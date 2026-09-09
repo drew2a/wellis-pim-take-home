@@ -446,6 +446,77 @@ tail -n +2 legacy_export/patients.csv | cut -d, -f8 | sort | uniq -c | wc -l   #
 4. Self-reported city can lag a move. Nothing in the export dates it, so it should be shown as
    "city at signup", not as a current address.
 
+**Agreed** (2026-09-09)
+
+Store as-is, free text, no normalisation, no vocabulary table. Not a key for anything. Shown in
+conflict views as a side-by-side field labelled "city at signup". Future values need no review
+item.
+
+### weight and weight_unit
+
+Discussed as a pair: a weight without its unit is not a measurement.
+
+**Facts** (P-9, P-10, P-20, H-2)
+
+| fact | value |
+|---|---|
+| weight: rows / empty / numeric | 2466 / 105 / 2361; decimal point on every value, 0 non-numeric |
+| weight shapes | `999.9` 1367, `99.9` 989, `9.9` 5 |
+| weight_unit values | `kg` 2393, `lbs` 55, empty 18 |
+| empty unit | all 18 rows carry a weight |
+| empty weight | all 105 rows carry unit `kg` |
+| distribution, unit `kg` (n 2288) | min 6.5, p5 71.5, median 103.1, p95 145.8, max 166.3 |
+| distribution, unit `lbs` (n 55) | min 144.6, median 225.5, max 356.9 |
+| distribution, empty unit (n 18) | min 140.2, median 208.1, max 320.1 |
+| BMI window 15 .. 70 with height_cm | 45 rows fall outside it read as kg and inside it read as pounds; they are the `lbs` rows and the empty-unit rows above 200 |
+| intake weight / patient weight, `kg` rows (H-2) | 2684 of 2688 intakes within 0.90 .. 1.10; 2 in 0.49 .. 0.90, 2 above 1.10 |
+| intake weight / patient weight, `lbs` rows | 0 of 68 within 0.90 .. 1.10; 15 within the pounds band 0.42 .. 0.49; 23 below 0.40, 5 in 0.40 .. 0.42, 25 in 0.49 .. 0.90 |
+| intake weight / patient weight, empty-unit rows | 0 of 20 within 0.90 .. 1.10; 1 within the pounds band; the rest spread 0.25 .. 0.90 |
+| `kg` rows below 35 | 5 rows: 6.5, 7.2, 7.7, 7.8, 8.6; their intakes are equally small (5.7 .. 9.1) |
+| rows at 300 or above | 9 rows: 7 `lbs`, 2 empty unit |
+
+Intake weights are kilogram-scale throughout (P-20: max 167.1, no unit column).
+
+**What the numbers say**
+
+- `kg` rows are internally consistent: patient weight and intake weight agree within 10 % in
+  99.85 % of cases. The notes' "self-reported, so they can legitimately differ" is true but
+  small in practice.
+- `lbs` rows are certainly not kilograms (not one agrees with an intake as-is). Read as pounds
+  they land in a plausible human range and a plausible BMI, but they still agree with the same
+  patient's intakes in only 15 of 68 cases. The unit is right; the *value* does not reconcile
+  with the rest of that patient's record.
+- Empty-unit rows behave exactly like `lbs` rows and not at all like `kg` rows: same value range
+  (140 .. 320), zero same-unit agreement, plausible only as pounds. Nothing distinguishes them
+  from `lbs` rows except the missing label.
+- The 5 tiny `kg` weights are not a patient-row typo: the intakes carry the same tiny scale, so
+  whatever went wrong happened to that patient's data as a whole. No multiplier is evidenced.
+
+```sh
+npm run profile:hypotheses    # H-2 tables
+```
+
+**Possible warnings**
+
+1. Weight drives BMI, and BMI drives two eligibility rules. A wrong unit changes an outcome:
+   225 read as kg is a BMI around 60; read as pounds it is around 28, right on the flag band.
+   This is the highest-consequence mapping in the patient file.
+2. Converting an explicit `lbs` value is a deterministic unit conversion, not a guess, and needs
+   a normalisation record per row. But the converted weight disagrees with the patient's own
+   intakes far more often than any `kg` row does. The conversion is correct as arithmetic and the
+   result is still suspicious as data.
+3. "Empty unit means pounds" is an inference. It is well supported (18 of 18 rows in the pounds
+   range, 0 of 18 in the kilogram range, same intake behaviour as `lbs` rows) but it is one
+   decision, and CLAUDE.md §5 says it belongs to a human once, not to 18 row guesses.
+4. R-A36: divergence between patient weight and intake weight must not be treated as an error.
+   It can, however, be *noticed*: a patient whose signup weight disagrees with every intake by
+   more than 10 % is exactly the record a reviewer wants to see before the BMI is trusted. That
+   is a review item, not a rejection.
+5. The 105 missing signup weights are not a defect; the intake carries a weight. No item.
+6. Storage: one canonical column in kilograms with one decimal, raw value and raw unit kept. Never
+   store a canonical value in mixed units with a unit column beside it; that is how the legacy
+   system got here.
+
 **Agreed**
 
 _Not yet discussed._
