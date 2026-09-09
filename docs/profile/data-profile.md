@@ -84,7 +84,7 @@ Shapes are too diverse for a table here (115 distinct exact shapes, 10 distinct 
 
 72 rows have leading or trailing whitespace, 0 rows have a double space inside the name, 0 rows contain a digit, 0 rows contain a diacritic or other non-ASCII character, 0 rows are all lowercase and 0 rows are ALL CAPS.
 
-Exact duplicates: 598 groups over 1409 rows. Duplicates after folding (trim + lowercase + collapse whitespace): 618 groups over 1470 rows.
+Exact duplicates: 598 groups over 1409 rows. Duplicates after folding (trim + lowercase + collapse whitespace): 618 groups over 1470 rows. 41 folded names have more than one raw spelling, covering 112 rows.
 
 **Complete collapsed-shape inventory**
 
@@ -1403,7 +1403,7 @@ Findings the notes do not mention at all. Each is a count, not a judgement.
 - 3 signup dates and 3 intake dates lie after the reference date 2026-09-08 under every plausible ordering. (P-13, P-18, P-35)
 - 30 bsn values are shared by more than one row, which is an identity collision rather than a formatting problem. (P-6, P-34)
 - 61 phone numbers are shared by more than one row when compared on digits only. (P-7, P-34)
-- 72 full_name values carry leading or trailing whitespace, which splits 20 name groups that folding would join; 0 names contain a digit and 0 are ALL CAPS. (P-2)
+- 72 full_name values carry leading or trailing whitespace; 41 folded names have more than one raw spelling (112 rows), so exact comparison keeps apart names that folding joins; 0 names contain a digit and 0 are ALL CAPS. (P-2)
 - The reviewer_note "twijfel, toch akkoord" (doubt, agreed anyway) appears on 421 intakes, of which 73 have a rejecting outcome and 49 an outcome that is neither an approval nor a rejection. (P-26)
 - 5 patients submitted more than one intake on the same day (dates compared on any shared plausible reading) and 0 row groups are identical in every field except intake_id. (P-27)
 - 7 patients have a revoke with no prior grant in the log. (P-33)

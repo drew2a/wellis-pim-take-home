@@ -554,7 +554,7 @@ export function notWarnedItems(input: ClaimsInput): NotWarnedItem[] {
         num(input, `${P}.full_name`, 'rowsWithDigits') > 0 ||
         num(input, `${P}.full_name`, 'allCapsRows') > 0 ||
         num(input, `${P}.full_name`, 'edgeWhitespaceRows') > 0,
-      text: `${num(input, `${P}.full_name`, 'edgeWhitespaceRows')} full_name values carry leading or trailing whitespace, which splits ${num(input, `${P}.full_name`, 'foldedDuplicateGroups') - num(input, `${P}.full_name`, 'exactDuplicateGroups')} name groups that folding would join; ${num(input, `${P}.full_name`, 'rowsWithDigits')} names contain a digit and ${num(input, `${P}.full_name`, 'allCapsRows')} are ALL CAPS.`,
+      text: `${num(input, `${P}.full_name`, 'edgeWhitespaceRows')} full_name values carry leading or trailing whitespace; ${num(input, `${P}.full_name`, 'foldingMergeGroups')} folded names have more than one raw spelling (${num(input, `${P}.full_name`, 'foldingMergeRows')} rows), so exact comparison keeps apart names that folding joins; ${num(input, `${P}.full_name`, 'rowsWithDigits')} names contain a digit and ${num(input, `${P}.full_name`, 'allCapsRows')} are ALL CAPS.`,
       evidence: [`${P}.full_name`],
     },
     {

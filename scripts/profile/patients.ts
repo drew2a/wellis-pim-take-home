@@ -177,6 +177,9 @@ export function patientsSections(p: Patients, ctx: PatientsContext): Section[] {
   const allCaps = p.fullName.filter((v) => letters(v) !== '' && v === v.toUpperCase());
   const nameExactDup = duplicateStats(p.fullName);
   const nameFoldedDup = duplicateStats(p.fullName.map((v) => fold(v)));
+  // Folded names that several raw spellings map to: what folding actually joins. This is not
+  // the difference of the two group counts above, which nets joins against groups folding leaves.
+  const nameMerge = foldingMerge(p.fullName);
   sections.push(
     columnSection({
       file: FILE,
@@ -190,7 +193,8 @@ export function patientsSections(p: Patients, ctx: PatientsContext): Section[] {
           `non-ASCII character, ${allLower.length} rows are all lowercase and ${allCaps.length} rows are ALL CAPS.`,
         `Exact duplicates: ${nameExactDup.groups} groups over ${nameExactDup.rows} rows. Duplicates after ` +
           `folding (trim + lowercase + collapse whitespace): ${nameFoldedDup.groups} groups over ` +
-          `${nameFoldedDup.rows} rows.`,
+          `${nameFoldedDup.rows} rows. ${nameMerge.groups} folded names have more than one raw spelling, ` +
+          `covering ${nameMerge.rows} rows.`,
       ],
       tables: [
         table(
@@ -226,6 +230,8 @@ export function patientsSections(p: Patients, ctx: PatientsContext): Section[] {
         exactDuplicateRows: nameExactDup.rows,
         foldedDuplicateGroups: nameFoldedDup.groups,
         foldedDuplicateRows: nameFoldedDup.rows,
+        foldingMergeGroups: nameMerge.groups,
+        foldingMergeRows: nameMerge.rows,
         unusualCharacters: unusual.entries().map((e) => ({character: e.key, rows: e.count, examples: e.examples})),
       },
     }),

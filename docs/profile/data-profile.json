@@ -18370,6 +18370,8 @@
       "exactDuplicateRows": 1409,
       "foldedDuplicateGroups": 618,
       "foldedDuplicateRows": 1470,
+      "foldingMergeGroups": 41,
+      "foldingMergeRows": 112,
       "unusualCharacters": []
     },
     "patients.csv.email": {
@@ -52277,7 +52279,7 @@
       ]
     },
     {
-      "finding": "72 full_name values carry leading or trailing whitespace, which splits 20 name groups that folding would join; 0 names contain a digit and 0 are ALL CAPS.",
+      "finding": "72 full_name values carry leading or trailing whitespace; 41 folded names have more than one raw spelling (112 rows), so exact comparison keeps apart names that folding joins; 0 names contain a digit and 0 are ALL CAPS.",
       "evidence": [
         "P-2"
       ],
