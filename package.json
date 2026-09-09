@@ -10,7 +10,8 @@
   "scripts": {
     "profile": "tsx scripts/profile/profile.ts",
     "typecheck": "tsc --noEmit",
-    "profile:hypotheses": "tsx scripts/profile/hypotheses.ts"
+    "profile:hypotheses": "tsx scripts/profile/hypotheses.ts",
+    "profile:inventory": "tsx scripts/profile/inventory.ts"
   },
   "devDependencies": {
     "@types/node": "^22.20.1",

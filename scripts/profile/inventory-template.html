@@ -1,0 +1,311 @@
+<title>Legacy Export Inventory</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    --bg: #f5f7f6; --surface: #ffffff; --ink: #1a211e; --muted: #5f6d68; --rule: #d8dfdc; --band: #edf2f0;
+    --accent: #0e7c72; --accent-ink: #0b5f58; --accent-soft: #d9efec; --ws: #b4560a; --ws-soft: #fbead8;
+    --ok: #2f7d4f; --bad: #b3261e; --partly: #b4560a; --na: #6b7280; --bar: #9fd6cf;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #131817; --surface: #1a2220; --ink: #e4e9e6; --muted: #96a39e; --rule: #2a3431; --band: #1f2826;
+      --accent: #4fd1c0; --accent-ink: #7fe3d6; --accent-soft: #163a36; --ws: #f0a04b; --ws-soft: #3b2a14;
+      --ok: #6cc48f; --bad: #f28b82; --partly: #f0a04b; --na: #9ca3af; --bar: #2b5d57;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #131817; --surface: #1a2220; --ink: #e4e9e6; --muted: #96a39e; --rule: #2a3431; --band: #1f2826;
+    --accent: #4fd1c0; --accent-ink: #7fe3d6; --accent-soft: #163a36; --ws: #f0a04b; --ws-soft: #3b2a14;
+    --ok: #6cc48f; --bad: #f28b82; --partly: #f0a04b; --na: #9ca3af; --bar: #2b5d57;
+  }
+  * { box-sizing: border-box; }
+  body { background: var(--bg); color: var(--ink); font: 14px/1.5 "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif; margin: 0; }
+  code, .mono, td.raw, td.shape, .stat b, .num { font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace; font-variant-numeric: tabular-nums; }
+  a { color: var(--accent-ink); }
+  .layout { display: grid; grid-template-columns: 240px minmax(0, 1fr); min-height: 100vh; }
+  nav { position: sticky; top: 0; height: 100vh; overflow-y: auto; border-right: 1px solid var(--rule); padding: 20px 14px 40px; background: var(--surface); }
+  nav h1 { font-size: 15px; font-weight: 600; margin: 0 0 4px; letter-spacing: 0.01em; }
+  nav .sub { color: var(--muted); font-size: 12px; margin: 0 0 14px; }
+  nav input { width: 100%; padding: 6px 8px; border: 1px solid var(--rule); border-radius: 4px; background: var(--bg); color: var(--ink); font: inherit; font-size: 13px; margin-bottom: 14px; }
+  nav input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  nav .file { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin: 14px 0 4px; }
+  nav a.col { display: flex; justify-content: space-between; gap: 8px; text-decoration: none; color: var(--ink); padding: 3px 6px; border-radius: 3px; font-size: 13px; }
+  nav a.col:hover { background: var(--band); }
+  nav a.col .n { color: var(--muted); font-size: 11px; }
+  nav a.col.hidden { display: none; }
+  main { padding: 28px 40px 80px; max-width: 1100px; }
+  header.top h1 { font-size: 26px; font-weight: 600; margin: 0 0 6px; text-wrap: balance; }
+  header.top p { max-width: 68ch; color: var(--muted); margin: 0 0 18px; }
+  section.panel { background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 18px 22px 20px; margin: 0 0 22px; scroll-margin-top: 16px; }
+  section.panel.hidden { display: none; }
+  .eyebrow { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--accent-ink); font-weight: 600; }
+  section.panel h2 { font-size: 18px; margin: 2px 0 10px; font-weight: 600; }
+  section.panel h2 code { font-size: 17px; }
+  .stats { display: flex; flex-wrap: wrap; gap: 6px 22px; margin: 0 0 14px; padding: 10px 0; border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); }
+  .stat { font-size: 12px; color: var(--muted); }
+  .stat b { display: block; font-size: 15px; color: var(--ink); font-weight: 500; }
+  .stat.warn b { color: var(--ws); }
+  h3 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 18px 0 6px; font-weight: 600; }
+  .twrap { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  th { text-align: left; font-weight: 500; color: var(--muted); background: var(--band); padding: 5px 8px; border-bottom: 1px solid var(--rule); white-space: nowrap; }
+  td { padding: 4px 8px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  td.num, th.num { text-align: right; white-space: nowrap; }
+  td.raw, td.shape { white-space: pre; }
+  .ws { color: var(--ws); background: var(--ws-soft); border-radius: 2px; }
+  .empty { color: var(--muted); font-style: italic; font-family: "IBM Plex Sans", sans-serif; }
+  .bar { display: inline-block; height: 9px; background: var(--bar); vertical-align: middle; margin-right: 6px; border-radius: 1px; min-width: 1px; }
+  .barcell { white-space: nowrap; }
+  .ex { color: var(--muted); }
+  .more { margin: 6px 0 0; font-size: 12px; color: var(--muted); }
+  .more button { font: inherit; font-size: 12px; color: var(--accent-ink); background: none; border: 1px solid var(--rule); border-radius: 3px; padding: 2px 8px; cursor: pointer; }
+  .more button:focus-visible { outline: 2px solid var(--accent); }
+  dl.facts { display: grid; grid-template-columns: max-content 1fr; gap: 3px 18px; margin: 0; font-size: 13px; }
+  dl.facts dt { color: var(--muted); }
+  dl.facts dd { margin: 0; }
+  .verdict { display: inline-block; padding: 0 7px; border-radius: 10px; font-size: 11px; font-weight: 600; letter-spacing: 0.03em; color: #fff; }
+  .v-confirmed { background: var(--ok); } .v-contradicted { background: var(--bad); } .v-partly { background: var(--partly); } .v-unverifiable { background: var(--na); }
+  ul.findings { padding-left: 18px; margin: 0; } ul.findings li { margin: 0 0 6px; max-width: 80ch; }
+  .note { font-size: 12px; color: var(--muted); max-width: 80ch; }
+  @media (max-width: 760px) { .layout { grid-template-columns: 1fr; } nav { position: static; height: auto; border-right: 0; border-bottom: 1px solid var(--rule); } main { padding: 20px 16px 60px; } }
+  @media (prefers-reduced-motion: no-preference) { section.panel { transition: none; } }
+  @media print {
+    @page { size: A4; margin: 12mm; }
+    :root { --bg: #ffffff; --surface: #ffffff; --ink: #1a211e; --muted: #5f6d68; --rule: #d8dfdc; --band: #edf2f0; --accent: #0e7c72; --accent-ink: #0b5f58; --ws: #b4560a; --ws-soft: #fbead8; --bar: #9fd6cf; }
+    .layout { display: block; }
+    nav { display: none; }
+    main { padding: 0; max-width: none; }
+    section.panel { break-inside: auto; page-break-inside: auto; border: 0; border-top: 1px solid var(--rule); border-radius: 0; padding: 12px 0 8px; margin: 0 0 8px; }
+    section.panel h2, h3 { break-after: avoid; }
+    tr[hidden] { display: table-row !important; }
+    tr { break-inside: avoid; }
+    .more { display: none; }
+    table { font-size: 11px; }
+    body { font-size: 12px; }
+  }
+</style>
+<div class="layout">
+  <nav id="nav"></nav>
+  <main id="main"></main>
+</div>
+<script>
+/*__DATA__*/
+(function () {
+  const $ = (tag, attrs = {}, ...kids) => {
+    const el = document.createElement(tag);
+    for (const [k, v] of Object.entries(attrs)) { if (k === 'class') el.className = v; else if (k === 'html') el.innerHTML = v; else el.setAttribute(k, v); }
+    for (const k of kids.flat()) if (k != null) el.append(k.nodeType ? k : document.createTextNode(String(k)));
+    return el;
+  };
+  const fmt = (n) => typeof n === 'number' ? (Number.isInteger(n) ? n.toLocaleString('en-GB') : n.toFixed(2)) : String(n);
+  const asList = (v) => v && v.__list ? v : { items: v || [], total: (v || []).length, remaining: 0 };
+  // Raw values keep their whitespace; make the edges visible instead of trimming them away.
+  function rawCell(raw, cls = 'raw') {
+    const td = $('td', { class: cls });
+    if (raw === '' || raw == null) { td.append($('span', { class: 'empty' }, '(empty)')); return td; }
+    const m = /^(\s*)(.*?)(\s*)$/s.exec(raw);
+    const vis = (s) => s.replace(/ /g, '␣').replace(/\t/g, '⇥').replace(/\r/g, '␍').replace(/\n/g, '␊');
+    if (m[1]) td.append($('span', { class: 'ws' }, vis(m[1])));
+    td.append(m[2].replace(/ {2,}/g, (s) => s));
+    if (m[3]) td.append($('span', { class: 'ws' }, vis(m[3])));
+    return td;
+  }
+  function barCell(count, total) {
+    const pct = total ? (count / total) * 100 : 0;
+    return $('td', { class: 'num barcell' }, $('span', { class: 'bar', style: `width:${Math.max(1, pct * 1.4).toFixed(1)}px` }), fmt(count), $('span', { class: 'ex' }, ` ${pct.toFixed(1)}%`));
+  }
+  function table(headers, rows, opts = {}) {
+    const wrap = $('div', { class: 'twrap' });
+    const t = $('table');
+    t.append($('thead', {}, $('tr', {}, headers.map((h) => $('th', { class: h.num ? 'num' : '' }, h.label ?? h)))));
+    const tb = $('tbody');
+    const limit = opts.limit ?? 25;
+    rows.forEach((r, i) => { if (i >= limit) r.hidden = true; tb.append(r); });
+    t.append(tb); wrap.append(t);
+    const frag = document.createDocumentFragment(); frag.append(wrap);
+    if (rows.length > limit || opts.remaining) {
+      const more = $('p', { class: 'more' });
+      if (rows.length > limit) {
+        const b = $('button', {}, `Show all ${rows.length} rows`);
+        b.onclick = () => { rows.forEach((r) => (r.hidden = false)); b.remove(); };
+        more.append(b, ' ');
+      }
+      if (opts.total && opts.total > rows.length) more.append(`Showing the ${rows.length} most frequent of ${fmt(opts.total)} distinct; the other ${fmt(opts.total - rows.length)} cover ${fmt(opts.remaining)} rows. The full list is in docs/data-profile.json.`);
+      frag.append(more);
+    }
+    return frag;
+  }
+  const fold = (s) => s.trim().toLowerCase().replace(/\s+/g, ' ');
+  function valuesTable(list, total) {
+    const L = asList(list);
+    const rows = L.items.map((v) => $('tr', {}, rawCell(v.raw), barCell(v.count, total), $('td', { class: 'mono' }, fold(v.raw) === v.raw ? '' : fold(v.raw) || $('span', { class: 'empty' }, '(empty)'))));
+    return table(['raw value', { label: 'rows', num: true }, 'folded (when different)'], rows, { total: L.total, remaining: L.remaining, limit: 60 });
+  }
+  function shapesTable(list, total, dateLike) {
+    const L = asList(list);
+    const heads = ['shape', { label: 'rows', num: true }];
+    if (dateLike) heads.push({ label: 'day-first', num: true }, { label: 'month-first', num: true }, { label: 'ambiguous', num: true }, { label: 'invalid', num: true });
+    heads.push('examples');
+    const rows = L.items.map((s) => {
+      const tds = [rawCell(s.shape, 'shape'), barCell(s.count, total)];
+      if (dateLike) { const o = s.byOrderClass || {}; tds.push(...['day-first', 'month-first', 'ambiguous', 'invalid'].map((k) => $('td', { class: 'num' }, fmt(o[k] ?? 0)))); }
+      tds.push($('td', { class: 'mono ex' }, (s.examples || []).join('   ')));
+      return $('tr', {}, tds);
+    });
+    return table(heads, rows, { total: L.total, remaining: L.remaining });
+  }
+  function objTable(list, limit) {
+    const L = asList(list);
+    if (!L.items.length) return $('p', { class: 'note' }, 'none');
+    const keys = Object.keys(L.items[0]).filter((k) => typeof L.items[0][k] !== 'object' || Array.isArray(L.items[0][k]));
+    const rows = L.items.map((it) => $('tr', {}, keys.map((k) => {
+      const v = it[k];
+      if (typeof v === 'number') return $('td', { class: 'num' }, fmt(v));
+      if (Array.isArray(v)) return $('td', { class: 'mono ex' }, v.map(String).join(', '));
+      if (typeof v === 'boolean') return $('td', {}, v ? 'yes' : 'no');
+      return rawCell(v == null ? '' : String(v));
+    })));
+    return table(keys.map((k) => (typeof L.items[0][k] === 'number' ? { label: words(k), num: true } : words(k))), rows, { total: L.total, remaining: L.remaining, limit: limit ?? 25 });
+  }
+  function statsTable(list) {
+    const L = asList(list);
+    const rows = L.items.map((u) => $('tr', {}, rawCell(u.unit), ...['n', 'min', 'p5', 'median', 'p95', 'max'].map((k) => $('td', { class: 'num' }, fmt(u.stats[k])))));
+    return table(['unit', { label: 'n', num: true }, { label: 'min', num: true }, { label: 'p5', num: true }, { label: 'median', num: true }, { label: 'p95', num: true }, { label: 'max', num: true }], rows);
+  }
+  const words = (k) => k.replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/_/g, ' ').toLowerCase();
+  function facts(obj, skip) {
+    const dl = $('dl', { class: 'facts' });
+    for (const [k, v] of Object.entries(obj)) {
+      if (skip.has(k)) continue;
+      if (v && typeof v === 'object' && !Array.isArray(v) && !v.__list) {
+        if ('n' in v && 'median' in v) { dl.append($('dt', {}, words(k)), $('dd', { class: 'mono' }, `n ${fmt(v.n)}, min ${fmt(v.min)}, p5 ${fmt(v.p5)}, median ${fmt(v.median)}, p95 ${fmt(v.p95)}, max ${fmt(v.max)}`)); continue; }
+        dl.append($('dt', {}, words(k)), $('dd', { class: 'mono' }, Object.entries(v).map(([a, b]) => `${a} ${fmt(b)}`).join(' · ')));
+        continue;
+      }
+      if (Array.isArray(v) && v.length && typeof v[0] !== 'object') { dl.append($('dt', {}, words(k)), $('dd', { class: 'mono' }, v.length ? v.join(', ') : 'none')); continue; }
+      if (Array.isArray(v) && !v.length) { dl.append($('dt', {}, words(k)), $('dd', {}, 'none')); continue; }
+      if (typeof v !== 'object') dl.append($('dt', {}, words(k)), $('dd', { class: typeof v === 'number' ? 'mono' : '' }, typeof v === 'boolean' ? (v ? 'yes' : 'no') : fmt(v)));
+    }
+    return dl;
+  }
+  function pivot(list, rowKey, colKey, valKey) {
+    const L = asList(list).items;
+    const rows = [...new Set(L.map((x) => x[rowKey]))], cols = [...new Set(L.map((x) => x[colKey]))];
+    const get = (r, c) => (L.find((x) => x[rowKey] === r && x[colKey] === c) || {})[valKey] ?? 0;
+    const trs = rows.map((r) => $('tr', {}, rawCell(r), cols.map((c) => $('td', { class: 'num' }, get(r, c) || $('span', { class: 'ex' }, '·'))), $('td', { class: 'num' }, fmt(cols.reduce((a, c) => a + get(r, c), 0)))));
+    const heads = [words(rowKey) + ' \\ ' + words(colKey), ...cols.map((c) => ({ label: c === '' ? '(empty)' : c, num: true })), { label: 'total', num: true }];
+    return table(heads, trs, { limit: 60 });
+  }
+
+  const STD = new Set(['rows', 'empty', 'distinct', 'distinctFolded', 'edgeWhitespaceRows', 'edgeWhitespaceValues', 'distinctShapes', 'distinctCollapsedShapes', 'values', 'shapes', 'foldingMerges', 'foldingMergeGroups', 'foldingMergeRows', 'mixedShapes']);
+  const sectionByKey = Object.fromEntries((DATA.sections || []).map((s) => [s.key, s]));
+
+  function renderColumn(key, col) {
+    const [file, ...rest] = key.split('.'); const name = rest.slice(1).join('.');
+    const sec = sectionByKey[key];
+    const panel = $('section', { class: 'panel', id: 'c-' + key.replace(/[^a-z0-9]/gi, '-'), 'data-search': key.toLowerCase() });
+    panel.append($('div', { class: 'eyebrow' }, (sec ? sec.pn + '  ·  ' : '') + file + '.' + rest[0]));
+    panel.append($('h2', {}, $('code', {}, name)));
+    if ('rows' in col) {
+      const st = $('div', { class: 'stats' });
+      const add = (label, v, warn) => st.append($('div', { class: 'stat' + (warn && v ? ' warn' : '') }, $('b', {}, fmt(v)), label));
+      add('rows', col.rows); add('empty', col.empty, true); add('distinct raw', col.distinct); add('distinct folded', col.distinctFolded);
+      if (col.distinctShapes != null) add('distinct shapes', col.distinctShapes);
+      add('edge whitespace rows', col.edgeWhitespaceRows, true);
+      panel.append(st);
+    }
+    const total = col.rows;
+    const dateLike = col.shapes && asList(col.shapes).items[0] && asList(col.shapes).items[0].byOrderClass;
+    if (col.values) { panel.append($('h3', {}, `Every raw value (${fmt(asList(col.values).total)} distinct)`), valuesTable(col.values, total)); }
+    if (col.shapes && (!col.values || asList(col.shapes).total > 1)) { panel.append($('h3', {}, dateLike ? 'Shapes and how each value could be read' : `Shapes (${fmt(asList(col.shapes).total)} distinct)`), shapesTable(col.shapes, total, dateLike)); }
+    if (col.foldingMerges && asList(col.foldingMerges).items.length) {
+      panel.append($('h3', {}, 'Spellings that folding would merge'), objTable(col.foldingMerges));
+    }
+    const skip = new Set(STD);
+    const special = {
+      perUnit: (v) => ['Weight distribution per unit value', statsTable(v)],
+      bands: (v) => ['Numeric bands', objTable(v)], ratioBands: (v) => ['Intake value divided by patient-row value', objTable(v)],
+      negativeGapBands: (v) => ['Days between submitted_at and signup_date where negative under some ordering', objTable(v)],
+      extremes: (v) => ['Extremes', objTable(v)], separators: (v) => ['Separators seen', objTable(asList(v).items.filter((s) => (s.rows ?? s.count) > 0))],
+      syntaxFailures: (v) => ['Values failing the syntax check', objTable(v)], domains: (v) => ['Domains', objTable(v)],
+      localPartsOnSeveralDomains: (v) => ['Same local part on several domains (first 40)', objTable(v, 10)],
+      tokenCounts: (v) => ['Tokens per name', objTable(v)], lengthClassInventory: (v) => ['Length and character class', objTable(v)],
+      digitCounts: (v) => ['Digit count', objTable(v)], prefixClasses: (v) => ['Prefix class', objTable(v)],
+      emptyLike: (v) => ['Values that read as "none"', objTable(v)], foldedValues: (v) => ['Folded values', objTable(v, 60)],
+      terms: (v) => ['Term probes (case-insensitive substring)', objTable(v, 40)], probeTokens: (v) => ['Other tokens near the term list', objTable(v)],
+      nonNumericValues: (v) => ['Non-numeric values', objTable(v)],
+      noteByOutcome: (v) => ['Note by outcome (rows)', pivot(v, 'note', 'outcome', 'rows')],
+      intakesPerPatient: (v) => ['Intakes per patient', objTable(v)], eventsPerPatient: (v) => ['Events per patient', objTable(v)],
+      patternCounts: (v) => ['Event patterns per patient (timestamp order)', objTable(v)],
+      patientsWhoseLastStateDiffersByOrdering: (v) => ['Patients whose last state differs by ordering (first 40)', objTable(v, 10)],
+      keySets: (v) => ['Key sets', objTable(v)], fieldCounts: (v) => ['Fields per row', objTable(v)],
+      orphanIds: (v) => ['Orphan ids', $('p', { class: 'mono note' }, asList(v).items.join(', '))],
+    };
+    for (const [k, fn] of Object.entries(special)) { if (col[k] != null && !(Array.isArray(col[k]) && !col[k].length)) { const [title, node] = fn(col[k]); panel.append($('h3', {}, title), node); skip.add(k); } }
+    // Anything else that is a list of objects: a plain table, so nothing in the JSON is invisible here.
+    for (const [k, v] of Object.entries(col)) { if (skip.has(k)) continue; const L = asList(v); if ((Array.isArray(v) || v.__list) && L.items.length && typeof L.items[0] === 'object') { panel.append($('h3', {}, words(k)), objTable(v)); skip.add(k); } }
+    const f = facts(col, skip);
+    if (f.children.length) panel.append($('h3', {}, 'Facts'), f);
+    return panel;
+  }
+
+  // ---- page
+  const main = document.getElementById('main'), nav = document.getElementById('nav');
+  main.append($('header', { class: 'top' },
+    $('h1', {}, 'Legacy Export Inventory'),
+    $('p', {}, 'Every column of legacy_export/ as it was exported: complete value tables where a column has few distinct values, shape tables where it has many. Nothing is mapped or corrected here. Leading and trailing whitespace is drawn as ', $('span', { class: 'ws mono' }, '␣'), ' so it cannot hide. Generated from docs/data-profile.json (npm run profile).'),
+  ));
+  const filesRows = DATA.files.map((f) => $('tr', {}, $('td', { class: 'mono' }, f.name), $('td', { class: 'num' }, fmt(f.bytes)), $('td', {}, f.utf8Valid ? 'UTF-8' : 'not UTF-8', f.bom ? ', BOM' : ', no BOM'), $('td', {}, f.lineEndings.crlf ? 'CRLF' : 'LF'), $('td', { class: 'num' }, f.header.length), $('td', { class: 'num' }, fmt(f.dataRows)), $('td', { class: 'num' }, f.blankLines), $('td', { class: 'num' }, f.duplicateFullRows.rows)));
+  const files = $('section', { class: 'panel', id: 'files' }, $('div', { class: 'eyebrow' }, 'Files'), $('h2', {}, 'As read from disk'),
+    table(['file', { label: 'bytes', num: true }, 'encoding', 'line endings', { label: 'columns', num: true }, { label: 'data rows', num: true }, { label: 'blank lines', num: true }, { label: 'duplicate rows', num: true }], filesRows));
+  const rd = DATA.referenceDates;
+  files.append($('h3', {}, 'Reference dates derived from the data'), $('p', { class: 'note' }, `Earliest date anywhere (dob excluded): ${rd.earliest}. Latest under any reading: ${rd.now}, which sits in an isolated tail of ${fmt(DATA.crossFile['cross.date-range'].totalRowsInIsolatedTails)} rows more than a year past everything else. Latest once those tails are set aside: ${rd.bulkNow}. "Future" counts below use both.`));
+  main.append(files);
+
+  const groups = {};
+  for (const key of Object.keys(DATA.columns)) { const file = key.split('.').slice(0, 2).join('.'); (groups[file] ||= []).push(key); }
+  nav.append($('h1', {}, 'Legacy Export Inventory'), $('p', { class: 'sub' }, `${Object.keys(DATA.columns).length} inventories, 3 files`));
+  const search = $('input', { type: 'search', placeholder: 'Filter columns…', 'aria-label': 'Filter columns' });
+  nav.append(search);
+  nav.append($('a', { class: 'col', href: '#files' }, 'Files'));
+  for (const [file, keys] of Object.entries(groups)) {
+    nav.append($('div', { class: 'file' }, file));
+    for (const key of keys) {
+      const col = DATA.columns[key];
+      const a = $('a', { class: 'col', href: '#c-' + key.replace(/[^a-z0-9]/gi, '-'), 'data-search': key.toLowerCase() }, $('span', {}, key.split('.').slice(2).join('.')), $('span', { class: 'n' }, col.distinct != null ? fmt(col.distinct) + ' distinct' : ''));
+      nav.append(a);
+      main.append(renderColumn(key, col));
+    }
+  }
+  // cross-file
+  nav.append($('div', { class: 'file' }, 'cross-file'));
+  const cf = DATA.crossFile;
+  const addCross = (id, title, ...nodes) => { const p = $('section', { class: 'panel', id, 'data-search': title.toLowerCase() }, $('div', { class: 'eyebrow' }, 'Cross-file'), $('h2', {}, title), ...nodes); main.append(p); nav.append($('a', { class: 'col', href: '#' + id, 'data-search': title.toLowerCase() }, $('span', {}, title))); };
+  const dc = cf['cross.duplicate-candidates'];
+  addCross('x-dup', 'Duplicate-patient candidates', $('h3', {}, 'Groupings'), objTable(dc.groupings), $('h3', {}, 'Overlap with the email grouping'), objTable(dc.overlapWithEmailGrouping));
+  const dr = cf['cross.date-range'];
+  addCross('x-dates', 'Date ranges per column', objTable(dr.perColumn.map((c) => ({ column: c.column, earliest: c.anyReading.earliest, latest: c.anyReading.latest, bulkLatest: c.isolatedTail ? c.isolatedTail.bulkLatest : '', isolatedTailRows: c.isolatedTail ? c.isolatedTail.rows : 0, isolatedTailDates: c.isolatedTail ? c.isolatedTail.dates.map((d) => d.date + ' x' + d.rows) : [] }))));
+  const vr = cf['cross.variation'];
+  const varNodes = [];
+  for (const [dim, list] of Object.entries(vr)) {
+    for (const entry of asList(list).items) {
+      varNodes.push($('h3', {}, `${entry.column} (${entry.dimension}) by ${entry.groupedBy}`));
+      varNodes.push(objTable(asList(entry.perGroup).items.map((g) => ({ group: g.group, distinct: g.distinct, topValues: asList(g.values).items.slice(0, 6).map((v) => `${v.value === '' ? '(empty)' : v.value} x${v.count}`) }))));
+    }
+  }
+  addCross('x-var', 'Value sets that change with source or year', ...varNodes);
+
+  // claims
+  nav.append($('div', { class: 'file' }, 'export-notes'));
+  const claimRows = DATA.exportNotesClaims.map((c) => $('tr', {}, $('td', { html: c.claim.replace(/`([^`]+)`/g, '<code>$1</code>') }), $('td', {}, $('span', { class: 'verdict v-' + c.verdict }, c.verdict)), $('td', { class: 'mono ex' }, c.evidence.join(', ')), $('td', {}, c.note)));
+  const claims = $('section', { class: 'panel', id: 'claims', 'data-search': 'claims export-notes' }, $('div', { class: 'eyebrow' }, 'EXPORT-NOTES.md'), $('h2', {}, 'Claim by claim'), table(['claim', 'verdict', 'evidence', 'what the numbers say'], claimRows, { limit: 100 }));
+  main.append(claims); nav.append($('a', { class: 'col', href: '#claims', 'data-search': 'claims' }, $('span', {}, 'Claims verified')));
+  const nw = $('section', { class: 'panel', id: 'notwarned', 'data-search': 'not warned' }, $('div', { class: 'eyebrow' }, 'EXPORT-NOTES.md'), $('h2', {}, 'Not warned about'), $('ul', { class: 'findings' }, DATA.notWarnedAbout.map((f) => $('li', {}, f.finding, ' ', $('span', { class: 'mono ex' }, f.evidence.join(', '))))));
+  main.append(nw); nav.append($('a', { class: 'col', href: '#notwarned', 'data-search': 'not warned' }, $('span', {}, 'Not warned about')));
+
+  search.addEventListener('input', () => {
+    const q = search.value.trim().toLowerCase();
+    for (const el of document.querySelectorAll('[data-search]')) el.classList.toggle('hidden', q !== '' && !el.dataset.search.includes(q));
+  });
+})();
+</script>
