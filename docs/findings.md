@@ -247,8 +247,9 @@ The convention is inferred from the data, so it produces **one** vocabulary-leve
 a human approves once. Row-level items for the 921 formally ambiguous values only where the
 alternative reading changes a consequence: the alternative reading flips minor/adult at the time
 of an intake for 6 patients (6 intakes; 3 at signup), so those 6 rows get a review item, the other
-915 do not. Minors are otherwise not a dob problem: they become review items when the age detector
-runs over history, outcome untouched. Any value not matching one of the three shapes in a future
+915 do not. Minors are otherwise not a dob problem: the age rule runs over history in shadow mode
+(ADR-0005); review items only for minors with an approved or pending outcome (58 intakes), the 12
+rejected are a report figure; outcome untouched. Any value not matching one of the three shapes in a future
 export is a review item, never a guess.
 
 The importer is not a rule engine: mapping is plain deterministic parser code. "Rule" in a
@@ -953,6 +954,10 @@ Check (1): 394 rows whose canonical value differs from raw, each with a record; 
 is unchanged for all. Check (2): one item for one question; per-row items would be 394 copies of
 it.
 
+*Amended 2026-09-09 (ADR-0005 review):* for consistency with `OK`, `2.0` maps to `v2` with its own
+rule code `VERSION_LABEL_ASSUMED_V2` on the 394 rows, plus the one confirmation item, instead of
+null. If the human says no, the records identify the rows to remap.
+
 ### weight
 
 **Facts** (P-20, H-2)
@@ -1230,8 +1235,8 @@ tail -n +2 legacy_export/intakes.csv | grep -ciE 'schildklierkanker|schildklierc
    from this file.
 4. The `;` separator means the matcher must run over the whole text, not over a first token.
 5. Legacy rows carry a BMI in the flag band and no weight-related condition on 283 intakes; the
-   new rules would have flagged them. Same reasoning as GLP-1: per-patient items from the history
-   audit, not a change to the outcome.
+   new rules would have flagged them. Unlike GLP-1 in free text, the doctor saw the BMI: shadow
+   evaluation and a report figure, not review items (ADR-0005).
 
 **Agreed** (2026-09-09, per the instruction given with meds_current)
 

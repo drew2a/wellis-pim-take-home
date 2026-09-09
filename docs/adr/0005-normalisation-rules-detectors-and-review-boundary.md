@@ -63,7 +63,7 @@ not a rule engine"); option 3 fails R-A9 and would produce thousands of identica
 | intakes.intake_id | text, unique | none | none |
 | intakes.legacy_patient_id | text; `patient_id` via alias | none | see ADR-0006 (21 orphans, 5 same-day pairs) |
 | intakes.submitted_at | date | `DATE_ORDER_FROM_SEPARATOR` 413 | none new (2062 rows inside their patient's item) |
-| intakes.questionnaire_version | label text + enum | `UNMAPPED_TO_NULL` 394 (`2.0`) | vocabulary: is `2.0` = `v2` |
+| intakes.questionnaire_version | label text + enum | `VERSION_LABEL_ASSUMED_V2` 394 (`2.0` → `v2`, an inference with its own code, like `OK`) | vocabulary: confirm `2.0` = `v2`; if no, the records identify the rows to remap |
 | intakes.weight | `weight_kg`, kilograms by documented assumption | none | via plausibility detector |
 | intakes.height | integer | none | via plausibility detector |
 | intakes.meds_current | raw text + `medication_report` | `VOCAB_NONE_MEDICATION` 815 | vocabulary: whole term vocabulary classified (GLP-1 / none / unrecognised) |
@@ -112,21 +112,47 @@ Other properties of review items:
 - An unseen raw value in any closed vocabulary (`sex`, `status`, `outcome`, `weight_unit`, consent
   `type`/`action`) maps to `unknown` and raises **one** vocabulary item per new value.
 
-### Detectors (shared with Part B, run over history at import)
+### Shadow evaluation and the history audit
 
-Defined once, read their parameters from `rules/v1.json`, produce review items of type
-`clinical_history` or `data_quality` with the Part B engine's reason string, and never change a
-legacy outcome.
+Every Part B rule runs over every legacy intake at import, but **queueing every hit is wrong**: the
+doctor who approved a 2024 intake saw its BMI, so a BMI disagreement is a fact about the rules, not
+an open question about the patient (Q9 default, shadow mode).
+
+- Every legacy intake gets a row in `eligibility_evaluations`, the same table Part B writes:
+  `ruleset_version`, the outcome the engine would give, the reason strings, `shadow = true`,
+  evaluated at import. Nothing is applied to the intake; its legacy state stays.
+- The patient detail view shows the shadow verdict next to the legacy outcome. The console has a
+  filterable list of legacy intakes whose shadow verdict disagrees with the legacy outcome: a list
+  to browse, no status to close, not queue items.
+- The import report figure "ruleset v1 disagrees with N historical outcomes", per rule, is a count
+  over that table. On this export: BMI below 27 on 191 legacy intakes, BMI 27 to 30 without a
+  weight-related condition on 283 (of 520 in the band), age under 18 on 70.
+- Row-level review items from the history audit exist only where the legacy process **could not
+  see the problem** or where it is **a legal one**, and they are derived from the stored
+  evaluations, so history is evaluated once:
+
+| history-audit item | reason string | over this export |
+|---|---|---|
+| GLP-1 medication in free text | "flagged: current GLP-1 medication (<matched text>)" | 42 intakes (approved 28, rejected 7, pending 7) |
+| flag condition in free text | "flagged: self-reported history of thyroid cancer / pancreatitis (<matched text>)" | 15 intakes (approved 10, rejected 3, pending 2) |
+| age under 18 at submission **with an approved or pending outcome** | "rejected: age N at submission" | 58 intakes (approved 48, pending 10); the 12 rejected minors are a report figure |
+
+  If Wellis later asks to reopen a class (for example the BMI band), items are generated from the
+  stored evaluations without re-running the rules.
+
+### Detectors (shared with Part B, run at import)
+
+Defined once, read their parameters from `rules/v1.json`, and never change a legacy outcome or a
+canonical value (they are layer 2 above).
 
 | detector | parameters (rules file) | over this export |
 |---|---|---|
-| plausibility | `weight_kg` ∈ [30, 300], `height_cm` ∈ [100, 230] | 10 per-patient items (5 tiny weights, 5 heights), covering 5 + 5 patient values and 6 + 6 intake values; canonical null, raw kept, decimal-shift proposal |
+| plausibility | `weight_kg` ∈ [30, 300], `height_cm` ∈ [100, 230] | 10 per-patient `data_quality` items (5 tiny weights, 5 heights), covering 5 + 5 patient values and 6 + 6 intake values; canonical null, raw kept, decimal-shift proposal |
 | signup-vs-intake weight divergence | tolerance 0.9 to 1.1, derived from `kg` rows (2684 of 2688 within it) | row items for `kg` rows only: 3 patients; `lbs` non-reconciliation is one vocabulary item |
-| age under 18 at submission | 18 years, age at `submitted_at` | row items per intake, reason "rejected: age N at submission"; 54 patients, 70 intakes |
-| BMI band without weight-related condition | 27 ≤ BMI ≤ 30 (unrounded), weight-related term list | row items per intake; 283 legacy intakes |
-| BMI below 27 | 27 | row items per intake; count produced by the report |
-| GLP-1 medication | term list (brands + INNs, NL + EN), word-boundary match after lowercasing and dose stripping, never bare substring | 42 row items, reason "flagged: current GLP-1 medication (<matched text>)" |
-| flag conditions | `schildklierkanker`, `schildkliercarcinoom`, `thyroid cancer`, `medullary thyroid`, `pancreatitis`, `alvleesklierontsteking`; value split on `;` first | 15 row items |
+| age under 18 at submission | 18 years, age at `submitted_at` | shadow evaluation; items only for approved or pending (58) |
+| BMI below 27; BMI 27 to 30 without weight-related condition | 27.0 and 30.0 inclusive, unrounded (Q2 default); weight-related term list | shadow evaluation only (191; 283) |
+| GLP-1 medication | term list (brands + INNs, NL + EN), word-boundary match after lowercasing and dose stripping, never bare substring | 42 `clinical_history` items |
+| flag conditions | `schildklierkanker`, `schildkliercarcinoom`, `thyroid cancer`, `medullary thyroid`, `pancreatitis`, `alvleesklierontsteking`; value split on `;` first | 15 `clinical_history` items |
 
 `rules/v1.json` holds: plausibility bounds, the divergence tolerance, the age threshold, the BMI
 thresholds and boundary semantics (Q2 default: 27.0 ≤ BMI ≤ 30.0 flags, unrounded), the GLP-1 term
@@ -171,9 +197,10 @@ one.
   `npm run profile` and `npm run profile:hypotheses`.
 - Good: detectors are one definition for import, history and Part B; the console shows legacy and
   new cases in the same shape.
-- Bad: the history audit creates several hundred row items (about 283 BMI-band, 70 age, 42
-  GLP-1, 15 conditions) on day one. Accepted: each is a distinct patient with a distinct clinical
-  question, and the queue's type and age filters exist for this (R-C3).
+- Bad: the history audit creates 115 row items on day one (42 GLP-1, 15 flag conditions, 58
+  approved-or-pending minors). Accepted: each is a distinct patient with a question the legacy
+  process could not see or a legal one. BMI disagreements (191 below 27, 283 in the band without a
+  condition) are shadow evaluations only: browsable, counted in the report, never queued.
 - Bad: two term lists are seeded by an engineer, not a clinician. Mitigated by the vocabulary
   items that ask a human to confirm the whole classified vocabulary once, and by Q3.
 - Neutral: the separator convention and `OK` = approved are inferences with their own rule codes
@@ -185,7 +212,11 @@ one.
   `45` → none; `03-02-1960` and `02/03/1960` → the same date).
 - Unit tests for the consent derivation: out-of-order events, equal timestamps, revoke-first pairs,
   no events with signup before and after 2023-01-01.
-- Import report "rules applied" lists every code above with the row counts in this table.
+- Import report "rules applied" lists every code above with the row counts in this table, and
+  "ruleset v1 disagrees with N historical outcomes" per rule is `SELECT count(*)` over
+  `eligibility_evaluations` where `shadow` and the verdict differs from the legacy outcome.
+- Integration test: after import every legacy intake has exactly one shadow evaluation and no
+  legacy intake state changed.
 - A test asserts that every raw value in `docs/data-profile.json` for the closed vocabularies is
   covered by the mapping tables.
 
