@@ -347,6 +347,64 @@ tail -n +2 legacy_export/patients.csv | cut -d, -f6 | grep -v '^$' | sort | uniq
 6. 1525 rows have no bsn. Empty is the normal case, not a defect; it must not become a review
    item.
 
+**Agreed** (2026-09-09)
+
+Store bsn as text exactly as exported (identifier, not quantity: leading zero significant, fixed
+width, no arithmetic; `CHECK (bsn ~ '^[0-9]{9}$')`), no normalisation. Compute and store an
+elfproef flag `valid | invalid | absent`; the 17 invalid rows get a per-row review item "bsn fails
+the elfproef" with no proposed fix. Shared bsn between rows creates a duplicate-candidate
+conflict, never a merge. The 1525 empties are `absent`, no item. One vocabulary-level review item
+for the reviewers: "bsn retention: keep, mask, or drop" (GDPR, Q7-adjacent), and the console
+masks bsn by default until it is answered.
+
+### phone
+
+**Facts** (P-7, P-34, H-5)
+
+| fact | value |
+|---|---|
+| rows / empty / distinct | 2466 / 143 / 2263 |
+| written forms | `+316xxxxxxxx` 1064, `06-xxxxxxxx` 763, `06xxxxxxxx` 496; nothing else (0 with `0031`, spaces, dots, brackets or a foreign prefix) |
+| digits | 11 when written `+31`, 10 when written `06`; no other lengths |
+| network type | every value is a Dutch mobile number (`+316` or `06`); 0 landlines |
+| whitespace | 0 rows |
+| shared numbers, compared on digits only | 61 numbers on 2 rows each (122 rows) |
+| shared numbers after E.164 normalisation | the same 61; no pair is the same number written in two forms |
+
+The 61 shared-phone pairs, compared on folded name and dob read with the separator convention:
+
+| the two rows have | pairs |
+|---|---|
+| same name, same dob | 29 |
+| same name, different dob | 14 |
+| different name, same dob (includes the `-L`, `-E`, `-T` name variants) | 18 |
+| different name, different dob | 0 |
+
+Unlike bsn, no shared phone belongs to two clearly different people.
+
+```sh
+tail -n +2 legacy_export/patients.csv | cut -d, -f7 | grep -v '^$' | sed 's/^06/+316/; s/-//' | sort | uniq -d | wc -l   # 61
+```
+
+**Possible warnings**
+
+1. Three spellings of one thing. `06-53549409`, `0653549409` and `+31653549409` are the same
+   number and the same format family; converting all to E.164 (`+31653549409`) is a deterministic
+   format conversion with no ambiguity in this file (every value is Dutch, every value is mobile,
+   every digit count is right). It changes 1259 stored values and therefore needs a normalisation
+   record per row.
+2. The conversion is only safe because the input is this clean. A future value like `0031 6 ...`,
+   `+44 ...`, `020-1234567` (landline) or `06-1234567` (9 digits) is outside what we have seen and
+   must not be silently forced into E.164; it is a review item.
+3. A phone number is a household or family device as often as a personal one, so a shared number
+   is a weaker identity signal than bsn. Here it never joins two clearly different people, which
+   makes it a good *confirming* signal for the name-variant duplicates, not a merge key.
+4. 143 rows have no phone. That is a missing contact channel, not a defect of the import; no
+   review item, but the console should show it as absent.
+5. Dutch mobile numbers are 9 digits after the country code and always start with 6. The check
+   constraint should encode exactly that (`^\+316[0-9]{8}$`) so a wrong length cannot be stored as
+   canonical.
+
 **Agreed**
 
 _Not yet discussed._
