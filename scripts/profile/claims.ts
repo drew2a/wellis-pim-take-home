@@ -100,8 +100,49 @@ interface ExtraFacts {
   readonly twijfelRows: number;
   readonly twijfelOnRejection: number;
   readonly twijfelOnNeither: number;
-  readonly dutchConditionRows: number;
-  readonly englishConditionRows: number;
+  readonly conditionLanguages: ConditionLanguages;
+}
+
+/**
+ * Every `conditions` row in exactly one class, so the counts add up to the row count. The
+ * two word lists are disjoint by construction: a spelling that is the same in both languages
+ * (`reflux`, `pcos`, `prediabetes`, `pancreatitis`, `diabetes type 2`) is `neutral`, and the
+ * English placeholder `none` is counted apart from English condition names.
+ */
+interface ConditionLanguages {
+  readonly dutchOnly: number;
+  readonly englishOnly: number;
+  readonly englishNone: number;
+  readonly neutral: number;
+  readonly empty: number;
+  readonly neutralValues: readonly string[];
+}
+
+const DUTCH_ONLY = /schildklier|alvleesklier|suikerziekte|bloeddruk|slaapapneu|lever|artrose|hoog cholesterol|depressie|hypertensie|astma|hypothyreoidie|\bgeen\b/u;
+const ENGLISH_ONLY = /thyroid|hypertension|apnea|osteoarth|depression|asthma|\bliver\b|high cholesterol|high blood pressure/u;
+
+function conditionLanguages(values: readonly string[]): ConditionLanguages {
+  let dutchOnly = 0;
+  let englishOnly = 0;
+  let englishNone = 0;
+  let neutral = 0;
+  let empty = 0;
+  const neutralValues = new Set<string>();
+  for (const v of values) {
+    const f = fold(v);
+    const nl = DUTCH_ONLY.test(f);
+    const en = ENGLISH_ONLY.test(f);
+    if (nl && en) throw new Error(`condition language lists overlap on ${JSON.stringify(v)}`);
+    if (f === '') empty++;
+    else if (nl) dutchOnly++;
+    else if (en) englishOnly++;
+    else if (f === 'none') englishNone++;
+    else {
+      neutral++;
+      neutralValues.add(f);
+    }
+  }
+  return {dutchOnly, englishOnly, englishNone, neutral, empty, neutralValues: [...neutralValues].sort()};
 }
 
 function extras(input: ClaimsInput): ExtraFacts {
@@ -145,9 +186,6 @@ function extras(input: ClaimsInput): ExtraFacts {
     (r) => !REJECTION.includes(r.outcome) && !APPROVAL.includes(r.outcome),
   ).length;
 
-  const dutch = it.conditions.filter((v) => /schildklier|alvleesklier|suikerziekte|hoge bloeddruk|slaapapneu|lever|artrose|hoog cholesterol|depressie/u.test(fold(v))).length;
-  const english = it.conditions.filter((v) => /thyroid|pancrea|diabetes|hypertens|apnea|apnoe|cholesterol|reflux|osteoarth|depression|prediabetes/u.test(fold(v))).length;
-
   return {
     isoShapeSubmittedBefore2024: isoBeforeS,
     nonIsoShapeSubmitted2024OrLater: nonIsoAfterS,
@@ -158,8 +196,7 @@ function extras(input: ClaimsInput): ExtraFacts {
     twijfelRows: twijfelRows.length,
     twijfelOnRejection,
     twijfelOnNeither,
-    dutchConditionRows: dutch,
-    englishConditionRows: english,
+    conditionLanguages: conditionLanguages(it.conditions),
   };
 }
 
@@ -344,9 +381,13 @@ export function claimRows(input: ClaimsInput): ClaimRow[] {
     },
     {
       claim: 'intakes.csv: `conditions` is free text, Dutch and English mixed',
-      verdict: 'confirmed',
+      verdict: x.conditionLanguages.dutchOnly > 0 && x.conditionLanguages.englishOnly > 0 ? 'confirmed' : 'partly',
       evidence: [`${I}.conditions`],
-      note: `${x.dutchConditionRows} rows match a Dutch term and ${x.englishConditionRows} rows match an English term.`,
+      note:
+        `Each row in one class: ${x.conditionLanguages.dutchOnly} rows carry a Dutch-only spelling, ` +
+        `${x.conditionLanguages.englishOnly} an English-only condition name, ${x.conditionLanguages.englishNone} the English ` +
+        `placeholder \`none\`, ${x.conditionLanguages.neutral} a spelling that is the same in both languages ` +
+        `(${x.conditionLanguages.neutralValues.map((v) => `\`${v}\``).join(', ')}) and ${x.conditionLanguages.empty} are empty.`,
     },
     {
       claim: 'intakes.csv: `alcohol_units_week` is self-reported units per week',

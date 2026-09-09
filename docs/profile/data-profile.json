@@ -51998,14 +51998,14 @@
     },
     {
       "claim": "intakes.csv: `conditions` is free text, Dutch and English mixed",
-      "verdict": "confirmed",
+      "verdict": "partly",
       "evidence": [
         "P-23"
       ],
       "evidenceKeys": [
         "intakes.csv.conditions"
       ],
-      "note": "1117 rows match a Dutch term and 923 rows match an English term."
+      "note": "Each row in one class: 1814 rows carry a Dutch-only spelling, 0 an English-only condition name, 185 the English placeholder `none`, 731 a spelling that is the same in both languages (`diabetes type 2`, `pancreatitis 2022`, `pcos`, `prediabetes`, `reflux`) and 187 are empty."
     },
     {
       "claim": "intakes.csv: `alcohol_units_week` is self-reported units per week",
