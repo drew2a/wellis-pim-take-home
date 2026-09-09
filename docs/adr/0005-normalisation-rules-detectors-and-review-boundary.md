@@ -36,7 +36,8 @@ deterministic parser code; a "rule" is a string code on a normalisation record p
 
 ## Decision outcome
 
-Chosen option: **Option 1**. Option 2 was explicitly rejected by the repo owner ("the importer is
+Chosen option: **Option 1**, structured as three layers kept apart in code (mapper, detectors,
+resolution path; see below). Option 2 was explicitly rejected by the repo owner ("the importer is
 not a rule engine"); option 3 fails R-A9 and would produce thousands of identical items.
 
 ### Mapping specification per column
@@ -77,15 +78,35 @@ evidence it rests on (P-n, H-n). The three meaning-level assignments in `VOCAB_S
 (`cancelled` → churned, `on hold` → paused, `new`/`lead` → prospect) and the kilogram assumption
 for intake weight are listed there as assumptions.
 
-### Review items: the general mechanism
+### Three layers, kept apart in code
+
+1. **Mapper.** Converts raw to canonical and never guesses. Every change has a normalisation
+   record; if a value needs a guess, the mapper stores null and moves on. It knows nothing about
+   review items.
+2. **Detectors.** Read canonical data and create review items. A detector **may attach a proposal
+   to its item as data**: `{field, proposed_value, rule, evidence}`, nothing more. A detector never
+   writes a canonical value.
+3. **Resolution path.** The only way a canonical value changes after import, and it is the same
+   path whether the reviewer accepts a proposal or types a value: write the value, write the field
+   history (audit entry with actor, note, `changes`), close the item. Proposals are applied by a
+   human through this path, never by the importer.
+
+The intake form (Part B) does not use proposals; it shares only the detectors' parameters
+(plausibility bounds, term lists) as validation.
+
+There is **no proposal framework**. This export needs four kinds of proposal, and they are four
+functions next to the detectors that produce them:
+
+| proposal | produced by | proposed value |
+|---|---|---|
+| remove the space before `@` | email syntax detector | the address without internal whitespace (10 rows) |
+| read a unit-less weight as pounds | weight-unit detector (vocabulary item, per-row payload) | `weight_kg` = raw × 0.45359237, with both BMIs shown (18 rows) |
+| decimal shift into the plausible range | plausibility detector | the single ×10 or ×100 value that lands inside the bounds (`15` → 150, `7.8` → 78); none when zero or two shifts land |
+| re-format a phone in an unseen form | phone form detector | E.164 when the digits read unambiguously (`0031 6...`), else none (0 rows in this export) |
+
+Other properties of review items:
 
 - One queue, one table (ADR-0004). "Warning" and "proposed autofix" are not separate mechanisms.
-- A review item **may** carry a proposed resolution. It is applied only on operator consent and is
-  then an audit entry with a human actor and the value change in `changes`; never a normalisation
-  record.
-- **Decimal-shift proposal**: for a value outside its plausibility bounds, when exactly one of
-  ×10 / ×100 lands inside the bounds, that value is the proposed fix (`15` → 150, `1.75` → 175,
-  `7.8` → 78). Otherwise no proposal.
 - A vocabulary-level item's payload lists the affected rows; the operator may exclude rows before
   applying (used for the 18 unit-less weights and the 332 pending intakes with a cutoff date).
 - An unseen raw value in any closed vocabulary (`sex`, `status`, `outcome`, `weight_unit`, consent
