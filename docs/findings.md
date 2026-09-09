@@ -175,6 +175,65 @@ tail -n +2 legacy_export/patients.csv | awk -F, "{print \$3}" | grep -cE "^[^ @]
 6. Only consumer domains appear, so there is no employer or clinic address that would hint at a
    staff test account. `info@` is the one exception and it is incomplete.
 
+**Agreed** (2026-09-09)
+
+Canonical email = trimmed and lowercased, each step its own normalisation record (rules
+`whitespace-trim` 30 rows, `email-lowercase` 28 rows). Lowercasing the local part is accepted.
+The 10 addresses with an internal space are **not** changed automatically: canonical email stays
+null, and the row gets a review item that carries a *proposed fix* (the address with the space
+removed) which the operator applies with one action or rejects. This introduces a general
+mechanism: a review item MAY carry a proposed value; it is applied only with operator consent
+and is then recorded as a human decision, not as a normalisation. The 11 placeholder values
+become canonical null with a per-row review item "email missing, placeholder typed" and no
+proposed fix. Shared canonical email between rows creates a duplicate-candidate conflict, never
+a merge. No validation beyond the syntax check.
+
+### dob
+
+**Facts** (P-4, P-35, H-1, H-5)
+
+| fact | value |
+|---|---|
+| rows / empty / distinct | 2466 / 0 / 2350 |
+| shapes | `9999-99-99` 1828, `99-99-9999` 328, `99/99/9999` 310; nothing else |
+| unambiguous values (a part above 12) | dash shape: 207 day-first, 0 month-first; slash shape: 0 day-first, 154 month-first |
+| reading rule under test (H-1) | ISO = Y-M-D, dash = D-M-Y, slash = M-D-Y: 1479 unambiguous values, 0 counterexamples, 0 unreadable |
+| same rule on signup_date and submitted_at | 0 counterexamples there either; under it 0 intakes predate their patient's signup |
+| non-ISO shapes by signup year | present 2022, 2023, 2024; absent 2025, 2026 (P-36) |
+| birth decades | 1950s 95, 1960s 540, 1970s 469, 1980s 491, 1990s 477, 2000s 389, later 5 |
+| dob after 2028 (impossible) | 5 rows: 2044, 2049, 2059, 2060, 2077 |
+| age at signup under the rule | below 0: 5, 10 to 16: 22, 16 to 18: 78, 18 to 100: 2360, above 100: 1 (103.3 years) |
+| minors with intakes | 54 patients; their 70 intakes carry legacy outcomes approved 48, rejected 12, pending 10 |
+| duplicate pairs written in two formats | `03-02-1960` and `02/03/1960` (one person, H-5 group 1) read to the same date under the rule; so do the other two mixed-format twins |
+
+```sh
+npm run profile:hypotheses    # H-1 tables
+```
+
+The minors check reads dob and submitted_at with the H-1 rule and classes outcomes as approved
+(`approved`, `goedgekeurd`, `ok`), rejected (`rejected`, `afgewezen`, `declined`) or pending.
+
+**Possible warnings**
+
+1. A birth date read with the wrong ordering is a silent error: `03-02-1960` becomes a different
+   valid date, nothing fails, and age-based eligibility is then computed on a wrong age. This is
+   the column where guessing hurts most.
+2. The rule "ordering follows the separator" is inferred from the data. It has 1479 unambiguous
+   supporting values and no counterexample in this file, and it makes the mixed-format duplicate
+   pairs agree. It is still an inference about *this* export: a future export from another
+   automation could break it, so the rule must be versioned and the raw string kept.
+3. Under the rule, 710 ISO and 277 non-ISO values remain formally ambiguous (both parts at most
+   12). They are not ambiguous under the rule; they are ambiguous only if the rule is rejected.
+   Flagging 987 rows would be flagging the rule, not the rows.
+4. 5 birth dates are in the future and 1 gives an age above 100. No reading fixes them; they are
+   wrong values that need a human.
+5. 100 patients were under 18 at signup and 54 of them have intakes, 48 of which were approved.
+   Either the birth dates are wrong or minors were treated. Part B's age rule would reject every
+   one of them; running that detector over history (CLAUDE.md §5) will surface these as review
+   items without touching the historical outcome.
+6. The export stores dates without time zone, and dob needs none. Store as a calendar date, never
+   as a timestamp, or a UTC conversion will shift birthdays by a day.
+
 **Agreed**
 
 _Not yet discussed._
