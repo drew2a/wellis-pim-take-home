@@ -234,6 +234,64 @@ The minors check reads dob and submitted_at with the H-1 rule and classes outcom
 6. The export stores dates without time zone, and dob needs none. Store as a calendar date, never
    as a timestamp, or a UTC conversion will shift birthdays by a day.
 
+**Agreed** (2026-09-09)
+
+Read dob with the separator convention: ISO = Y-M-D, dash = D-M-Y, slash = M-D-Y. Every non-ISO
+value gets a normalisation record with rule code `DATE_ORDER_FROM_SEPARATOR` and the H-1 evidence
+(1479 unambiguous values, 0 counterexamples); ISO values are stored unchanged. Store as a calendar
+date, keep the raw string. The 6 impossible dates (5 future, 1 above 100) get canonical null and a
+per-row review item.
+
+The convention is inferred from the data, so it produces **one** vocabulary-level review item:
+"Confirm the separator convention (dash = D-M-Y, slash = M-D-Y)", carrying the H-1 evidence, which
+a human approves once. Row-level items for the 921 formally ambiguous values only where the
+alternative reading changes a consequence: the alternative reading flips minor/adult at the time
+of an intake for 6 patients (6 intakes; 3 at signup), so those 6 rows get a review item, the other
+915 do not. Minors are otherwise not a dob problem: they become review items when the age detector
+runs over history, outcome untouched. Any value not matching one of the three shapes in a future
+export is a review item, never a guess.
+
+The importer is not a rule engine: mapping is plain deterministic parser code. "Rule" in a
+normalisation record is a string code plus evidence, and "versioned" means the record carries the
+import run and importer version. "Warning" and "proposed autofix" are not separate mechanisms: they
+are review items on the one queue, optionally carrying a proposed resolution that is applied only
+on operator consent and logged as a human decision. The term is *review item* everywhere.
+
+### sex
+
+**Facts** (P-5, H-4)
+
+| fact | value |
+|---|---|
+| rows / empty / distinct raw / distinct folded | 2466 / 0 / 11 / 7 |
+| whitespace, digits, other characters | none |
+| raw values | `male` 267, `M` 256, `Male` 237, `m` 236, `female` 223, `man` 223, `vrouw` 212, `F` 209, `f` 207, `Female` 201, `V` 195 |
+| folded values | `male` 504, `m` 492, `female` 424, `f` 416, `man` 223, `vrouw` 212, `v` 195 |
+| languages | English words and initials (`male`, `m`), Dutch words and initials (`man`, `vrouw`, `v`); Dutch `m` and English `m` coincide |
+| spread | every spelling appears in every source and every signup year (H-4 pattern, P-36); no automation owns a spelling |
+| values outside male/female | none: no empty, no `x`, `other`, `onbekend`, `non-binary` |
+
+Closed mapping, covering all 2466 rows:
+
+| canonical | raw spellings | rows |
+|---|---|---|
+| `male` | `male`, `Male`, `M`, `m`, `man` | 1219 |
+| `female` | `female`, `Female`, `F`, `f`, `vrouw`, `V` | 1247 |
+
+**Possible warnings**
+
+1. Two languages share one letter: `M` is male in English and man in Dutch, so it is safe; `V`
+   only means vrouw. There is no letter that means different things in the two languages in this
+   file, but a future `W` (woman) or `O` (onbekend) would not be in the table.
+2. The column is `sex` and the values are binary. Whether the new intake form asks for sex at
+   birth, gender, or both is a Part B question; the legacy column cannot answer it and should not
+   be relabelled as gender.
+3. Nothing in the eligibility rules uses sex (age and BMI do not), so a mapping error here does
+   not change an outcome. It still identifies a patient in the console and in letters.
+4. A vocabulary table is only correct for the values it has seen. An unseen spelling in a future
+   export must produce one vocabulary-level review item ("new value `X` in sex, N rows"), not N
+   row items and not a guess.
+
 **Agreed**
 
 _Not yet discussed._
