@@ -119,6 +119,62 @@ tail -n +2 legacy_export/patients.csv | awk -F, "{print \$2}" | grep -cE "^[A-Za
    Splitting is guesswork and gains nothing for Part A; the new intake form (Part B) can collect
    structured names if wanted.
 
+**Agreed** (2026-09-09)
+
+Trim trailing whitespace with a normalisation record (rule `whitespace-trim`, 72 rows). Store the
+trimmed value as typed otherwise: one field, no split, no casing changes. Never use the name to
+merge. Folded name enters duplicate-candidate detection only as a secondary signal next to dob,
+phone and bsn; name variants of the kind found here are what a reviewer sees side by side in a
+conflict.
+
+### email
+
+**Facts** (P-3, P-34, H-5)
+
+| fact | value |
+|---|---|
+| rows / empty / distinct raw / distinct folded | 2466 / 0 / 2447 / 2419 |
+| leading whitespace / trailing whitespace | 18 rows / 12 rows (30 total) |
+| contains uppercase | 28 rows, of which 21 are the whole address in capitals (`SEM.DEBOER@YAHOO.COM`) |
+| whitespace inside the address | 10 rows, all of the form `local @domain` |
+| fails the syntax check | 16 distinct values on 21 rows: the 10 above plus `n.v.t.` 4, `x` 3, `-` 1, `none` 1, `info@` 1, `@gmail.com` 1 |
+| domains | 9 real domains, all consumer providers (`protonmail.com` 287 ... `outlook.com` 239), plus 1 row with no domain |
+| plus-addressing | 0 rows |
+| duplicate emails, exact | 16 groups, 35 rows |
+| duplicate emails after folding | 44 groups, 91 rows (includes the junk groups `n.v.t.` x4 and `x` x3) |
+| local part on more than one domain | 547 local parts |
+| local part ending in `x` | 24 rows; 6 of them sit in the duplicate groups of H-5 (`fleur.degrootx`, `emily.dewitx`, `wei.vosx`, `bram.nairx`, `luuk.dijkstrax`, `emma.visserx`) |
+| local part ending in a digit | 109 rows |
+
+```sh
+tail -n +2 legacy_export/patients.csv | awk -F, "{print \$3}" | grep -c "^ "                    # 18
+tail -n +2 legacy_export/patients.csv | awk -F, "{print \$3}" | grep -cE "^[A-Z0-9.@]+$"        # 21
+tail -n +2 legacy_export/patients.csv | awk -F, "{print \$3}" | grep -cE "^[^ @]+ @[^ @]+$"     # 10
+```
+
+**Possible warnings**
+
+1. EXPORT-NOTES.md says one automation used email as a login. As exported it is not comparable:
+   whitespace, case and a stray space before `@` split addresses that are the same mailbox. The
+   comparison key has to be normalised (trim, lowercase, drop internal whitespace) or duplicate
+   detection misses exactly the cases the ops team described.
+2. Normalising the *stored* value is a different question from normalising the *comparison key*.
+   Lowercasing the domain is always safe; lowercasing the local part is technically not (RFC 5321)
+   but universally so in practice for these 9 providers. Removing the internal space is an
+   inference: 10 of 10 cases are `local @domain` with a known provider domain, no counterexample.
+3. 11 rows carry placeholders, not addresses (`x`, `-`, `n.v.t.`, `none`, `info@`,
+   `@gmail.com`). Storing them as emails poisons duplicate detection (`n.v.t.` already forms a
+   4-row "duplicate" group) and any future mailing. They are missing values that were typed to
+   get past a required field.
+4. Same email on different rows (44 folded groups) is the strongest single duplicate signal in the
+   file, but it is not proof of one person: shared family addresses exist in real data, and here
+   28 of the 31 name+dob groups share an email while 16 email groups have different names.
+5. The `x` and digit suffixes on the local part (`bram.nairx`, `emily.dewit1`) are how people
+   made a "new" address to retry the intake. They defeat exact matching on purpose and are only
+   caught through dob, phone or bsn.
+6. Only consumer domains appear, so there is no employer or clinic address that would hint at a
+   staff test account. `info@` is the one exception and it is incomplete.
+
 **Agreed**
 
 _Not yet discussed._
