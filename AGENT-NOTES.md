@@ -97,9 +97,10 @@ Concrete cases where the agent's output was wrong and I corrected it.
 ## Review of `feature/legacy-importer` (2026-09-09)
 
 A fresh session ran `/code-review high` on the branch before the merge (`CLAUDE.md` §3). Ten
-findings survived verification; a second review session fixed or declined each one.
+findings survived verification, plus six cut by the report cap; a second review session fixed,
+corrected, deferred or declined each one.
 
-- **Fixed (8):** the "future" reference date was inferred from the data through the ambiguous
+- **Fixed (12):** the "future" reference date was inferred from the data through the ambiguous
   date reader and landed on 2062-11-04, a date in no file. I had it removed rather than repaired:
   every profile script now takes `--as-of YYYY-MM-DD` and prints it. Also fixed: four literal NUL
   bytes that made `common.ts` binary to git and therefore invisible to the review itself (the
@@ -107,8 +108,10 @@ findings survived verification; a second review session fixed or declined each o
   to show; overlapping Dutch/English term lists that double-counted 190 rows; two definitions of
   "same day" between the intake and patient duplicate checks (4 pairs became 5); a stale path to
   the profile JSON; a prune step that would have blanked the inventory page at 41 sections; and
-  hypotheses.ts carrying its own copies of thresholds and helpers. Two cut-by-cap findings were
-  fixed as well: `URL.pathname` for the repo root, and the duplicated helpers.
+  hypotheses.ts carrying its own copies of thresholds and helpers. Four cut-by-cap findings were
+  fixed as well: `URL.pathname` for the repo root, the duplicated helpers, an isolated-tail scan
+  that a single early outlier could have collapsed, and a name-group count computed as a
+  difference of two group counts (20) instead of the folded names with several spellings (41).
 - **Corrected as clerical (1):** `VOCAB_OUTCOME` 1918 was a tally that forgot the 82 `pending`
   rows; the right figure is 1836. The decision is unchanged, so the count was corrected in place
   under a new sentence in the ADR lifecycle rather than by a superseding ADR. The same pass
