@@ -69,7 +69,7 @@ not a rule engine"); option 3 fails R-A9 and would produce thousands of identica
 | intakes.meds_current | raw text + `medication_report` | `VOCAB_NONE_MEDICATION` 815 | vocabulary: whole term vocabulary classified (GLP-1 / none / unrecognised) |
 | intakes.conditions | raw text + `condition_report` | `VOCAB_NONE_CONDITION` 348 | vocabulary: whole vocabulary classified (flag / weight-related / other / none / unrecognised) |
 | intakes.alcohol_units_week | integer | `NON_NUMERIC_TO_NULL` 272 (`n.v.t.`) | vocabulary: `n.v.t.` zero or not answered |
-| intakes.outcome | enum + legacy state | `VOCAB_OUTCOME` 1918; `OUTCOME_OK_ASSUMED_APPROVED` 441 | vocabulary: confirm `OK` = approved; vocabulary: 332 `legacy_pending` (three resolutions, cutoff date) |
+| intakes.outcome | enum + legacy state | `VOCAB_OUTCOME` 1836; `OUTCOME_OK_ASSUMED_APPROVED` 441 | vocabulary: confirm `OK` = approved; vocabulary: 332 `legacy_pending` (three resolutions, cutoff date) |
 | intakes.reviewer_note | text | none | vocabulary: 73 "twijfel, toch akkoord" on a rejecting outcome (payload lists rows) |
 | consents.* | events as exported | none | see consent state below |
 
@@ -193,8 +193,11 @@ one.
 
 ### Consequences
 
-- Good: the boundary is a table (R-A13); every count in it is reproducible from
-  `npm run profile` and `npm run profile:hypotheses`.
+- Good: the boundary is a table (R-A13). Its mapping-table counts come from the profile (P-n, H-n:
+  `npm run profile -- --as-of 2026-09-08`, `npm run profile:hypotheses -- --as-of 2026-09-08`); the
+  detector, consent-state and identity-tier counts are a one-off computation recorded in
+  `docs/findings.md` and are reproduced by the import report, which the Confirmation section
+  requires to list every rule code with these counts.
 - Good: detectors are one definition for import, history and Part B; the console shows legacy and
   new cases in the same shape.
 - Bad: the history audit creates 115 row items on day one (42 GLP-1, 15 flag conditions, 58

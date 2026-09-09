@@ -2,9 +2,10 @@
 
 What each column of `legacy_export/` contains, what could go wrong when we map it, and what we
 agreed to do about it. Built one column at a time in discussion; the evidence is in
-`docs/profile/data-profile.md` (`P-n` sections, `npm run profile`) and `docs/profile/data-hypotheses.md`
-(`H-n` sections, `npm run profile:hypotheses`). Numbers here are copied from those two generated
-files and nowhere else. Extra one-off checks quote their shell command.
+`docs/profile/data-profile.md` (`P-n` sections, `npm run profile -- --as-of 2026-09-08`) and
+`docs/profile/data-hypotheses.md` (`H-n` sections, `npm run profile:hypotheses -- --as-of 2026-09-08`).
+Numbers here are copied from those two generated files and nowhere else. Extra one-off checks quote
+their shell command.
 
 Each column has three parts:
 
@@ -207,7 +208,7 @@ a merge. No validation beyond the syntax check.
 | duplicate pairs written in two formats | `03-02-1960` and `02/03/1960` (one person, H-5 group 1) read to the same date under the rule; so do the other two mixed-format twins |
 
 ```sh
-npm run profile:hypotheses    # H-1 tables
+npm run profile:hypotheses -- --as-of 2026-09-08    # H-1 tables
 ```
 
 The minors check reads dob and submitted_at with the H-1 rule and classes outcomes as approved
@@ -244,8 +245,9 @@ per-row review item.
 
 The convention is inferred from the data, so it produces **one** vocabulary-level review item:
 "Confirm the separator convention (dash = D-M-Y, slash = M-D-Y)", carrying the H-1 evidence, which
-a human approves once. Row-level items for the 921 formally ambiguous values only where the
-alternative reading changes a consequence: the alternative reading flips minor/adult at the time
+a human approves once. Row-level items for the 921 values whose alternative reading is a different
+calendar date (P-4; the other 66 of the 987 have day and month equal) only where the alternative
+reading changes a consequence: the alternative reading flips minor/adult at the time
 of an intake for 6 patients (6 intakes; 3 at signup), so those 6 rows get a review item, the other
 915 do not. Minors are otherwise not a dob problem: the age rule runs over history in shadow mode
 (ADR-0005); review items only for minors with an approved or pending outcome (58 intakes), the 12
@@ -494,7 +496,7 @@ Intake weights are kilogram-scale throughout (P-20: max 167.1, no unit column).
   whatever went wrong happened to that patient's data as a whole. No multiplier is evidenced.
 
 ```sh
-npm run profile:hypotheses    # H-2 tables
+npm run profile:hypotheses -- --as-of 2026-09-08    # H-2 tables
 ```
 
 **Possible warnings**
@@ -814,7 +816,7 @@ Check (1): no stored value differs from raw. Check (2): no review items.
 | orphans with a look-alike patient (same height, weight within 10 %, signup at most a year earlier) | none 7, exactly one 3, several 11 |
 | patients with no intake | 447 of 2466 |
 | intakes per patient | 1: 1311 patients, 2: 581, 3: 148 |
-| same patient, same submission day | 5 pairs once dates are read with the separator convention (P-27 counts 4 on raw strings); ids consecutive in 3 of them; weights differ by 1 to 3 kg; outcomes agree in 2 pairs, disagree in 3 (`in review` vs `goedgekeurd`, `Rejected` vs `in review`, `afgewezen` vs `rejected` agree) |
+| same patient, same submission day | 5 pairs (P-27, which groups rows whose dates share a plausible reading, so `04/12/2024` and `2024-04-12` count as one day); ids consecutive in 3 of them; weights differ by 1 to 3 kg; outcomes agree in 2 pairs, disagree in 3 (`in review` vs `goedgekeurd`, `Rejected` vs `in review`, `afgewezen` vs `rejected` agree) |
 
 ```sh
 tail -n +2 legacy_export/patients.csv | cut -d, -f1 | sort -u > /tmp/p.txt
@@ -1307,7 +1309,7 @@ tail -n +2 legacy_export/intakes.csv | awk -F, '{print $(NF-1)}' | sort | uniq -
 **Proposed** (awaiting explicit confirmation)
 
 Map with the closed table into `approved | rejected | pending`; rows whose raw spelling differs
-from the canonical string get a normalisation record `VOCAB_OUTCOME` (2359 rows: all but
+from the canonical string get a normalisation record `VOCAB_OUTCOME` (2277 rows: all but
 `approved` 411, `rejected` 147, `pending` 82). The `OK` assignment is listed in the import report
 under rules applied as an inference. Legacy intakes do not enter the Part B state machine: they
 get the terminal legacy states `legacy_approved`, `legacy_rejected` and the non-terminal
@@ -1318,14 +1320,14 @@ close them as expired?" with the per-year breakdown; on the operator's choice th
 the state machine at `in_review` (each with an audit entry) or move to `legacy_expired`. Unseen
 spellings in a future export: one vocabulary-level item, class `unknown` until resolved.
 
-Check (1): 2359 rows differ from raw, each with a record. Check (2): one item for one product
+Check (1): 2277 rows differ from raw, each with a record. Check (2): one item for one product
 decision about 332 rows; the per-patient clinical questions come from the detectors, not from
 this column.
 
 **Agreed** (2026-09-09)
 
 Closed table for the twelve spellings other than `OK`, normalisation record `VOCAB_OUTCOME` per
-row whose raw spelling differs from the canonical string (1918 rows). `OK` is not a spelling of
+row whose raw spelling differs from the canonical string (1836 rows). `OK` is not a spelling of
 approved but an inference about 441 medical decisions, so it is treated like the separator
 convention: mapped to `approved` with its own rule code `OUTCOME_OK_ASSUMED_APPROVED` on each of the
 441 rows, plus **one** vocabulary-level review item "confirm `OK` = approved" carrying the evidence
@@ -1344,7 +1346,7 @@ all-or-nothing, so the reviewer can say "open 2026, leave the rest"; 19 intakes 
 from 2026 are not the same question. Payload carries the per-year breakdown. Unseen spellings in a
 future export: one vocabulary-level item, class `unknown` until resolved.
 
-Check (1): 1918 + 441 rows differ from raw, each with a record naming its rule. Check (2): two
+Check (1): 1836 + 441 rows differ from raw, each with a record naming its rule. Check (2): two
 vocabulary-level items, each a decision about a rule or a product choice; the per-patient clinical
 questions come from the detectors.
 
