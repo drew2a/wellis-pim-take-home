@@ -1024,3 +1024,39 @@ No divergence detector for height. The import report states under unexpected fin
 height equals the patient row in 2896 of 2896 cases.
 
 Check (1): no stored value differs from raw. Check (2): 0 new items.
+
+### alcohol_units_week
+
+**Facts** (P-24, H-4)
+
+| fact | value |
+|---|---|
+| rows / empty / distinct | 2917 / 290 / 9 |
+| values | `0` 870, `10` 311, `2` 306, `6` 303, `1` 284, `4` 276, `5` 5, `n.v.t.` 272, empty 290 |
+| numeric shape | integers only; the set {0, 1, 2, 4, 6, 10} on 2350 rows reads as a pick-list, `5` on 5 rows does not |
+| maximum | 10, on 311 rows: a cap ("10 or more"), not a measurement |
+| `n.v.t.` by anything | same share under every questionnaire label and every year (H-4); same outcome mix as `0`, as `1+` and as empty |
+
+**Possible warnings**
+
+1. `n.v.t.` ("not applicable") on 272 rows next to 870 explicit zeros: it may mean "I do not
+   drink", "I would rather not say" or a form default. The export gives no way to tell, and
+   guessing `0` would invent 272 answers.
+2. `10` is a ceiling. Any later analysis that averages alcohol units would be wrong; the value
+   means "10 or more".
+3. Nothing in the eligibility rules uses alcohol, so no outcome depends on this column. Its only
+   consumer is a reviewer reading the intake.
+4. Empty (290) and `n.v.t.` (272) are different things in the source and must stay
+   distinguishable after import; both cannot become plain null without a trace.
+
+**Agreed** (2026-09-09, recorded by the agent under the standing instruction; checked against the
+two questions below)
+
+Canonical integer `alcohol_units_week`, stored unchanged for the 2355 numeric rows; the import
+report notes that 10 is a cap. `n.v.t.` maps to null with a normalisation record `NON_NUMERIC_TO_NULL`
+(272 rows, raw kept, so it stays distinguishable from empty) and **one** vocabulary-level review
+item "`n.v.t.` on 272 rows: zero or not answered?", no proposed fix. Empty stays null, no record,
+no item. Any other non-numeric value in a future export: same record, one vocabulary-level item
+per new value.
+
+Check (1): 272 rows differ from raw, each with a record. Check (2): one item for one question.
