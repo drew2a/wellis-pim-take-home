@@ -6,7 +6,7 @@
  * which sections are added, never typed, so a new inventory cannot desynchronise the
  * cross-references.
  */
-import {Counter, Grouper, collapsedShape, fold, hasEdgeWhitespace, shape} from './util.js';
+import {Counter, Grouper, KEY_SEP, collapsedShape, fold, hasEdgeWhitespace, shape} from './util.js';
 
 /** Above this many distinct raw values a column is inventoried by shape, not by value. */
 export const VALUE_TABLE_LIMIT = 60;
@@ -270,15 +270,15 @@ export function crossTab(
   const rowKeys = [...new Set(pairs.map((p) => p[0]))].sort();
   const colKeys = [...new Set(pairs.map((p) => p[1]))].sort();
   const counts = new Counter();
-  for (const [r, c] of pairs) counts.add(`${r} ${c}`);
+  for (const [r, c] of pairs) counts.add(`${r}${KEY_SEP}${c}`);
   const rows = rowKeys.map((r) => [
     code(r),
-    ...colKeys.map((c) => String(counts.get(`${r} ${c}`))),
-    String(colKeys.reduce((t, c) => t + counts.get(`${r} ${c}`), 0)),
+    ...colKeys.map((c) => String(counts.get(`${r}${KEY_SEP}${c}`))),
+    String(colKeys.reduce((t, c) => t + counts.get(`${r}${KEY_SEP}${c}`), 0)),
   ]);
   rows.push([
     '**total**',
-    ...colKeys.map((c) => String(rowKeys.reduce((t, r) => t + counts.get(`${r} ${c}`), 0))),
+    ...colKeys.map((c) => String(rowKeys.reduce((t, r) => t + counts.get(`${r}${KEY_SEP}${c}`), 0))),
     String(pairs.length),
   ]);
   return table(caption, [rowLabel, ...colKeys.map((c) => (c === '' ? '(empty)' : plain(c))), 'total'], rows);

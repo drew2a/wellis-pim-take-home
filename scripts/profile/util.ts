@@ -116,6 +116,13 @@ export function hasDoubleSpace(s: string): boolean {
   return /\s\s/u.test(s.trim());
 }
 
+/**
+ * Separator for composite string keys. NUL cannot occur in a CSV field or a JSON string
+ * value read from the export, so joining with it can never collide two distinct tuples.
+ * Written as an escape: a literal NUL byte makes git treat the source file as binary.
+ */
+export const KEY_SEP = '\u0000';
+
 export function digitsOnly(s: string): string {
   return s.replace(/\D/gu, '');
 }

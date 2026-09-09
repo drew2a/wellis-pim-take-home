@@ -7,11 +7,9 @@ import {candidateDates} from './dates.js';
 import {dateAnalysis, foldingMerge, freeTextAnalysis, numericAnalysis, shapeCrossTab, type TermSpec} from './common.js';
 import {code, columnSection, crossTab, table, type Section, type Table} from './report.js';
 import type {Patients} from './patients.js';
-import {Counter, band, bandLabels, fold, numStats, parseNumber} from './util.js';
+import {Counter, KEY_SEP, band, bandLabels, fold, numStats, parseNumber} from './util.js';
 
 const FILE = 'intakes.csv';
-/** Separator for joining a row into one comparison key; cannot occur in a CSV field. */
-const FIELD_SEP = '\u0000';
 
 export interface Intakes {
   readonly csv: Csv;
@@ -416,7 +414,7 @@ export function intakesSections(it: Intakes, ctx: IntakesContext): Section[] {
   for (const k of perPatient.keys()) perPatientDist.add(String(perPatient.get(k)));
   const withoutIdCounter = new Counter();
   const idIdx = it.csv.header.indexOf('intake_id');
-  for (const r of it.csv.rows) withoutIdCounter.add(r.filter((_, i) => i !== idIdx).join(FIELD_SEP));
+  for (const r of it.csv.rows) withoutIdCounter.add(r.filter((_, i) => i !== idIdx).join(KEY_SEP));
   const identicalApartFromId = withoutIdCounter.entries().filter((e) => e.count > 1);
   sections.push({
     key: `${FILE}.duplicates`,
@@ -449,7 +447,7 @@ export function intakesSections(it: Intakes, ctx: IntakesContext): Section[] {
         `Groups identical apart from intake_id${identicalApartFromId.length > 10 ? ` (first 10 of ${identicalApartFromId.length})` : ''}`,
         ['rows in group', 'legacy_patient_id', 'submitted_at', 'outcome'],
         identicalApartFromId.slice(0, 10).map((e) => {
-          const fields = e.value.split(FIELD_SEP);
+          const fields = e.value.split(KEY_SEP);
           const at = (name: string): string => {
             const hi = it.csv.header.indexOf(name);
             return fields[hi > idIdx ? hi - 1 : hi] ?? '';
