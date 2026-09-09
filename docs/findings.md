@@ -517,6 +517,71 @@ npm run profile:hypotheses    # H-2 tables
    store a canonical value in mixed units with a unit column beside it; that is how the legacy
    system got here.
 
+**Agreed** (2026-09-09)
+
+1. Canonical `weight_kg`, numeric with one decimal, raw value and raw unit kept. `kg` rows are
+   stored unchanged.
+2. `lbs` rows are converted with rule code `WEIGHT_LBS_TO_KG` (factor 0.45359237), one
+   normalisation record each (55 rows).
+3. Empty-unit rows: canonical null plus **one** vocabulary-level review item "18 rows have a weight
+   and no unit; evidence says pounds", carrying the H-2 evidence and the proposed fix "convert as
+   pounds". Its payload lists all 18 rows with both readings and both BMIs: as kg 57.4 to 92.5, as
+   pounds 26.0 to 42.0, six of them between 26.0 and 27.2, on the eligibility threshold. The
+   operator may exclude individual rows before the fix is applied. One decision, consequence
+   visible per patient. Each converted row gets a human-decision record.
+4. Divergence detector, every patient regardless of unit: canonical signup weight outside 0.9 to
+   1.1 of **every** intake weight of that patient. The tolerance is derived from the `kg` rows
+   (2684 of 2688 intakes within it), not chosen. Routing by what a reviewer can decide:
+   - `kg` rows: per-row review item, no proposed fix. 3 patients (4 intakes) in this export.
+   - `lbs` rows: the non-reconciliation is systematic (49 of 68 intakes outside the tolerance after
+     conversion, 30 of 46 patients disagree with all their intakes, against 4 of 2688 for `kg`).
+     Fifty identical items give a reviewer nothing to decide, so this becomes one entry in the
+     import report's unexpected findings plus **one** vocabulary-level review item carrying that
+     evidence. No per-row items.
+   - Empty-unit rows run through the detector only after item 3 gives them a canonical value.
+5. 105 empty weights: null, no item.
+6. Plausibility detector, shared by the whole system: `weight_kg` outside [30, 300] or `height_cm`
+   outside [100, 230] produces a per-row review item, canonical null, raw kept, no proposed fix.
+   The divergence detector is silent on these rows because the intakes repeat the same values
+   (tiny weights 5.7 to 9.1, heights 15, 45, 45, 51, 300), so a separate detector is needed. In
+   this export it fires on 5 patient weights (6.5 to 8.6, the decimal-shift reading 7.8 → 78 goes
+   into the payload as a hypothesis only) and 5 patient heights; over `intakes.csv` on 6 weights
+   below 30 and 6 heights out of range. The bounds live in the rules file, not in code: the same
+   definition of "physically possible" becomes the Part B form validation and Part B will version
+   it.
+
+### height_cm
+
+**Facts** (P-11, P-21, H-3)
+
+| fact | value |
+|---|---|
+| rows / empty / distinct | 2466 / 0 / 51 |
+| shape | integers only: `999` 2462, `99` 4; 0 decimals, 0 unit text, 0 whitespace |
+| distribution | min 15, p5 153, median 175, p95 196, max 300 |
+| values outside [100, 230] | 5 rows: 15, 45, 45, 51, 300 |
+| metres (1.50 .. 2.20) or inches (55 .. 80) | 0 rows: "always intended as centimetres" holds for the plausible values |
+| intake height vs patient height | byte-identical on 2896 of 2896 resolvable intakes (H-3); the 5 odd values are repeated in every intake of those patients |
+
+```sh
+tail -n +2 legacy_export/patients.csv | cut -d, -f11 | awk '$1<100 || $1>230' | sort | tr '\n' ' '   # 15 300 45 45 51
+```
+
+**Possible warnings**
+
+1. Height is the other half of BMI. A height of 45 cm with a weight of 96.9 kg gives a BMI of 478;
+   nothing downstream would catch that unless the plausibility detector (weight agreement, item 6)
+   nulls the canonical value first.
+2. EXPORT-NOTES.md says intake height is self-reported at submission time. The data says it is a
+   copy of the patient row, every time. So a wrong patient height is wrong on every intake of that
+   patient: the error is correlated, not independent, and the intake cannot be used to
+   cross-check the patient row for height the way it can for weight.
+3. The column is integer centimetres with no decimals. A future export in metres (`1.75`) or with
+   a decimal centimetre (`175.5`) is outside what we have seen; the first must be a review item,
+   the second a documented conversion.
+4. The 300 is possibly 200 with a typo and the 15 possibly 150 with a dropped digit. Both are
+   hypotheses; neither has evidence in the export and neither becomes a proposed fix.
+
 **Agreed**
 
 _Not yet discussed._
