@@ -300,6 +300,7 @@ export function freeTextAnalysis(
   // When the column's own value table already lists every value, only the empty-like subset
   // adds anything here; above the limit this is the only folded inventory in the document.
   const shown = foldedEntries.length <= valueTableLimit ? emptyLike : foldedEntries.slice(0, valueTableLimit);
+  const separatorRows = SEPARATORS.map(([lbl, re]) => ({separator: lbl, rows: values.filter((v) => re.test(v)).length}));
   const tables: Table[] = [
     table(
       foldedEntries.length <= valueTableLimit
@@ -311,7 +312,7 @@ export function freeTextAnalysis(
     table(
       'Separator occurrences (rows whose value contains the separator)',
       ['separator', 'rows'],
-      SEPARATORS.map(([lbl, re]) => [code(lbl), String(values.filter((v) => re.test(v)).length)]),
+      separatorRows.map((r) => [code(r.separator), String(r.rows)]),
     ),
   ];
 
@@ -377,7 +378,7 @@ export function freeTextAnalysis(
       foldedValues: foldedEntries.map((e) => ({folded: e.value, count: e.count})),
       terms: termJson,
       probeTokens: probeRows.map((r) => ({token: r[0], count: Number(r[1]), coveredByTerm: r[2] === 'yes'})),
-      separators: SEPARATORS.map(([lbl, re]) => ({separator: lbl, rows: values.filter((v) => re.test(v)).length})),
+      separators: separatorRows,
     },
   };
 }
