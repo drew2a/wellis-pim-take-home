@@ -1104,7 +1104,7 @@ None.
 
 ### P-27 intakes.csv duplicate rows and intakes per patient
 
-4 (legacy_patient_id, submitted_at) pairs appear more than once, covering 8 rows. 0 groups of rows are byte-identical in every field except intake_id, covering 0 rows.
+5 groups of rows share a legacy_patient_id and a submission day (their submitted_at values have a candidate date in common under the plausible orderings), covering 10 rows. 0 groups of rows are byte-identical in every field except intake_id, covering 0 rows.
 
 **Intakes per patient id**
 
@@ -1114,14 +1114,15 @@ None.
 | 2 | 581 |
 | 3 | 148 |
 
-**Repeated (legacy_patient_id, submitted_at) pairs**
+**Same patient, same submission day**
 
-| legacy_patient_id | submitted_at | rows |
-| --- | --- | --- |
-| `recFzM0hMij94VLi6` | `2026-04-21` | 2 |
-| `recJ2kAlUPJa88M4r` | `2024-08-11` | 2 |
-| `recnnQEt8Nxp4xcc9` | `2024-07-22` | 2 |
-| `recuSs76Rr161XtAA` | `2062-01-25` | 2 |
+| legacy_patient_id | submitted_at values | intake_id values | rows |
+| --- | --- | --- | --- |
+| `recJ2kAlUPJa88M4r` | `2024-08-11` `2024-08-11` | `INT-8763` `INT-8764` | 2 |
+| `recnnQEt8Nxp4xcc9` | `2024-07-22` `2024-07-22` | `INT-7533` `INT-7532` | 2 |
+| `recFzM0hMij94VLi6` | `2026-04-21` `2026-04-21` | `INT-8344` `INT-8342` | 2 |
+| `recuSs76Rr161XtAA` | `2062-01-25` `2062-01-25` | `INT-7254` `INT-7255` | 2 |
+| `rechmuPCybu0EmYUw` | `04/12/2024` `2024-04-12` | `INT-7500` `INT-7498` | 2 |
 
 **Groups identical apart from intake_id**
 
@@ -1404,7 +1405,7 @@ Findings the notes do not mention at all. Each is a count, not a judgement.
 - 61 phone numbers are shared by more than one row when compared on digits only. (P-7, P-34)
 - 72 full_name values carry leading or trailing whitespace, which splits 20 name groups that folding would join; 0 names contain a digit and 0 are ALL CAPS. (P-2)
 - The reviewer_note "twijfel, toch akkoord" (doubt, agreed anyway) appears on 421 intakes, of which 73 have a rejecting outcome and 49 an outcome that is neither an approval nor a rejection. (P-26)
-- 4 (legacy_patient_id, submitted_at) pairs repeat and 0 row groups are identical in every field except intake_id. (P-27)
+- 5 patients submitted more than one intake on the same day (dates compared on any shared plausible reading) and 0 row groups are identical in every field except intake_id. (P-27)
 - 7 patients have a revoke with no prior grant in the log. (P-33)
 - 131 patients get a different derived consent state depending on whether the log is read in timestamp order or in file order, and 131 patients have events written out of timestamp order. (P-33)
 - 99 patients have no consent event at all, which is not the same as a revoked consent. (P-32)

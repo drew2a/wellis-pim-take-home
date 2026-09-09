@@ -17,7 +17,7 @@ import {
 } from './common.js';
 import {code, columnSection, crossTab, table, type Section, type Table} from './report.js';
 import type {Patients} from './patients.js';
-import {Counter, KEY_SEP, band, bandLabels, fold, numStats, parseNumber} from './util.js';
+import {Counter, KEY_SEP, UnionFind, band, bandLabels, fold, numStats, parseNumber} from './util.js';
 
 const FILE = 'intakes.csv';
 
@@ -405,9 +405,22 @@ export function intakesSections(it: Intakes, ctx: IntakesContext): Section[] {
   );
 
   // ---- duplicates ---------------------------------------------------------------
-  const pairCounter = new Counter();
-  it.patientId.forEach((id, i) => pairCounter.add(`${id}||${it.submittedAt[i] ?? ''}`));
-  const dupPairs = pairCounter.entries().filter((e) => e.count > 1);
+  // Same patient, same submission day: two rows group when their submitted_at values share
+  // a candidate date under the plausible orderings, the same test the duplicate-patient
+  // grouping (c) applies to dob, so `04/12/2024` and `2024-04-12` count as one day.
+  const uf = new UnionFind(it.csv.rows.length);
+  const bucket = new Map<string, number[]>();
+  it.patientId.forEach((id, i) => {
+    for (const d of it.submittedCandidates[i] ?? []) {
+      const key = `${id}${KEY_SEP}${d}`;
+      const list = bucket.get(key);
+      if (list === undefined) bucket.set(key, [i]);
+      else list.push(i);
+    }
+  });
+  for (const rows of bucket.values()) for (let k = 1; k < rows.length; k++) uf.union(rows[0] as number, rows[k] as number);
+  const sameDayGroups = uf.components();
+  const sameDayRows = sameDayGroups.reduce((t, g) => t + g.length, 0);
   const perPatient = new Counter();
   for (const id of it.patientId) perPatient.add(id);
   const perPatientDist = new Counter();
@@ -421,10 +434,10 @@ export function intakesSections(it: Intakes, ctx: IntakesContext): Section[] {
     title: `${FILE} duplicate rows and intakes per patient`,
     group: 'inventory',
     notes: [
-      `${dupPairs.length} (legacy_patient_id, submitted_at) pairs appear more than once, covering ` +
-        `${dupPairs.reduce((t, e) => t + e.count, 0)} rows. ${identicalApartFromId.length} groups of rows are ` +
-        `byte-identical in every field except intake_id, covering ` +
-        `${identicalApartFromId.reduce((t, e) => t + e.count, 0)} rows.`,
+      `${sameDayGroups.length} groups of rows share a legacy_patient_id and a submission day (their submitted_at ` +
+        `values have a candidate date in common under the plausible orderings), covering ${sameDayRows} rows. ` +
+        `${identicalApartFromId.length} groups of rows are byte-identical in every field except intake_id, ` +
+        `covering ${identicalApartFromId.reduce((t, e) => t + e.count, 0)} rows.`,
     ],
     tables: [
       table(
@@ -436,12 +449,14 @@ export function intakesSections(it: Intakes, ctx: IntakesContext): Section[] {
           .map((e) => [e.value, String(e.count)]),
       ),
       table(
-        `Repeated (legacy_patient_id, submitted_at) pairs${dupPairs.length > 20 ? ` (first 20 of ${dupPairs.length})` : ''}`,
-        ['legacy_patient_id', 'submitted_at', 'rows'],
-        dupPairs.slice(0, 20).map((e) => {
-          const [id, at] = e.value.split('||') as [string, string];
-          return [code(id), code(at), String(e.count)];
-        }),
+        `Same patient, same submission day${sameDayGroups.length > 20 ? ` (first 20 of ${sameDayGroups.length})` : ''}`,
+        ['legacy_patient_id', 'submitted_at values', 'intake_id values', 'rows'],
+        sameDayGroups.slice(0, 20).map((g) => [
+          code(it.patientId[g[0] as number] ?? ''),
+          g.map((r) => code(it.submittedAt[r] ?? '')).join(' '),
+          g.map((r) => code(it.intakeId[r] ?? '')).join(' '),
+          String(g.length),
+        ]),
       ),
       table(
         `Groups identical apart from intake_id${identicalApartFromId.length > 10 ? ` (first 10 of ${identicalApartFromId.length})` : ''}`,
@@ -457,8 +472,9 @@ export function intakesSections(it: Intakes, ctx: IntakesContext): Section[] {
       ),
     ],
     json: {
-      repeatedPatientSubmittedPairs: dupPairs.length,
-      repeatedPatientSubmittedRows: dupPairs.reduce((t, e) => t + e.count, 0),
+      sameDayGroups: sameDayGroups.length,
+      sameDayRows,
+      sameDayGroupMembers: sameDayGroups.map((g) => g.map((r) => it.intakeId[r] ?? '')),
       intakesPerPatient: perPatientDist.entries().map((e) => ({intakes: Number(e.value), patientIds: e.count})),
       identicalApartFromIntakeIdGroups: identicalApartFromId.length,
       identicalApartFromIntakeIdRows: identicalApartFromId.reduce((t, e) => t + e.count, 0),

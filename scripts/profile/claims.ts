@@ -583,8 +583,8 @@ export function notWarnedItems(input: ClaimsInput): NotWarnedItem[] {
       evidence: [`${I}.reviewer_note`],
     },
     {
-      when: num(input, `${I}.duplicates`, 'repeatedPatientSubmittedPairs') > 0,
-      text: `${num(input, `${I}.duplicates`, 'repeatedPatientSubmittedPairs')} (legacy_patient_id, submitted_at) pairs repeat and ${num(input, `${I}.duplicates`, 'identicalApartFromIntakeIdGroups')} row groups are identical in every field except intake_id.`,
+      when: num(input, `${I}.duplicates`, 'sameDayGroups') > 0,
+      text: `${num(input, `${I}.duplicates`, 'sameDayGroups')} patients submitted more than one intake on the same day (dates compared on any shared plausible reading) and ${num(input, `${I}.duplicates`, 'identicalApartFromIntakeIdGroups')} row groups are identical in every field except intake_id.`,
       evidence: [`${I}.duplicates`],
     },
     {

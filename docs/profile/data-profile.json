@@ -43186,8 +43186,30 @@
       ]
     },
     "intakes.csv.duplicates": {
-      "repeatedPatientSubmittedPairs": 4,
-      "repeatedPatientSubmittedRows": 8,
+      "sameDayGroups": 5,
+      "sameDayRows": 10,
+      "sameDayGroupMembers": [
+        [
+          "INT-8763",
+          "INT-8764"
+        ],
+        [
+          "INT-7533",
+          "INT-7532"
+        ],
+        [
+          "INT-8344",
+          "INT-8342"
+        ],
+        [
+          "INT-7254",
+          "INT-7255"
+        ],
+        [
+          "INT-7500",
+          "INT-7498"
+        ]
+      ],
       "intakesPerPatient": [
         {
           "intakes": 1,
@@ -52269,7 +52291,7 @@
       ]
     },
     {
-      "finding": "4 (legacy_patient_id, submitted_at) pairs repeat and 0 row groups are identical in every field except intake_id.",
+      "finding": "5 patients submitted more than one intake on the same day (dates compared on any shared plausible reading) and 0 row groups are identical in every field except intake_id.",
       "evidence": [
         "P-27"
       ],
