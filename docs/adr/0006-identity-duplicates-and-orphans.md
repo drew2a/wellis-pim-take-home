@@ -52,14 +52,17 @@ identity and non-contradictory on everything else*. That exception is deliberate
 
 | tier | definition | importer action | this export |
 |---|---|---|---|
-| 1 exact | folded name, dob and canonical email all present and identical, **and** every other field about the person (sex, bsn, phone, city, `weight_kg`, `height_cm`, status class, signup date) equal after normalisation or empty on one side | **auto-merge** with a merge record | 28 |
+| 1 exact | folded name, dob and canonical email all present and identical, **and** every other field about the person (sex, bsn, phone, city, `weight_kg`, `height_cm`, status class) equal after normalisation or empty on one side | **auto-merge** with a merge record | 28 |
 | 2 candidate | keys match but identity is not fully identical (for example the same phone and dob with a different email) | review item `identity_conflict`, as designed below | 3 |
 | 3 conflict | a shared key with contradicting facts: different dob, different name on one bsn or phone, or active on one row and churned on the other | review item `identity_conflict` **marked conflict**, never latest-wins | 39 (name differs 25, dob differs 14) |
 
-  `source` is provenance of the row, not a fact about the person, and is excluded from the tier-1
-  comparison; 25 of the 28 tier-1 pairs differ only in `source`, which is the "signed up again
-  through another funnel" story itself. Under the strict reading that includes `source`, tier 1 is
-  3 and tier 2 is 28; the choice is recorded here so it can be flipped by editing one list.
+  **Row provenance fields, not compared for contradiction:** `source`, `signup_date`. They describe
+  the row (which funnel created it, when), not the person; two rows from two funnels on two dates is
+  exactly the "signed up twice" that EXPORT-NOTES.md describes. Nothing is lost: both raw rows keep
+  their values, and the survivor's audit entry records the losing row's values in `changes`. Under
+  this reading the counts are tier 1 = 28, tier 2 = 3, tier 3 = 39; 25 of the 28 tier-1 pairs
+  differ in `source`, all 28 share their signup date, and none differs on any person field. The
+  list is the one place to edit if the reading changes.
 
 - **Tier-1 merge by the importer.** Survivor rule, deterministic: the row with intakes; if both or
   neither, the later signup; if equal, the lower `legacy_id`. The losing row stays with
@@ -108,8 +111,8 @@ identity and non-contradictory on everything else*. That exception is deliberate
   reviewer, not a backlog; each has a distinct decision.
 - Bad: some conflicts are false candidates (a shared household phone). Accepted: dismissing one
   costs a note; merging it automatically would cost a patient's record.
-- Bad: tier 1 depends on which fields count as "about the person"; `source` is excluded by
-  decision here (28 vs 3 pairs). Accepted, and stated so it can be flipped.
+- Bad: tier 1 depends on which fields count as "about the person"; `source` and `signup_date` are
+  declared row provenance by decision here. Accepted, and stated as one list so it can be changed.
 - Bad: a merge touches four tables. Accepted; it is one transaction in one repository function
   with one audit trail.
 - Neutral: the look-alike search for orphans is context, not a rule; it is not versioned in
