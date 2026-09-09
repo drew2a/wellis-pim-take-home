@@ -94,6 +94,35 @@ Concrete cases where the agent's output was wrong and I corrected it.
    tiny weights; it does not, because those patients' intakes carry the same tiny values. I asked
    for a separate plausibility detector with bounds in the rules file, shared with Part B.
 
+## Review of `feature/legacy-importer` (2026-09-09)
+
+A fresh session ran `/code-review high` on the branch before the merge (`CLAUDE.md` §3). Ten
+findings survived verification; a second review session fixed or declined each one.
+
+- **Fixed (8):** the "future" reference date was inferred from the data through the ambiguous
+  date reader and landed on 2062-11-04, a date in no file. I had it removed rather than repaired:
+  every profile script now takes `--as-of YYYY-MM-DD` and prints it. Also fixed: four literal NUL
+  bytes that made `common.ts` binary to git and therefore invisible to the review itself (the
+  file was then reviewed on its own); code spans that swallowed the edge whitespace they existed
+  to show; overlapping Dutch/English term lists that double-counted 190 rows; two definitions of
+  "same day" between the intake and patient duplicate checks (4 pairs became 5); a stale path to
+  the profile JSON; a prune step that would have blanked the inventory page at 41 sections; and
+  hypotheses.ts carrying its own copies of thresholds and helpers. Two cut-by-cap findings were
+  fixed as well: `URL.pathname` for the repo root, and the duplicated helpers.
+- **Corrected as clerical (1):** `VOCAB_OUTCOME` 1918 was a tally that forgot the 82 `pending`
+  rows; the right figure is 1836. The decision is unchanged, so the count was corrected in place
+  under a new sentence in the ADR lifecycle rather than by a superseding ADR. The same pass
+  re-derived every number in `docs/findings.md` and ADR-0004 to ADR-0006 from the regenerated
+  profile; no other count moved.
+- **Deferred (1):** the detector, consent-state and identity-tier counts in ADR-0005 and
+  ADR-0006 are produced by no committed script. The agent started a `mapping.ts` in the profile
+  to recompute them; I stopped it. The mapper is written test-first in the importer branch, and
+  one copy of the rules is the point. Acceptance criterion carried forward: **the import report
+  reproduces every ADR-0005 and ADR-0006 count.** ADR-0005 now says which counts come from where.
+- **Declined (2):** 13 commit subjects over 72 characters (history is not rewritten in this repo);
+  ESLint and Prettier not configured (ADR-0003 places tooling in the scaffold branch, which is
+  next; deferred, not dismissed).
+
 ## What I would do differently
 
 _To be filled at the end._
