@@ -1060,3 +1060,40 @@ no item. Any other non-numeric value in a future export: same record, one vocabu
 per new value.
 
 Check (1): 272 rows differ from raw, each with a record. Check (2): one item for one question.
+
+### reviewer_note
+
+**Facts** (P-26)
+
+| fact | value |
+|---|---|
+| rows / empty / distinct | 2917 / 1249 / 5 (4 non-empty) |
+| values | `besproken met arts` 435, `twijfel, toch akkoord` 421, `zie dossier` 414, `ok` 398 |
+| whitespace, case variants | none |
+| note by outcome class (provisional classes, see `outcome`) | each note sits on about 15 % of every class: the note is independent of the outcome |
+| `twijfel, toch akkoord` ("doubt, agreed anyway") | approved 299, rejected 73, pending 49 |
+| reviewer identity | none; no column names the doctor |
+
+**Possible warnings**
+
+1. EXPORT-NOTES.md calls this a free-text note by the reviewing doctor. Four fixed strings spread
+   evenly over every outcome are a pick-list, and the even spread means the note carries no
+   information about the decision. It is context for a reviewer, not evidence.
+2. "Doubt, agreed anyway" on a rejected intake contradicts the outcome on 73 rows, and on a
+   pending intake (49 rows) it describes a decision that has not been made. A reviewer can act on
+   the 73: check the dossier and confirm or correct the outcome of record. They cannot act on the
+   49 until the intake is decided.
+3. No actor. The legacy audit trail has decisions without a decider; the import must record the
+   actor of every legacy outcome as the named system process "legacy import", never as a person.
+
+**Agreed** (2026-09-09, recorded by the agent under the standing instruction; checked against the
+two questions below)
+
+Store as-is, free text, no normalisation. **One** vocabulary-level review item "73 intakes carry
+`twijfel, toch akkoord` with a rejecting outcome", payload listing the 73 intakes with patient,
+date and outcome; the reviewer confirms or corrects per row, no proposed fix. The 49 on pending
+outcomes and the pick-list finding go into unexpected findings only. Legacy outcomes are attributed
+to the actor "legacy import".
+
+Check (1): no stored value differs from raw. Check (2): one item; 73 row items would all say the
+same thing, and the payload lets the reviewer still act per row.
