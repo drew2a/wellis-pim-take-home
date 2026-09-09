@@ -12,12 +12,14 @@ Ops says people signed up twice with different emails. The export confirms it an
 variants (`Luuk-L Dijkstra`, `Braam Nair`), `x` and digit suffixes on the email local part, the
 same birth date written in two formats. It also shows the opposite: 6 of 30 shared BSNs belong to
 clearly different people. Twenty-one intakes reference patients that exist nowhere. Five patients
-submitted two intakes on the same day with contradicting outcomes. Identity, medicine and consent
-never auto-resolve (`CLAUDE.md` §5); this ADR fixes what the importer does instead.
+submitted two intakes on the same day with contradicting outcomes. Identity never auto-resolves unless
+the records are literally identical on identity and non-contradictory on everything else
+(`CLAUDE.md` §5); this ADR fixes what that means row by row.
 
 ## Decision drivers
 
-- No merge without a human and a record of which row supplied which field (R-A31, `CLAUDE.md` §5).
+- No merge without a record of which row supplied which field; no merge without a human unless the
+  rows are literally identical on identity and non-contradictory elsewhere (R-A31, `CLAUDE.md` §5).
 - Every legacy id keeps resolving after a merge (findings, `legacy_id`).
 - A name alone is never identity (618 folded names cover 1470 rows).
 - A fabricated record is worse than a null reference (findings, `legacy_patient_id`).
@@ -25,8 +27,8 @@ never auto-resolve (`CLAUDE.md` §5); this ADR fixes what the importer does inst
 
 ## Considered options
 
-1. Never auto-merge; detect candidates on exact keys; one conflict item per candidate group; alias
-   table makes a human merge reversible. Orphans keep a null patient reference.
+1. Three tiers on exact keys: auto-merge only literally identical records, review candidates,
+   mark conflicts; alias table makes every merge reversible. Orphans keep a null patient reference.
 2. Auto-merge groups where several keys agree (54 of 70 groups), review the rest.
 3. Fuzzy matching with a similarity score and a threshold.
 
@@ -34,29 +36,46 @@ never auto-resolve (`CLAUDE.md` §5); this ADR fixes what the importer does inst
 
 Chosen option: **Option 1**. Option 2 would merge medical records on a heuristic; the file itself
 shows shared BSNs and shared phones that are not one person, so "several keys agree" is strong
-evidence, not proof. Option 3 adds a tunable that nobody can explain in the follow-up (§3B:
+evidence, not proof. That argument does not apply to tier 1, where everything matches. Option 3 adds a tunable that nobody can explain in the follow-up (§3B:
 deterministic beats clever) and the export's variants are caught by exact keys anyway.
 
-### Duplicate-patient candidates
+### Duplicate-patient candidates: three tiers
+
+`CLAUDE.md` §5 in full: identity never auto-resolves *unless the records are literally identical on
+identity and non-contradictory on everything else*. That exception is deliberate and is tier 1.
 
 - Candidate keys, all exact after the normalisation of ADR-0005: canonical email (placeholders and
   unresolved internal-space addresses excluded), `bsn`, E.164 phone, folded `full_name` + `dob`
-  read with the separator convention. Folded name alone is **not** a key.
-- Rows are grouped by union of the four keys. In this export: **70 groups, all pairs, 140 rows**;
-  54 groups are supported by at least two different keys, 16 by one.
-- Each group is one `review_items` row: type `identity_conflict`, scope `row`, payload = every
-  field of every row side by side plus which keys matched, plus each row's intake count and
-  consent state. No proposed resolution.
-- The reviewer picks the surviving row and, per field, the winning value (or edits it), with a
-  required note (R-C5, R-C6). Applying the decision: the losing patient row stays, gets
-  `merged_into` = survivor; its legacy ids are repointed in `patient_legacy_ids`; intakes and
-  consent events resolve to the survivor through the alias table without being rewritten;
-  `consent_state` is recomputed for the survivor from the union of events; one audit entry per
-  affected entity records actor, from, to, reason and the field choices in `changes`. Unmerge is
-  the inverse and is possible because nothing was deleted.
-- The 6 BSN pairs with different names and birth dates are the same item type; the reviewer's
-  action there is "not the same person", recorded as a dismissal with a note, and the shared BSN
-  stays a `data_quality` fact in the report.
+  read with the separator convention. Folded name alone is **not** a key. Rows are grouped by
+  union of the four keys: **70 groups, all pairs, 140 rows** in this export. Each group is then
+  classified:
+
+| tier | definition | importer action | this export |
+|---|---|---|---|
+| 1 exact | folded name, dob and canonical email all present and identical, **and** every other field about the person (sex, bsn, phone, city, `weight_kg`, `height_cm`, status class, signup date) equal after normalisation or empty on one side | **auto-merge** with a merge record | 28 |
+| 2 candidate | keys match but identity is not fully identical (for example the same phone and dob with a different email) | review item `identity_conflict`, as designed below | 3 |
+| 3 conflict | a shared key with contradicting facts: different dob, different name on one bsn or phone, or active on one row and churned on the other | review item `identity_conflict` **marked conflict**, never latest-wins | 39 (name differs 25, dob differs 14) |
+
+  `source` is provenance of the row, not a fact about the person, and is excluded from the tier-1
+  comparison; 25 of the 28 tier-1 pairs differ only in `source`, which is the "signed up again
+  through another funnel" story itself. Under the strict reading that includes `source`, tier 1 is
+  3 and tier 2 is 28; the choice is recorded here so it can be flipped by editing one list.
+
+- **Tier-1 merge by the importer.** Survivor rule, deterministic: the row with intakes; if both or
+  neither, the later signup; if equal, the lower `legacy_id`. The losing row stays with
+  `merged_into` = survivor; its legacy id is repointed in `patient_legacy_ids`; intakes and consent
+  events follow through the alias; `consent_state` is recomputed from the union of events; one audit
+  entry per affected entity with actor `importer`, `reason` naming the survivor rule and
+  `changes` as field-level provenance (`{field, from, to, source_legacy_id}`, one entry per field
+  the survivor did not already hold). Reversible through the same unmerge path as a human merge.
+  Idempotent: a re-run finds the alias already repointed and does nothing.
+- **Tiers 2 and 3.** One `review_items` row per group, payload = every field of every row side by
+  side plus which keys matched and, for tier 3, which facts contradict, plus each row's intake count
+  and consent state. No proposed resolution. The reviewer picks the surviving row and, per field,
+  the winning value (or edits it), with a required note (R-C5, R-C6); applying the decision runs the
+  same merge path with a human actor. The 6 BSN pairs with different names and birth dates are
+  tier 3; the reviewer's action there is "not the same person", recorded as a dismissal with a
+  note, and the shared BSN stays a `data_quality` fact in the report.
 
 ### Orphan intakes
 
@@ -82,13 +101,15 @@ deterministic beats clever) and the export's variants are caught by exact keys a
 
 ### Consequences
 
-- Good: nothing is merged, dropped or fabricated by the importer; every legacy reference resolves;
-  every human merge is reversible.
-- Good: 70 conflicts and 21 orphans are a day's work for a reviewer, not a backlog; each has a
-  distinct decision.
-- Bad: 16 single-key groups will include some false candidates (a shared household phone). Accepted:
-  dismissing a false candidate costs a note; merging a true one automatically would cost a
-  patient's record.
+- Good: the importer merges only literally identical records (28 pairs), with provenance per field,
+  and nothing is dropped or fabricated; every legacy reference resolves; every merge, human or
+  importer, is reversible.
+- Good: 42 review items (3 candidates, 39 conflicts) and 21 orphans are a day's work for a
+  reviewer, not a backlog; each has a distinct decision.
+- Bad: some conflicts are false candidates (a shared household phone). Accepted: dismissing one
+  costs a note; merging it automatically would cost a patient's record.
+- Bad: tier 1 depends on which fields count as "about the person"; `source` is excluded by
+  decision here (28 vs 3 pairs). Accepted, and stated so it can be flipped.
 - Bad: a merge touches four tables. Accepted; it is one transaction in one repository function
   with one audit trail.
 - Neutral: the look-alike search for orphans is context, not a rule; it is not versioned in
@@ -96,8 +117,11 @@ deterministic beats clever) and the export's variants are caught by exact keys a
 
 ### Confirmation
 
-- Import report: 70 identity conflicts, 21 orphan intakes, 5 duplicate-intake pairs; 0 patients
-  merged by the importer.
+- Import report: 28 tier-1 merges by the importer, 3 candidates, 39 conflicts, 21 orphan intakes,
+  5 duplicate-intake pairs.
+- Unit test: the tier classifier on the three tier-1 examples (`Sem de Boer`, `Annelies Rossi`,
+  `Teun Kowalski`), on a tier-3 name variant (`Luuk-L Dijkstra`) and on a shared-bsn pair with
+  different names.
 - Integration test: merge two rows via the repository, assert both legacy ids resolve to the
   survivor, intakes and consent events follow, `consent_state` recomputed, audit entries present;
   unmerge restores the original resolution.
