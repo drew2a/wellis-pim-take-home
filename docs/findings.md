@@ -292,6 +292,61 @@ Closed mapping, covering all 2466 rows:
    export must produce one vocabulary-level review item ("new value `X` in sex, N rows"), not N
    row items and not a guess.
 
+**Agreed** (2026-09-09)
+
+Map with the closed table above into an enum `male | female | unknown`. Every row whose raw
+spelling differs from the canonical string gets a normalisation record with rule code `VOCAB_SEX`
+(1976 rows: all but the 267 `male` and 223 `female`). `unknown` is reserved for empty values, none
+in this export. Any raw value not in the table produces one vocabulary-level review item per new
+value and the row maps to `unknown` until resolved. Keep the column name `sex`.
+
+### bsn
+
+**Facts** (P-6, P-34, H-5)
+
+| fact | value |
+|---|---|
+| rows / empty / non-empty / distinct | 2466 / 1525 / 941 / 912 |
+| shape | every non-empty value is exactly 9 digits; 0 non-digit characters, 0 whitespace, 1 value with a leading zero |
+| elfproef (11-test) | 924 pass, 17 fail |
+| the 17 failures | none is in a shared group, none is one digit away from another bsn in the file, 1 has a leading zero |
+| presence by signup year | 2022 182 of 493, 2023 212 of 590, 2024 221 of 547, 2025 222 of 563, 2026 103 of 270: roughly 38 % in every year, no start or stop |
+| shared values | 30 values on 2 rows each (60 rows) |
+
+The 30 shared-bsn pairs, compared on folded name and dob read with the separator convention:
+
+| the two rows have | pairs | reading |
+|---|---|---|
+| same name, same dob | 10 | one person, signed up twice |
+| different name, same dob | 10 | includes the name variants `Braam Nair` / `Bram Nair`, `Luuk-L Dijkstra` / `Luuk Dijkstra`, `Emma-E Visser` / `Emma Visser`; likely one person |
+| same name, different dob | 4 | one person with a dob error, or two people with the same name |
+| different name, different dob | 6 | two different people carrying the same bsn, e.g. `Lucas Ivanov` 1989 and `Emma de Groot` 1978 |
+
+```sh
+tail -n +2 legacy_export/patients.csv | cut -d, -f6 | grep -v '^$' | sort | uniq -d | wc -l   # 30
+```
+
+**Possible warnings**
+
+1. A bsn is a national identifier and special-category personal data under Dutch law. It was
+   collected for an insurance experiment that ended. Keeping it at all is a data-minimisation
+   question for Wellis, not for the importer. Until answered, it must be stored but never shown
+   by default and never used as a login or lookup key exposed to patients.
+2. The notes say "collected for a period, then the field was hidden". The data says 38 % of rows
+   in every year, including 2026. Either the field was never hidden, or the bulk `import` and
+   manual ops edits kept filling it. The claim is contradicted and the export cannot say why.
+3. 17 values fail the elfproef. A failing bsn is not a valid bsn; it is a typo or a made-up
+   number. Correcting it is impossible from the data (no near neighbour exists). It is a per-row
+   review item, and the canonical bsn for those rows must not present as valid.
+4. A bsn is unique to one person by definition, so the 30 shared values are the strongest identity
+   signal in the file, stronger than email. But 6 of the 30 pairs are clearly two different
+   people, so "same bsn" must not merge anything either: every pair is a conflict for a reviewer,
+   with name, dob, email, phone side by side.
+5. The one value with a leading zero shows the column was stored as text; a numeric column type
+   would drop the zero and produce an 8-digit value that fails the elfproef. Store as text.
+6. 1525 rows have no bsn. Empty is the normal case, not a defect; it must not become a review
+   item.
+
 **Agreed**
 
 _Not yet discussed._
