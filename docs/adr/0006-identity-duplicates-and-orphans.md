@@ -1,8 +1,8 @@
 # ADR-0006: Identity: duplicate patients, orphan intakes and duplicate intakes
 
-- **Status:** proposed
+- **Status:** accepted
 - **Date:** 2026-09-09
-- **Deciders:** Andrei Andreev (pending)
+- **Deciders:** Andrei Andreev
 - **Requirements:** R-A4, R-A5, R-A10, R-A11, R-A12, R-A31, R-C4, R-C5, R-C6 · **Resolves:** Q6
   (default A + C), Q9 (amended: no placeholder patient)
 

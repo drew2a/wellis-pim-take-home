@@ -1,8 +1,8 @@
 # ADR-0005: Normalisation rules, detectors and the auto-fix / review boundary
 
-- **Status:** proposed
+- **Status:** accepted
 - **Date:** 2026-09-09
-- **Deciders:** Andrei Andreev (pending)
+- **Deciders:** Andrei Andreev
 - **Requirements:** R-A7, R-A9, R-A10, R-A11, R-A12, R-A13, R-A20, R-A21, R-A22, R-A23, R-A25 to
   R-A30, R-A32 to R-A36, R-B11, R-B12 · **Resolves:** Q3 (partly: list seeded, confirmation
   requested), Q7 (amended: states `no_record` and `unknown_pre_log`)

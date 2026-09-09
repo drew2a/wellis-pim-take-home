@@ -1,8 +1,8 @@
 # ADR-0004: Part A target schema, raw retention and idempotency
 
-- **Status:** proposed
+- **Status:** accepted
 - **Date:** 2026-09-09
-- **Deciders:** Andrei Andreev (pending)
+- **Deciders:** Andrei Andreev
 - **Requirements:** R-A2, R-A5, R-A6, R-A7, R-A8, R-A12, R-A14, R-A15, R-A16, R-A17, R-B20, R-B21,
   R-C2, R-C4, R-C9 · **Resolves:** Q5 (default B), Q9 (amended, see `docs/findings.md`)
 
