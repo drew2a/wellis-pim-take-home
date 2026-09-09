@@ -9,9 +9,9 @@
 import {readFileSync, writeFileSync} from 'node:fs';
 import {dirname, join} from 'node:path';
 import {fileURLToPath} from 'node:url';
+import {INVENTORY_HTML, PROFILE_JSON, abs} from './cli.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const ROOT = join(HERE, '..', '..');
 const CAP = 40;
 
 type Json = null | boolean | number | string | Json[] | {[k: string]: Json};
@@ -50,11 +50,10 @@ function prune(value: Json): Json | Pruned {
   return value;
 }
 
-const source = JSON.parse(readFileSync(join(ROOT, 'docs', 'profile', 'data-profile.json'), 'utf8')) as Json;
+const source = JSON.parse(readFileSync(abs(PROFILE_JSON), 'utf8')) as Json;
 const data = prune(source);
 const template = readFileSync(join(HERE, 'inventory-template.html'), 'utf8');
 if (!template.includes('/*__DATA__*/')) throw new Error('template has no data slot');
 const html = template.replace('/*__DATA__*/', 'const DATA = ' + JSON.stringify(data).replace(/</gu, '\\u003c') + ';');
-const out = join(ROOT, 'docs', 'profile', 'legacy-export-inventory.html');
-writeFileSync(out, html);
-console.log(`wrote ${out} (${html.length} bytes)`);
+writeFileSync(abs(INVENTORY_HTML), html);
+console.log(`wrote ${INVENTORY_HTML} (${html.length} bytes)`);

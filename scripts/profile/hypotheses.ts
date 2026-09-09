@@ -8,15 +8,14 @@
  * the decisions are in docs/adr/.
  */
 import {writeFileSync} from 'node:fs';
-import {dirname, join} from 'node:path';
-import {fileURLToPath} from 'node:url';
+import {join} from 'node:path';
+import {EXPORT_DIR, HYPOTHESES_MD, abs} from './cli.js';
 import {column, loadCsv} from './csv.js';
 import {classifyOrder} from './dates.js';
 import {fold, shape} from './util.js';
 
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const patients = loadCsv(join(ROOT, 'legacy_export', 'patients.csv'));
-const intakes = loadCsv(join(ROOT, 'legacy_export', 'intakes.csv'));
+const patients = loadCsv(join(EXPORT_DIR, 'patients.csv'));
+const intakes = loadCsv(join(EXPORT_DIR, 'intakes.csv'));
 
 const P = {
   id: column(patients, 'legacy_id'),
@@ -359,5 +358,5 @@ table(['shared key', 'groups with more than one row', 'of which the names differ
 table(['bsn', 'legacy_id', 'full_name', 'dob', 'email'], bsnDiffName.slice(0, 6).flatMap((g) => g.map((i) => [code(P.bsn[i] ?? ''), code(P.id[i] ?? ''), code(P.name[i] ?? ''), code(P.dob[i] ?? ''), code(P.email[i] ?? '')])));
 p(`(first 6 of ${bsnDiffName.length} bsn groups with differing names)`);
 
-writeFileSync(join(ROOT, 'docs', 'profile', 'data-hypotheses.md'), out.join('\n') + '\n');
-console.log(`wrote docs/profile/data-hypotheses.md (${out.length} lines)`);
+writeFileSync(abs(HYPOTHESES_MD), out.join('\n') + '\n');
+console.log(`wrote ${HYPOTHESES_MD} (${out.length} lines)`);

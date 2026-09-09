@@ -12,6 +12,7 @@
 import {mkdirSync, writeFileSync} from 'node:fs';
 import {dirname, join} from 'node:path';
 import {claimRows, notWarnedItems, type ClaimsInput} from './claims.js';
+import {EXPORT_DIR, PROFILE_JSON, PROFILE_MD, abs} from './cli.js';
 import {consentsSections, loadConsents} from './consents.js';
 import {crossSections, columnRange, isolatedTail} from './cross.js';
 import {delimiterLabel, loadCsv} from './csv.js';
@@ -20,10 +21,8 @@ import {loadPatients, patientsSections} from './patients.js';
 import {Report, code, plain, renderSection, renderTable, table, type Section} from './report.js';
 import {eolLabel, Counter, type FileInfo} from './util.js';
 
-const ROOT = join(dirname(new URL(import.meta.url).pathname), '..', '..');
-const EXPORT_DIR = join(ROOT, 'legacy_export');
-const OUT_MD = join(ROOT, 'docs', 'profile', 'data-profile.md');
-const OUT_JSON = join(ROOT, 'docs', 'profile', 'data-profile.json');
+const OUT_MD = abs(PROFILE_MD);
+const OUT_JSON = abs(PROFILE_JSON);
 
 function encodingLabel(info: FileInfo): string {
   return `${info.utf8Valid ? 'valid UTF-8' : 'NOT valid UTF-8'}, ${info.nonAsciiBytes} non-ASCII bytes`;
