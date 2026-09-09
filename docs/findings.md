@@ -1159,6 +1159,37 @@ Check (1): 815 rows whose canonical state differs from raw, each with a record; 
 stored unchanged for all 2917. Check (2): one item for the GLP-1 history finding; 42 row items
 would be identical.
 
-**Agreed**
+**Agreed** (2026-09-09)
 
-_Not yet discussed._
+Storage as proposed: raw text unchanged, `medication_report` with `none_reported` (815 rows,
+record `VOCAB_NONE_MEDICATION`) / `not_answered` (144) / `reported` (1958), no medication
+dictionary at import.
+
+Point 3 changed. A vocabulary-level item is for a decision about a rule; here the brief already
+says a GLP-1 is a flag and the decision is per patient ("this person was approved and reports
+Ozempic: does a doctor need to look?"). So the history audit produces **one row-level review item
+per intake**, of the same type and with the same reason string the Part B engine produces
+("flagged: current GLP-1 medication (Ozempic 0,5 mg)"), payload carrying the legacy outcome,
+outcome itself untouched. The console shows legacy and new cases in the same shape and the patient
+detail view shows the open clinical question. The 42/28 figure goes into the import report, not
+into a queue item.
+
+Matching is deterministic: a term list in `rules/v1.json` (brands and INNs, Dutch and English),
+matched on word boundaries after lowercasing and stripping doses, never bare substring (a
+substring `schildklier` would match `hypothyreoidie`, which is not a flag condition). No LLM
+anywhere. Whatever the list does not recognise is `unrecognised`, not clean: **one**
+vocabulary-level item lists every distinct `meds_current` value with its classification (GLP-1 /
+none / unrecognised) so a human confirms the whole vocabulary once. The audit marks legacy rows and
+never changes them.
+
+Shapes Part B: the new form collects medications and conditions as structured inputs (a yes/no for
+current GLP-1 use with the brand names listed, a condition checklist) plus an "other" free-text
+field; the engine evaluates the structured fields only; free text goes to the doctor unchanged,
+with the same matcher run over it as a safety net that can only add a flag, never clear one.
+
+Dependency: the history audit runs as an import step but reads its term lists from
+`rules/v1.json`, so the ruleset file is authored before the detectors, not after Part B.
+
+Check (1): 815 rows differ from raw in the derived field, each with a record; raw text unchanged
+for all. Check (2): 42 row items, each a different patient with a clinical question; one
+vocabulary item for the term list, which is a decision about a rule.
