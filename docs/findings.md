@@ -914,3 +914,41 @@ review item of their patient, no new item.
 
 Check (1): 413 converted values, each with a record; 2504 ISO values unchanged. Check (2): 0 new
 items; the convention item and the 2062 patient items already exist.
+
+### questionnaire_version
+
+**Facts** (P-19, P-36, H-4)
+
+| fact | value |
+|---|---|
+| rows / empty / distinct | 2917 / 410 / 5 (4 non-empty) |
+| values | `v1` 862, `v2` 841, `v3` 410, `2.0` 394, empty 410 |
+| whitespace, case variants | none |
+| by submitted year | every label in every year 2022 to 2026, including `2.0` (24, 67, 84, 100, 119) and empty (17, 69, 120, 113, 91) |
+| by anything else | outcome mix, alcohol values, date shapes and medication vocabulary are the same under every label (H-4, P-36); the small vocabulary gaps for `2.0` are single-digit counts |
+| orphans | only `v1` and `v2` |
+
+**Possible warnings**
+
+1. `2.0` may be `v2` written by another tool, or a fourth questionnaire, or a version of the
+   consent text pasted into the wrong column. Nothing in the export separates the 394 rows from
+   the `v2` rows or from any other label, so there is no evidence for any mapping. Mapping it to
+   `v2` would be a guess about 394 medical records.
+2. 410 intakes have no version at all. For a legacy intake this only limits what we can say about
+   which questions were asked; legacy intakes are not re-evaluated (Q9), so no outcome depends on
+   it.
+3. Labels are informational for the legacy data but become the ruleset key in Part B. The legacy
+   label must not be confused with the new ruleset version; store it as the legacy label it is.
+
+**Agreed** (2026-09-09, recorded by the agent under the standing instruction; checked against the
+two questions below)
+
+Store the raw label unchanged as `questionnaire_version_label`. A canonical enumerated version is
+derived for `v1`, `v2`, `v3`; for `2.0` it is null with a normalisation record `UNMAPPED_TO_NULL`
+(394 rows) and **one** vocabulary-level review item "Is `2.0` the questionnaire `v2`? 394 rows,
+no distinguishing evidence", no proposed fix. Empty stays null, no record (empty is null), no
+item; the count goes into the import report.
+
+Check (1): 394 rows whose canonical value differs from raw, each with a record; the label column
+is unchanged for all. Check (2): one item for one question; per-row items would be 394 copies of
+it.
