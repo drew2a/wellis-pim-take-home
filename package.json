@@ -9,7 +9,8 @@
   "type": "module",
   "scripts": {
     "profile": "tsx scripts/profile/profile.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "profile:hypotheses": "tsx scripts/profile/hypotheses.ts"
   },
   "devDependencies": {
     "@types/node": "^22.20.1",
