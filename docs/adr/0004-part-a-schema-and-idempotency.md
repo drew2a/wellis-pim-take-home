@@ -73,7 +73,7 @@ source column as `text` exactly as exported, untrimmed (so `active ` and `approv
 - `intakes` — `id`, `intake_id` (unique, text), `legacy_patient_id` (text, as exported),
   `patient_id` (nullable FK; null for the 21 orphans), `submitted_at` (`date`),
   `questionnaire_version_label` (text as exported), `questionnaire_version` (enum
-  `v1 | v2 | v3`, null for `2.0` and empty), `weight_kg`, `height_cm`, `meds_current_raw`,
+  `v1 | v2 | v3`, null for empty; `2.0` maps to `v2` with rule `VERSION_LABEL_ASSUMED_V2`, ADR-0005), `weight_kg`, `height_cm`, `meds_current_raw`,
   `medication_report` (enum `none_reported | not_answered | reported`), `conditions_raw`,
   `condition_report` (same enum), `alcohol_units_week` (`integer`, null), `outcome` (enum
   `approved | rejected | pending | unknown`), `outcome_raw`, `reviewer_note`, `state` (enum shared
@@ -84,6 +84,10 @@ source column as `text` exactly as exported, untrimmed (so `active ` and `approv
 - `consent_events` — `id`, `patient_id` (FK via alias at load), `legacy_patient_id`, `type`,
   `action` (enum `granted | revoked`), `at` (**type open, see below**), `version`, `source_line`,
   `import_run_id`. Never updated.
+- `eligibility_evaluations` — `id`, `intake_id`, `ruleset_version`, `outcome` (the engine's verdict),
+  `reasons` (jsonb list of reason strings), `shadow` (boolean: true for legacy intakes evaluated at
+  import, nothing applied), `evaluated_at`, `import_run_id` (nullable). Part B writes the same table
+  with `shadow = false`. Legacy disagreements are a query over it, not queue items (ADR-0005).
 - `consent_states` — `patient_id`, `type`, `state` (enum
   `granted | revoked | no_record | unknown_pre_log | conflict`), `derived_from_event_id`,
   `derivation_version`, `computed_at`. Recomputed by one pure function on import and on every new
@@ -101,13 +105,16 @@ source column as `text` exactly as exported, untrimmed (so `active ` and `approv
   `title`, `reason` (the engine's reason string where one exists), `payload` (jsonb: competing
   versions side by side, or the row list of a vocabulary item), `proposed_resolution` (jsonb,
   nullable), `patient_id`, `intake_id` (nullable refs), `status` (enum `open | resolved | dismissed`),
-  `dedupe_key` (unique: a re-run that would raise the same item finds it and does nothing, whether
-  it is open or resolved, R-A17), `created_by_run`, `created_at`, `resolved_by`, `resolved_at`,
+  `field` (nullable; the canonical field the item is about), `dedupe_key` (unique, built from type,
+  entity, **field**, rule and raw value: two ambiguous fields on one entity are two items by
+  construction, and a re-run that would raise the same item finds it and does nothing, whether it
+  is open or resolved, R-A17), `created_by_run`, `created_at`, `resolved_by`, `resolved_at`,
   `resolution_note` (required on resolve), `resolution` (jsonb: what was chosen or edited).
 - `audit_entries` — append-only: `id`, `actor` (human identity or named process, e.g. `legacy
   import`, `importer`), `at`, `entity_type`, `entity_id`, `from_state`, `to_state`, `reason`,
-  `review_item_id` (nullable), `changes` (jsonb list of `{field, from, to}` for human decisions
-  that change a value). `UPDATE` and `DELETE` are revoked from the application role.
+  `review_item_id` (nullable), `changes` (jsonb list of `{field, from, to, source_legacy_id}`: for human decisions that change a
+  value, and for the importer's tier-1 merges of ADR-0006, where it is the field-level provenance
+  naming which row supplied each field and the survivor rule in `reason`). `UPDATE` and `DELETE` are revoked from the application role.
 
 ### Idempotency and re-runs
 
@@ -119,8 +126,8 @@ source column as `text` exactly as exported, untrimmed (so `active ` and `approv
   field is human-owned when an `audit_entries` row with a human actor lists it in `changes` for that
   entity. The importer never writes such a field; if the raw value would now map differently, it
   raises a new review item referencing the old one.
-- `review_items.dedupe_key` is deterministic from (type, entity, rule, raw value), so a re-run
-  neither duplicates open items nor re-opens resolved ones.
+- `review_items.dedupe_key` is deterministic from (type, entity, field, rule, raw value), so a
+  re-run neither duplicates open items nor re-opens resolved ones.
 - Two consecutive runs on the same export yield identical row counts in every table except
   `import_runs` (the R-A16 test).
 
