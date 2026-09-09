@@ -1,0 +1,20 @@
+{
+  "name": "wellis-intake",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Wellis Intake: legacy import, patient intake with eligibility rules, review console",
+  "engines": {
+    "node": ">=22"
+  },
+  "type": "module",
+  "scripts": {
+    "profile": "tsx scripts/profile/profile.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.1",
+    "csv-parse": "^7.0.2",
+    "tsx": "^4.23.13",
+    "typescript": "^5.9.3"
+  }
+}
