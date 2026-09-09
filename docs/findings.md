@@ -62,6 +62,63 @@ tool. Hypothesis only; the export does not say so.
 5. Ids from a bulk load nobody remembers (`source = import`, 417 rows) share the format with the
    rest, so the format cannot be used to tell provenance.
 
+**Agreed** (2026-09-09)
+
+Store as-is, unique, opaque. No normalisation of any kind. Every legacy_id keeps resolving to
+exactly one patient forever, also after a merge, via an alias table. Orphan intakes are stored
+and get a review item each; how they attach to a patient is decided under
+`intakes.legacy_patient_id`.
+
+### full_name
+
+**Facts** (P-2, P-34, H-5)
+
+| fact | value |
+|---|---|
+| rows / empty / distinct raw / distinct folded | 2466 / 0 / 1655 / 1614 |
+| trailing whitespace | 72 rows (all trailing; 0 leading; 0 double spaces inside) |
+| digits, diacritics, ALL CAPS, all lowercase | 0 rows each |
+| characters other than letters and space | only `-`, on 5 rows |
+| tokens per name | 2 tokens 1911, 3 tokens 460, 4 tokens 95 |
+| lowercase Dutch particles (`de`, `van`, `den`, `der`, ...) | 495 rows |
+| exact duplicate names | 598 groups, 1409 rows |
+| duplicate names after folding | 618 groups, 1470 rows; 603 of the groups span more than one email |
+| same folded name and same dob (H-1 date reading) | 31 groups, 62 rows |
+
+The 5 hyphenated names all follow one pattern, first name plus its own initial, and every one has a
+plain twin row with the same date of birth and the same phone or bsn:
+
+| variant | plain twin | shared |
+|---|---|---|
+| `Luuk-L Dijkstra` | `Luuk Dijkstra` | dob (two formats), bsn, phone |
+| `Emma-E Visser` | `Emma Visser` | dob, bsn, phone |
+| `Thijs-T Benali` | `Thijs Benali` | dob (two formats), phone |
+| `Fatima-F de Wit` | `Fatima de Wit` | dob, bsn |
+| `Lisa-L Jones` | `Lisa Jones` | dob (two formats), phone |
+
+A doubled-letter variant also exists: `Braam Nair` shares bsn and dob with `Bram Nair` (H-5).
+
+```sh
+tail -n +2 legacy_export/patients.csv | awk -F, "{print \$2}" | grep -c " $"                 # 72
+tail -n +2 legacy_export/patients.csv | awk -F, "{print \$2}" | grep -cE "^[A-Za-z]+-[A-Z] "  # 5
+```
+
+**Possible warnings**
+
+1. Trailing spaces on 72 rows break exact matching and sorting. Trimming is safe and
+   deterministic, but it is still a change to a stored value and needs a normalisation record.
+2. Casing and particles are consistent (`Sem de Boer`, not `Sem De Boer`), so there is nothing to
+   "fix" there. Any title-casing would be a change without evidence and must not happen.
+3. The name pool is small: 618 folded names cover 1470 rows and 603 of those groups span different
+   emails. A name alone is not identity and must never merge anything, not even as a tie-breaker.
+4. Name *variants* (`Luuk-L`, `Braam`) are a signature of "signed up again with a different
+   email". They are invisible to exact and folded matching and only surface through another key
+   (dob, phone, bsn). Duplicate detection therefore has to start from those keys, not from the
+   name.
+5. The export has no split into given name and family name and no consistent particle handling.
+   Splitting is guesswork and gains nothing for Part A; the new intake form (Part B) can collect
+   structured names if wanted.
+
 **Agreed**
 
 _Not yet discussed._
