@@ -1,6 +1,6 @@
 /**
- * Builds the browsable inventory page (docs/legacy-export-inventory.html) from
- * docs/data-profile.json. Run with `npm run profile:inventory` after `npm run profile`.
+ * Builds the browsable inventory page (docs/profile/legacy-export-inventory.html) from
+ * docs/profile/data-profile.json. Run with `npm run profile:inventory` after `npm run profile`.
  *
  * Why: the markdown profile is the record; the page is the reading aid the reviewer uses to see
  * the diversity of every column at once. Long arrays are pruned to their head so the page stays
@@ -50,11 +50,11 @@ function prune(value: Json): Json | Pruned {
   return value;
 }
 
-const source = JSON.parse(readFileSync(join(ROOT, 'docs', 'data-profile.json'), 'utf8')) as Json;
+const source = JSON.parse(readFileSync(join(ROOT, 'docs', 'profile', 'data-profile.json'), 'utf8')) as Json;
 const data = prune(source);
 const template = readFileSync(join(HERE, 'inventory-template.html'), 'utf8');
 if (!template.includes('/*__DATA__*/')) throw new Error('template has no data slot');
 const html = template.replace('/*__DATA__*/', 'const DATA = ' + JSON.stringify(data).replace(/</gu, '\\u003c') + ';');
-const out = join(ROOT, 'docs', 'legacy-export-inventory.html');
+const out = join(ROOT, 'docs', 'profile', 'legacy-export-inventory.html');
 writeFileSync(out, html);
 console.log(`wrote ${out} (${html.length} bytes)`);

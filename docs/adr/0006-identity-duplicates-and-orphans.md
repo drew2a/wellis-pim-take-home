@@ -133,6 +133,6 @@ identity and non-contradictory on everything else*. That exception is deliberate
 
 ## More information
 
-- `docs/findings.md`: `full_name`, `email`, `bsn`, `phone`, `legacy_patient_id`; `docs/data-profile.md`
-  P-34; `docs/data-hypotheses.md` H-5.
+- `docs/findings.md`: `full_name`, `email`, `bsn`, `phone`, `legacy_patient_id`; `docs/profile/data-profile.md`
+  P-34; `docs/profile/data-hypotheses.md` H-5.
 - ADR-0004 (alias table, review items, audit), ADR-0005 (the normalisations the keys rely on).

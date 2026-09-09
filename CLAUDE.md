@@ -11,7 +11,7 @@ Source documents:
   reviewers answer.
 - `docs/adr/` — every significant design decision, MADR format. Start every session by
   reading `docs/adr/README.md`; do not re-ask what an accepted ADR already answers.
-- `docs/data-profile.md` — what the export actually contains (written in the profiling
+- `docs/profile/data-profile.md` — what the export actually contains (written in the profiling
   session). Every data rule cites the section that supports it.
 
 ## 1. Design decisions are recorded (ADR)

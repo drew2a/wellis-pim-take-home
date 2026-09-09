@@ -164,5 +164,5 @@ source column as `text` exactly as exported, untrimmed (so `active ` and `approv
 
 ## More information
 
-- `docs/findings.md` (every Agreed line), `docs/data-profile.md`, `docs/data-hypotheses.md`.
+- `docs/findings.md` (every Agreed line), `docs/profile/data-profile.md`, `docs/profile/data-hypotheses.md`.
 - ADR-0005 (rules and detectors), ADR-0006 (identity).

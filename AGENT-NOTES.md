@@ -8,7 +8,7 @@ traces are the full record.
 
 - Docs before code: `REQUIREMENTS.md`, `QUESTIONS.md`, `CLAUDE.md` and the ADR log were
   written first so every later session starts from the same definition of "correct".
-- Part A starts with a data profile (`docs/data-profile.md`), then mapping rules and
+- Part A starts with a data profile (`docs/profile/data-profile.md`), then mapping rules and
   schema as `proposed` ADRs that I accept by hand, then implementation on a topic branch,
   then a review in a fresh session before the merge.
 
@@ -17,7 +17,7 @@ traces are the full record.
 **Let it run (2026-09-09, Part A analysis).**
 
 - Profiling the export: a subagent wrote `scripts/profile/*.ts` and generated
-  `docs/data-profile.md` / `.json` (36 inventories) from a spec I gave it; I only spot-checked six
+  `docs/profile/data-profile.md` / `.json` (36 inventories) from a spec I gave it; I only spot-checked six
   numbers against the raw files and read the result.
 - Testing the mapping hypotheses (`scripts/profile/hypotheses.ts`): the separator convention for
   dates, the weight-unit readings against the same patient's intakes, heights, vocabulary spread.

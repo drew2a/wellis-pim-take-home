@@ -2,7 +2,7 @@
 
 What each column of `legacy_export/` contains, what could go wrong when we map it, and what we
 agreed to do about it. Built one column at a time in discussion; the evidence is in
-`docs/data-profile.md` (`P-n` sections, `npm run profile`) and `docs/data-hypotheses.md`
+`docs/profile/data-profile.md` (`P-n` sections, `npm run profile`) and `docs/profile/data-hypotheses.md`
 (`H-n` sections, `npm run profile:hypotheses`). Numbers here are copied from those two generated
 files and nowhere else. Extra one-off checks quote their shell command.
 

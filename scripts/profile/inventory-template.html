@@ -130,7 +130,7 @@
         b.onclick = () => { rows.forEach((r) => (r.hidden = false)); b.remove(); };
         more.append(b, ' ');
       }
-      if (opts.total && opts.total > rows.length) more.append(`Showing the ${rows.length} most frequent of ${fmt(opts.total)} distinct; the other ${fmt(opts.total - rows.length)} cover ${fmt(opts.remaining)} rows. The full list is in docs/data-profile.json.`);
+      if (opts.total && opts.total > rows.length) more.append(`Showing the ${rows.length} most frequent of ${fmt(opts.total)} distinct; the other ${fmt(opts.total - rows.length)} cover ${fmt(opts.remaining)} rows. The full list is in docs/profile/data-profile.json.`);
       frag.append(more);
     }
     return frag;
@@ -253,7 +253,7 @@
   const main = document.getElementById('main'), nav = document.getElementById('nav');
   main.append($('header', { class: 'top' },
     $('h1', {}, 'Legacy Export Inventory'),
-    $('p', {}, 'Every column of legacy_export/ as it was exported: complete value tables where a column has few distinct values, shape tables where it has many. Nothing is mapped or corrected here. Leading and trailing whitespace is drawn as ', $('span', { class: 'ws mono' }, '␣'), ' so it cannot hide. Generated from docs/data-profile.json (npm run profile).'),
+    $('p', {}, 'Every column of legacy_export/ as it was exported: complete value tables where a column has few distinct values, shape tables where it has many. Nothing is mapped or corrected here. Leading and trailing whitespace is drawn as ', $('span', { class: 'ws mono' }, '␣'), ' so it cannot hide. Generated from docs/profile/data-profile.json (npm run profile).'),
   ));
   const filesRows = DATA.files.map((f) => $('tr', {}, $('td', { class: 'mono' }, f.name), $('td', { class: 'num' }, fmt(f.bytes)), $('td', {}, f.utf8Valid ? 'UTF-8' : 'not UTF-8', f.bom ? ', BOM' : ', no BOM'), $('td', {}, f.lineEndings.crlf ? 'CRLF' : 'LF'), $('td', { class: 'num' }, f.header.length), $('td', { class: 'num' }, fmt(f.dataRows)), $('td', { class: 'num' }, f.blankLines), $('td', { class: 'num' }, f.duplicateFullRows.rows)));
   const files = $('section', { class: 'panel', id: 'files' }, $('div', { class: 'eyebrow' }, 'Files'), $('h2', {}, 'As read from disk'),

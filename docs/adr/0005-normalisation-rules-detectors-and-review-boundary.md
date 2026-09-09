@@ -217,11 +217,11 @@ one.
   `eligibility_evaluations` where `shadow` and the verdict differs from the legacy outcome.
 - Integration test: after import every legacy intake has exactly one shadow evaluation and no
   legacy intake state changed.
-- A test asserts that every raw value in `docs/data-profile.json` for the closed vocabularies is
+- A test asserts that every raw value in `docs/profile/data-profile.json` for the closed vocabularies is
   covered by the mapping tables.
 
 ## More information
 
-- `docs/findings.md` for the reasoning behind every line; `docs/data-profile.md` (P-n),
-  `docs/data-hypotheses.md` (H-n).
+- `docs/findings.md` for the reasoning behind every line; `docs/profile/data-profile.md` (P-n),
+  `docs/profile/data-hypotheses.md` (H-n).
 - ADR-0004 (tables), ADR-0006 (identity).
