@@ -2,7 +2,7 @@
 
 - **Status:** accepted
 - **Date:** 2026-09-08
-- **Deciders:** Andrei Andreev (pending)
+- **Deciders:** Andrei Andreev
 - **Requirements:** R-T1, R-T2, R-T7, R-T8, R-T10, R-P6
 
 ## Context and problem statement
