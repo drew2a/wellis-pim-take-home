@@ -1441,6 +1441,40 @@ Check (1): no stored value differs from raw; the derived state is a new field wi
 recorded. Check (2): 99 row items, each a different patient with a distinct compliance action; one
 vocabulary item for a question about timestamps.
 
-**Agreed**
+**Agreed** (2026-09-09)
 
-_Not yet discussed._
+As proposed, with four amendments.
+
+1. "Future" is relative to the import run timestamp, not to the other records: a revocation dated
+   next week has not happened either. Counted from 2026-09-08 that is 69 events (66 revoked, 3
+   granted): 24 in Sep to Dec 2026, 39 in 2027, 3 in 2028, 3 in 2062. All 69 go into the one
+   vocabulary-level item; the derived state is unchanged by it.
+2. The 73 active-or-paused patients without an event are split by signup year against the notes'
+   "complete from 2023": signup 2023 or later → state `no_record`, "consent missing" (55: 52 active,
+   3 paused); signup 2022 → state `unknown_pre_log`, "consent unknown, predates the log" (18: 17
+   active, 1 paused). Same review item type and action, the payload says which; the report counts
+   them separately. The 26 churned and prospect patients without an event (16 and 3 from 2023 on,
+   6 and 1 from 2022) get the same states and no item.
+3. Tie-break named: a grant and a revocation with the same timestamp resolve to `revoked`.
+4. The items go to the review queue, not to an ops list: a report is read once, the queue is
+   worked. They carry type `consent` so the queue's type filter separates them from clinical work.
+
+Everything else as proposed: 7 + 19 + 73 row items, none for churned or prospect, the 71 intakes
+before first grant and 83 after revocation as report findings, events stored as exported, local
+time without zone with the assumption recorded, `consent_state` derived per patient and type by
+timestamp order, revocation the safe direction, the 7 swapped pairs `conflict` = not granted until
+a human resolves.
+
+Requirement for Part B: `consent_state` is recomputed by the same function on every new consent
+event, not only at import. The new intake flow writes a `granted` event at submit with the current
+consent-text version, and an intake cannot be submitted without it.
+
+Open point for the schema ADR: the timestamp column type. Legacy events without a zone are right
+for the derivation, but new-flow events carry a real zone and one column holds one kind of time.
+Options: `timestamptz` with legacy converted via Europe/Amsterdam plus a per-row
+`TIMESTAMP_ZONE_ASSUMED` record, or `timestamp` without zone for all. Decided when the
+`consent_events` table is designed.
+
+Check (1): no stored value differs from raw; the derived state is a new field with its rule
+recorded. Check (2): 99 row items, each a distinct patient with a distinct action; one vocabulary
+item about timestamps.
