@@ -877,3 +877,40 @@ as well as under quarantined.
 
 Check (1): no stored value differs from raw. Check (2): 21 + 5 row items, each a different person
 or pair with distinct actions.
+
+### submitted_at
+
+**Facts** (P-18, P-35, H-1)
+
+| fact | value |
+|---|---|
+| rows / empty / distinct | 2917 / 0 / 1433 |
+| shapes | `9999-99-99` 2504, `99-99-9999` 234, `99/99/9999` 179; nothing else; date only, no time |
+| separator convention (H-1) | 1804 unambiguous values, 0 counterexamples, 0 unreadable |
+| non-ISO by year of the value | 2022: 65 of 162, 2023: 237 of 543, 2024: 111 of 702 (latest 2024-05-31), 2025 and 2026: 0 |
+| shape by questionnaire_version | every shape under every label, same proportions (P-18); no label owns a format |
+| against the patient's signup_date, under the convention | 0 of 2896 earlier; 12 on the day; 299 within 30 days; 1775 within a year; 810 later |
+| rows dated 2062 | 3, all belonging to two of the three patients whose whole record is shifted (`recuSs76Rr161XtAA` twice, `reckIDPmvFjD5ppYo` once) |
+
+**Possible warnings**
+
+1. Same silent-error risk as the patient dates, same convention, same single confirmation item.
+   The zero-before-signup result is computed from this column and signup_date together and is the
+   evidence for both.
+2. Date only. "Age at submission" for the age detector is therefore a whole-day computation; a
+   patient submitting on their 18th birthday is 18. Store as a calendar date.
+3. The 3 rows in 2062 belong to patients already carrying a review item that lists all their
+   shifted dates. A second item per intake would be the same decision twice.
+4. The May 2024 cut-over is identical in this file and in patients.csv, which says the export or
+   the form tool changed, not one automation.
+
+**Agreed** (2026-09-09, recorded by the agent under the standing instruction; checked against the
+two questions below)
+
+Separator convention, one normalisation record with rule code `DATE_ORDER_FROM_SEPARATOR` per
+non-ISO row (413 rows), stored as a calendar date, raw kept, covered by the same single
+confirmation item as dob. The 3 rows in 2062: canonical null, raw kept, listed inside the existing
+review item of their patient, no new item.
+
+Check (1): 413 converted values, each with a record; 2504 ISO values unchanged. Check (2): 0 new
+items; the convention item and the 2062 patient items already exist.
