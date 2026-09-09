@@ -637,6 +637,58 @@ tail -n +2 legacy_export/patients.csv | cut -d, -f12 | sort | uniq -c | sort -rn
 5. Any unseen value in a future export produces one vocabulary-level review item and maps to
    `unknown` until resolved, exactly as for `sex`.
 
+**Agreed** (2026-09-09)
+
+Map with the closed table into `active | paused | churned | prospect | unknown`. Rows whose raw
+spelling differs from the canonical string get a normalisation record with rule code
+`VOCAB_STATUS` (1917 rows: all but `active` 268, `paused` 73, `churned` 158, `prospect` 50). The
+three meaning-level assignments (`cancelled` → churned, `on hold` → paused, `new`/`lead` →
+prospect) are listed in the import report under rules applied. Unseen values: one
+vocabulary-level review item, `unknown` until resolved. Never joined with the outcome table.
+
+### signup_date
+
+**Facts** (P-13, P-35, P-36, H-1)
+
+| fact | value |
+|---|---|
+| rows / empty / distinct | 2466 / 0 / 1570 |
+| shapes | `9999-99-99` 1819, `99-99-9999` 360, `99/99/9999` 287; nothing else |
+| separator convention (H-1) | 1499 unambiguous values, 0 counterexamples, 0 unreadable |
+| range under the convention | 2022-01-04 to 2026-06-20, plus 3 rows in 2062 |
+| non-ISO shapes by year of the value | 2022: 232 of 493, 2023: 287 of 590, 2024: 128 of 547 (latest 2024-05-30), 2025 and 2026: 0 |
+| non-ISO share by source | import 107 of 417, typeform 226 of 845, campaign 114 of 415, website 97 of 400, referral 103 of 389: about a quarter everywhere |
+| intakes before signup, under the convention | 0 of 2896; 12 on the signup day, 299 within 30 days, 1775 within a year, 810 later |
+| consent events before signup | 6 of 2643 events (3 to 23 days early), none of them a first grant; 160 on the signup day |
+| the 3 rows dated 2062 | `recNFRrTp1VM8q7fw` (typeform), `recuSs76Rr161XtAA` (typeform), `reckIDPmvFjD5ppYo` (import); their intakes and consent events are also dated 2062, consistently, and their dobs are normal (1958 to 1979) |
+
+```sh
+tail -n +2 legacy_export/patients.csv | cut -d, -f13 | grep -c '^2062'   # 3
+```
+
+**Possible warnings**
+
+1. Same silent-error risk as dob for the 647 non-ISO values, resolved by the same convention. The
+   fact that the convention yields zero intakes before signup (297 would be, under other
+   readings) is the strongest single piece of evidence that it is right; it should be cited in
+   the vocabulary-level item that confirms the convention.
+2. The notes' "ISO at some point in 2024" is roughly right but incomplete: both styles coexist
+   from 2022 until May 2024, in every source at about the same rate, and then non-ISO stops. So
+   no automation was "the US-style one"; the export itself contradicts the story of a single
+   culprit. The profile's verdict "contradicted" is about the claim that ISO started in 2024; ISO
+   was the majority all along.
+3. Three patients live entirely in 2062: signup, intakes and consent all shifted the same way,
+   dob untouched. That is a systematic offset in one pipeline, not a typo, and the offset is not
+   derivable from the data (36 years to 2026 is a guess). Every date of those three patients is
+   affected and their records are unusable for anything time-based (consent recency, age at
+   intake) until a human decides.
+4. signup_date is "when the row was created". It is a date, not a timestamp, with no time zone;
+   store it as a calendar date. It is also the only anchor for "age at signup" and for the
+   consent-before-signup check.
+5. The 6 consent events that precede signup are all revocations of the "revoked then granted"
+   patients (P-33). That points at timestamp trouble in the consent log rather than in this column;
+   handled under consents.
+
 **Agreed**
 
 _Not yet discussed._
