@@ -1,6 +1,6 @@
 # ADR-0003: Stack — Next.js, Postgres (Supabase-hosted), Drizzle, Vitest
 
-- **Status:** proposed
+- **Status:** accepted
 - **Date:** 2026-09-08
 - **Deciders:** Andrei Andreev (pending)
 - **Requirements:** R-T1, R-T2, R-T3, R-T4, R-T5, R-T6, R-T7, R-S2
