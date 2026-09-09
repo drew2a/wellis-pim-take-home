@@ -593,6 +593,10 @@ proposed fix. The import report records under unexpected findings that intake he
 the patient row in 2896 of 2896 cases, contradicting the notes. Any non-integer or unit-bearing
 value in a future export is a review item, with the same decimal-shift proposal where it applies.
 
+Check (1): no stored value differs from raw in this export, so no records; the 5 nulled rows keep
+their raw value. Check (2): 5 row items, each a distinct patient with a distinct fix to accept or
+reject; no vocabulary-level item needed.
+
 ### status
 
 **Facts** (P-12, H-4)
@@ -645,6 +649,9 @@ spelling differs from the canonical string get a normalisation record with rule 
 three meaning-level assignments (`cancelled` → churned, `on hold` → paused, `new`/`lead` →
 prospect) are listed in the import report under rules applied. Unseen values: one
 vocabulary-level review item, `unknown` until resolved. Never joined with the outcome table.
+
+Check (1): 1917 rows differ from raw (case, whitespace or synonym) and each has a `VOCAB_STATUS`
+record. Check (2): no row items; a new spelling is one vocabulary-level item.
 
 ### signup_date
 
@@ -738,6 +745,13 @@ tail -n +2 legacy_export/patients.csv | awk -F, '{print $14" "($10==""?"(empty)"
 4. Source is a filter for the console and a dimension for the import report, nothing else. It is
    not identity and not medical.
 
-**Agreed**
+**Agreed** (2026-09-09, recorded by the agent under the standing instruction; checked against the
+two questions below)
 
-_Not yet discussed._
+Store as-is, free text, no normalisation, no mapping table. Used as a console filter and as a
+dimension in the import report. No source-specific parsing anywhere. The import report lists
+`referral` as a value the notes did not name and states that no defect in the file correlates with
+source, under unexpected findings. Unseen future values are stored as they come; no review item.
+
+Check (1): no stored value differs from raw, so no records. Check (2): no review items; nothing
+here is a decision a human could act on.
