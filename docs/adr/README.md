@@ -59,5 +59,5 @@ being written, not before.
 | ADR | Title | Status |
 |---|---|---|
 | [0001](0001-record-architecture-decisions.md) | Record architecture decisions as ADRs | accepted |
-| [0002](0002-adopt-ivory-tower-engineering-conventions.md) | Adopt ivory-tower engineering conventions | proposed |
-| [0003](0003-stack-nextjs-postgres-drizzle.md) | Stack: Next.js, Postgres (Supabase-hosted), Drizzle, Vitest | proposed |
+| [0002](0002-adopt-ivory-tower-engineering-conventions.md) | Adopt ivory-tower engineering conventions | accepted |
+| [0003](0003-stack-nextjs-postgres-drizzle.md) | Stack: Next.js, Postgres (Supabase-hosted), Drizzle, Vitest | accepted |
