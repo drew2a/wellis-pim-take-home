@@ -1193,3 +1193,62 @@ Dependency: the history audit runs as an import step but reads its term lists fr
 Check (1): 815 rows differ from raw in the derived field, each with a record; raw text unchanged
 for all. Check (2): 42 row items, each a different patient with a clinical question; one
 vocabulary item for the term list, which is a decision about a rule.
+
+### conditions
+
+**Facts** (P-23, H-4)
+
+| fact | value |
+|---|---|
+| rows / empty / distinct | 2917 / 187 / 20 |
+| whitespace | none; one case variant (`PCOS`) |
+| "no condition" spellings | `none` 185, `geen` 163, plus 187 empty: 535 rows |
+| common conditions | 15 values, 170 to 195 rows each, Dutch and English mixed (`hypertensie` 185 and `hoge bloeddruk` 184 are the same condition twice) |
+| several conditions in one value | exactly one such value, `hoge bloeddruk; slaapapneu` on 193 rows; `;` is the only separator, no other value has two conditions |
+| flag conditions (brief §3B) | `alvleesklierontsteking` 6, `schildklierkanker (2019)` 5, `medullair schildkliercarcinoom familie` 2, `pancreatitis 2022` 2: 15 rows, legacy outcomes approved 10, rejected 3, pending 2 |
+| near misses for a substring matcher | `hypothyreoidie` 170 rows contains `thyro`; a substring `schildklier` catches it in no row but would catch `schildklierproblemen` in a future export |
+| weight-related conditions (for the BMI 27 to 30 rule) | `hoge bloeddruk`, `hypertensie`, `slaapapneu`, `diabetes type 2`, `prediabetes`, `hoog cholesterol`, `PCOS`; 520 legacy intakes have a BMI in 27 to 30 and 237 of them name one |
+| family history | `medullair schildkliercarcinoom familie` is a family history, not the patient's own; the brief's rule says "history of thyroid cancer (self-reported)" |
+| by version and year | same vocabulary everywhere |
+
+```sh
+tail -n +2 legacy_export/intakes.csv | grep -ciE 'schildklierkanker|schildkliercarcinoom|pancreatitis|alvleesklierontsteking'   # 15
+```
+
+**Possible warnings**
+
+1. Two clinical questions hide in one text column: the two *flag* conditions (thyroid cancer,
+   pancreatitis) and the *weight-related* conditions that decide the BMI 27 to 30 band. Both need
+   term lists, and both lists must be explicit, versioned and inspectable (R-B11).
+2. Family history of medullary thyroid carcinoma is a real contraindication for GLP-1 therapy
+   (MEN2/MTC). The brief's wording is "self-reported history"; a matcher on `schildkliercarcinoom`
+   flags it anyway. Flagging it is the safe side and a doctor decides; the reason string should say
+   what matched, so the doctor sees the word "familie".
+3. `hypertensie` and `hoge bloeddruk` are one condition; `astma`, `depressie`, `artrose knie`,
+   `reflux`, `hypothyreoidie` are not weight-related in the sense of the rule. Which conditions
+   count as weight-related is a clinical list (Q3) and must be confirmed by Wellis, not derived
+   from this file.
+4. The `;` separator means the matcher must run over the whole text, not over a first token.
+5. Legacy rows carry a BMI in the flag band and no weight-related condition on 283 intakes; the
+   new rules would have flagged them. Same reasoning as GLP-1: per-patient items from the history
+   audit, not a change to the outcome.
+
+**Agreed** (2026-09-09, per the instruction given with meds_current)
+
+Store the raw text unchanged as `conditions_raw`; derive `condition_report` with `none_reported`
+(348 rows, record `VOCAB_NONE_CONDITION`) / `not_answered` (187) / `reported` (2382). No condition
+dictionary at import. The history audit runs the Part B matcher over the text: specific terms only
+(`schildklierkanker`, `schildkliercarcinoom`, `thyroid cancer`, `medullary thyroid`,
+`pancreatitis`, `alvleesklierontsteking`) from `rules/v1.json`, word boundaries after lowercasing,
+never bare substring. Each match is **one row-level review item per intake** with the engine's
+reason string ("flagged: self-reported history of thyroid cancer (schildklierkanker (2019))"),
+payload carrying the legacy outcome, outcome untouched: 15 items in this export. The
+weight-related list is a separate entry in `rules/v1.json`, seeded from the 7 values seen and
+confirmed by Wellis (Q3). **One** vocabulary-level item lists every distinct `conditions` value
+with its classification (flag / weight-related / other / none / unrecognised) so a human confirms
+the whole vocabulary once. The 520 / 237 / 283 figures and the family-history observation go into
+the import report.
+
+Check (1): 348 rows differ from raw in the derived field, each with a record; raw text unchanged.
+Check (2): 15 row items, each a different patient with a clinical question; one vocabulary item
+for the two term lists.
