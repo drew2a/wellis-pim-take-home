@@ -20,7 +20,7 @@ import {crossSections} from './cross.js';
 import {delimiterLabel, loadCsv} from './csv.js';
 import {intakesSections, loadIntakes} from './intakes.js';
 import {loadPatients, patientsSections} from './patients.js';
-import {Report, code, plain, renderSection, renderTable, table, type Section} from './report.js';
+import {Report, VISIBLE_SPACE, code, plain, renderSection, renderTable, table, type Section} from './report.js';
 import {eolLabel, Counter, type FileInfo} from './util.js';
 
 const OUT_MD = abs(PROFILE_MD);
@@ -114,8 +114,9 @@ function main(): void {
   md.push(
     'Conventions used throughout:',
     '',
-    '- **raw value**: the field exactly as exported, shown inside backticks so leading and trailing whitespace is',
-    '  visible. `|` is escaped as `\\|` and tabs, carriage returns and newlines as `\\t`, `\\r`, `\\n`.',
+    '- **raw value**: the field exactly as exported, shown inside backticks. Each leading or trailing space is',
+    `  drawn as \`${VISIBLE_SPACE}\` (a rendered code span would otherwise swallow it); internal spaces are kept as they are.`,
+    '  `|` is escaped as `\\|` and tabs, carriage returns and newlines as `\\t`, `\\r`, `\\n`.',
     '- **folded**: trim, lowercase, then collapse internal whitespace runs to one space.',
     '- **shape**: every digit replaced by `9`, every lowercase letter by `a`, every uppercase letter by `A`,',
     '  punctuation and whitespace kept verbatim. A **collapsed shape** additionally collapses a run of one',

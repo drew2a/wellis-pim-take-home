@@ -31,14 +31,21 @@ export function table(caption: string, header: readonly string[], rows: readonly
   return {caption, header, rows};
 }
 
+/** The glyph that stands for one leading or trailing space in a code span (U+2423). */
+export const VISIBLE_SPACE = '␣';
+
 /**
- * Renders a raw value as a markdown code span so leading and trailing whitespace stays
- * visible in the document source. `|` becomes `\|` and control characters become escapes,
- * because a table cell cannot carry them.
+ * Renders a raw value as a markdown code span. Leading and trailing spaces are drawn as
+ * `␣`, because CommonMark strips one space from each end of a code span whose content
+ * starts and ends with a space, so `` ` en ` `` would render exactly like `` `en` `` and the
+ * whitespace the inventory exists to show would disappear. `|` becomes `\|` and control
+ * characters become escapes, because a table cell cannot carry them.
  */
 export function code(raw: string): string {
   if (raw === '') return '(empty)';
   const shown = raw
+    .replace(/^ +/u, (m) => VISIBLE_SPACE.repeat(m.length))
+    .replace(/ +$/u, (m) => VISIBLE_SPACE.repeat(m.length))
     .replace(/\\/gu, '\\\\')
     .replace(/\t/gu, '\\t')
     .replace(/\r/gu, '\\r')

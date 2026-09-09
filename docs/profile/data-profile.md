@@ -26,8 +26,9 @@ or merge rule: those are ADR decisions (CLAUDE.md §1) and they need this invent
 
 Conventions used throughout:
 
-- **raw value**: the field exactly as exported, shown inside backticks so leading and trailing whitespace is
-  visible. `|` is escaped as `\|` and tabs, carriage returns and newlines as `\t`, `\r`, `\n`.
+- **raw value**: the field exactly as exported, shown inside backticks. Each leading or trailing space is
+  drawn as `␣` (a rendered code span would otherwise swallow it); internal spaces are kept as they are.
+  `|` is escaped as `\|` and tabs, carriage returns and newlines as `\t`, `\r`, `\n`.
 - **folded**: trim, lowercase, then collapse internal whitespace runs to one space.
 - **shape**: every digit replaced by `9`, every lowercase letter by `a`, every uppercase letter by `A`,
   punctuation and whitespace kept verbatim. A **collapsed shape** additionally collapses a run of one
@@ -93,11 +94,11 @@ Exact duplicates: 598 groups over 1409 rows. Duplicates after folding (trim + lo
 | `Aa+ a+ Aa+` | 390 | `Zeynep de Wit` `Teun de Jong` `Kees de Jong` |
 | `Aa+ a+ a+ Aa+` | 90 | `Ruben van den Berg` `Youssef van der Meer` `Fatima van den Berg` |
 | `Aa+ Aa Aa+` | 59 | `Noor El Amrani` `Gijs El Amrani` `Emre El Amrani` |
-| `Aa+ Aa+ ` | 57 | `Annelies Benali ` `Annelies Dijkstra ` `Elena Brouwer ` |
-| `Aa+ a+ Aa+ ` | 9 | `Anna van Dijk ` `Annelies de Wit ` `Elena de Vries ` |
-| `Aa+ a+ a+ Aa+ ` | 5 | `Finn van der Meer ` `Piotr van der Meer ` `Mohammed van den Berg ` |
+| `Aa+ Aa+␣` | 57 | `Annelies Benali␣` `Annelies Dijkstra␣` `Elena Brouwer␣` |
+| `Aa+ a+ Aa+␣` | 9 | `Anna van Dijk␣` `Annelies de Wit␣` `Elena de Vries␣` |
+| `Aa+ a+ a+ Aa+␣` | 5 | `Finn van der Meer␣` `Piotr van der Meer␣` `Mohammed van den Berg␣` |
 | `Aa+-A Aa+` | 4 | `Luuk-L Dijkstra` `Emma-E Visser` `Thijs-T Benali` |
-| `Aa+ Aa Aa+ ` | 1 | `Priya El Amrani ` |
+| `Aa+ Aa Aa+␣` | 1 | `Priya El Amrani␣` |
 | `Aa+-A a+ Aa+` | 1 | `Fatima-F de Wit` |
 
 **Token count (folded value split on spaces)**
@@ -133,19 +134,19 @@ Exact duplicates: 16 groups over 35 rows. Case-insensitive duplicates: 44 groups
 | `a+.a+@a+.a+` | 2280 | `zeynep.chen@live.nl` `ruben.vandenberg@yahoo.com` `olga.brouwer@yahoo.com` |
 | `a+.a+9@a+.a+` | 107 | `roos.kaya1@hotmail.com` `olga.ricci1@protonmail.com` `hendrik.vos1@ziggo.nl` |
 | `A+.A+@A+.A+` | 21 | `PRIYA.IVANOV@ZIGGO.NL` `FEMKE.DEWIT@ICLOUD.COM` `JAN.JONES@LIVE.NL` |
-| ` a+.a+@a+.a+` | 17 | ` teun.smits@gmail.com` ` wei.rossi@outlook.com` ` kasia.mulder@icloud.com` |
-| `a+.a+@a+.a+ +` | 11 | `levi.petrov@kpnmail.nl  ` `mei.mulder@hotmail.com  ` `marco.dekker@gmail.com  ` |
+| `␣a+.a+@a+.a+` | 17 | `␣teun.smits@gmail.com` `␣wei.rossi@outlook.com` `␣kasia.mulder@icloud.com` |
+| `a+.a+@a+.a+ +` | 11 | `levi.petrov@kpnmail.nl␣␣` `mei.mulder@hotmail.com␣␣` `marco.dekker@gmail.com␣␣` |
 | `a+.a+ @a+.a+` | 8 | `willem.ricci @icloud.com` `kasia.nowak @hotmail.com` `eva.smit @outlook.com` |
 | `Aa+.Aa+@Aa+.Aa` | 4 | `Sanne.Chen@Kpnmail.Nl` `Lisa.Bos@Live.Nl` `Emre.Vos@Ziggo.Nl` |
 | `a.a.a.` | 4 | `n.v.t.` |
 | `Aa+.Aa+@Aa+.Aa+` | 3 | `Elena.Vos@Protonmail.Com` `Anna.Jansen@Gmail.Com` `Oliver.Wang@Protonmail.Com` |
 | `a` | 3 | `x` |
 | `a+.a+9 @a+.a+` | 2 | `jan.wilson1 @yahoo.com` `eva.wang1 @live.nl` |
-| ` a+.a+9@a+.a+` | 1 | ` kees.dejong1@yahoo.com` |
+| `␣a+.a+9@a+.a+` | 1 | `␣kees.dejong1@yahoo.com` |
 | `-` | 1 | `-` |
 | `@a+.a+` | 1 | `@gmail.com` |
 | `a+` | 1 | `none` |
-| `a+.a+9@a+.a+ +` | 1 | `zeynep.kaya1@icloud.com  ` |
+| `a+.a+9@a+.a+ +` | 1 | `zeynep.kaya1@icloud.com␣␣` |
 | `a+@` | 1 | `info@` |
 
 **Complete domain inventory (10 distinct)**
@@ -532,7 +533,7 @@ Bands are the ones a reader would ask about: below 3 (a value in metres), 3..100
 | `ACTIEF` | 275 | `actief` |
 | `actief` | 273 | `actief` |
 | `active` | 268 | `active` |
-| `active ` | 251 | `active` |
+| `active␣` | 251 | `active` |
 | `cancelled` | 170 | `cancelled` |
 | `Churned` | 164 | `churned` |
 | `churned` | 158 | `churned` |
@@ -550,7 +551,7 @@ Bands are the ones a reader would ask about: below 3 (a value in metres), 3..100
 
 | folded value | distinct raw spellings | rows | raw spellings (count) |
 | --- | --- | --- | --- |
-| `active` | 3 | 816 | `Active` 297, `active` 268, `active ` 251 |
+| `active` | 3 | 816 | `Active` 297, `active` 268, `active␣` 251 |
 | `actief` | 2 | 548 | `ACTIEF` 275, `actief` 273 |
 | `churned` | 2 | 322 | `Churned` 164, `churned` 158 |
 | `paused` | 2 | 129 | `paused` 73, `Paused` 56 |
@@ -887,8 +888,8 @@ None.
 | --- | --- |
 | `,` | 9 |
 | `;` | 0 |
-| ` en ` | 0 |
-| ` and ` | 0 |
+| `␣en␣` | 0 |
+| `␣and␣` | 0 |
 | `/` | 0 |
 | `+` | 0 |
 | `newline` | 0 |
@@ -968,8 +969,8 @@ None.
 | --- | --- |
 | `,` | 0 |
 | `;` | 193 |
-| ` en ` | 0 |
-| ` and ` | 0 |
+| `␣en␣` | 0 |
+| `␣and␣` | 0 |
 | `/` | 0 |
 | `+` | 0 |
 | `newline` | 0 |
@@ -1057,7 +1058,7 @@ None.
 | `goedgekeurd` | 420 | `goedgekeurd` |
 | `Approved` | 411 | `approved` |
 | `approved` | 411 | `approved` |
-| `approved ` | 385 | `approved` |
+| `approved␣` | 385 | `approved` |
 | `rejected` | 147 | `rejected` |
 | `afgewezen` | 131 | `afgewezen` |
 | `Rejected` | 125 | `rejected` |
@@ -1071,7 +1072,7 @@ None.
 
 | folded value | distinct raw spellings | rows | raw spellings (count) |
 | --- | --- | --- | --- |
-| `approved` | 3 | 1207 | `Approved` 411, `approved` 411, `approved ` 385 |
+| `approved` | 3 | 1207 | `Approved` 411, `approved` 411, `approved␣` 385 |
 | `rejected` | 2 | 272 | `rejected` 147, `Rejected` 125 |
 
 ### P-26 intakes.csv.reviewer_note
@@ -1278,7 +1279,7 @@ Group counts are groups of two or more rows. A row can appear in several groupin
 | 2 | `recbNPmcJ6tm80xRg` | `Annelies Rossi` | `annelies.rossi@yahoo.com` | `1980-03-09` | `2025-09-03` |
 | 2 | `rec29qlBbzgJV2kiq` | `Annelies Rossi` | `ANNELIES.ROSSI@YAHOO.COM` | `1980-03-09` | `2025-09-03` |
 | 3 | `recjH1MAp21WupjkB` | `Zeynep Wang` | `zeynep.wang@ziggo.nl` | `1979-11-11` | `2025-11-13` |
-| 3 | `recWM686gotMf9MHK` | `Zeynep Wang` | ` zeynep.wang@ziggo.nl` | `1979-11-11` | `2025-11-13` |
+| 3 | `recWM686gotMf9MHK` | `Zeynep Wang` | `␣zeynep.wang@ziggo.nl` | `1979-11-11` | `2025-11-13` |
 
 ### P-35 Earliest and latest dates across all files
 
