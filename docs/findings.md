@@ -1252,3 +1252,70 @@ the import report.
 Check (1): 348 rows differ from raw in the derived field, each with a record; raw text unchanged.
 Check (2): 15 row items, each a different patient with a clinical question; one vocabulary item
 for the two term lists.
+
+### outcome
+
+**Facts** (P-25, P-26, H-4)
+
+| fact | value |
+|---|---|
+| rows / empty / distinct raw / distinct folded | 2917 / 0 / 13 / 10 |
+| trailing whitespace | 385 rows, all the single value `approved ` |
+| raw values | `OK` 441, `goedgekeurd` 420, `Approved` 411, `approved` 411, `approved ` 385, `rejected` 147, `afgewezen` 131, `Rejected` 125, `declined` 114, `open` 93, `wacht op arts` 83, `pending` 82, `in review` 74 |
+| overlap with patients.status | none |
+| spread | every spelling under every questionnaire label and in every year (H-4); `OK` in every year 2022 to 2026 |
+| pending-class by submitted year | 2022: 19, 2023: 71, 2024: 76, 2025: 89, 2026: 76, 2062: 1 |
+
+Closed mapping onto the three classes EXPORT-NOTES.md names, covering all 2917 rows:
+
+| canonical | raw spellings (rows) | rows |
+|---|---|---|
+| `approved` | `OK` 441, `goedgekeurd` 420, `Approved` 411, `approved` 411, `approved ` 385 | 2068 |
+| `rejected` | `rejected` 147, `afgewezen` 131, `Rejected` 125, `declined` 114 | 517 |
+| `pending` | `open` 93, `wacht op arts` 83, `pending` 82, `in review` 74 | 332 |
+
+```sh
+tail -n +2 legacy_export/intakes.csv | awk -F, '{print $(NF-1)}' | sort | uniq -c | sort -rn   # 13 spellings (quoted notes shift the field on some rows; see P-25 for the exact table)
+```
+
+**Possible warnings**
+
+1. `OK` → approved is the one class assignment that is about meaning, not spelling, and it
+   carries 441 medical outcomes. `OK` is also a reviewer_note value. It reads as approval in a
+   Dutch clinic, and nothing in the file contradicts it, but it is an inference and the report
+   must say so.
+2. `pending` is not a terminal state: 332 legacy intakes were never decided, 19 of them submitted
+   in 2022. Stored as "legacy pending" they are dead data; entered into the new state machine as
+   `in_review` they are 332 items of real work for the care team, most of them years stale. Which
+   of the two is a product decision.
+3. The four pending spellings are not synonyms in the old process: `wacht op arts` (waiting for
+   the doctor) and `in review` say where the intake was; `open` and `pending` say nothing. The
+   canonical class loses that; the raw value keeps it.
+4. Legacy outcomes have no actor, no timestamp of decision (only the submission date), no reason.
+   The new audit entry for a legacy outcome can only say: actor "legacy import", state as
+   exported, reason "legacy outcome `<raw>`".
+5. Detectors over history (age, BMI, GLP-1, conditions) will disagree with some legacy outcomes.
+   The outcome stays; the disagreement is the review item. Nothing here may rewrite a historical
+   decision (CLAUDE.md §5).
+
+**Proposed** (awaiting explicit confirmation)
+
+Map with the closed table into `approved | rejected | pending`; rows whose raw spelling differs
+from the canonical string get a normalisation record `VOCAB_OUTCOME` (2359 rows: all but
+`approved` 411, `rejected` 147, `pending` 82). The `OK` assignment is listed in the import report
+under rules applied as an inference. Legacy intakes do not enter the Part B state machine: they
+get the terminal legacy states `legacy_approved`, `legacy_rejected` and the non-terminal
+`legacy_pending`, each with one audit entry (actor "legacy import", from none, to that state,
+reason "legacy outcome `<raw>`", at import time). The 332 `legacy_pending` intakes become **one**
+vocabulary-level review item "332 legacy intakes were never decided; open them as in_review, or
+close them as expired?" with the per-year breakdown; on the operator's choice they either enter
+the state machine at `in_review` (each with an audit entry) or move to `legacy_expired`. Unseen
+spellings in a future export: one vocabulary-level item, class `unknown` until resolved.
+
+Check (1): 2359 rows differ from raw, each with a record. Check (2): one item for one product
+decision about 332 rows; the per-patient clinical questions come from the detectors, not from
+this column.
+
+**Agreed**
+
+_Not yet discussed._
