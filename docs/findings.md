@@ -756,3 +756,44 @@ source, under unexpected findings. Unseen future values are stored as they come;
 
 Check (1): no stored value differs from raw, so no records. Check (2): no review items; nothing
 here is a decision a human could act on.
+
+---
+
+## intakes.csv
+
+### intake_id
+
+**Facts** (P-16, P-27)
+
+| fact | value |
+|---|---|
+| rows / empty / distinct | 2917 / 0 / 2917 |
+| shape | `INT-9999` on every row; numbers 7001 to 9917, all 2917 values in that range used exactly once |
+| whitespace, case | none |
+| order | id order is not date order: 1443 of 2916 adjacent id pairs are out of date order |
+| adjacent ids on the same patient and day | the same-day double submissions of P-27 have consecutive ids (`INT-7532`/`INT-7533`, `INT-8763`/`INT-8764`, `INT-7254`/`INT-7255`) |
+
+```sh
+tail -n +2 legacy_export/intakes.csv | cut -d, -f1 | sort -u | wc -l   # 2917
+```
+
+**Possible warnings**
+
+1. Dense, gap-free, and unrelated to submission order: the ids look assigned at export time or
+   renumbered, not issued by the form tool as submissions came in. Nothing in the export tells.
+   The id is unique here and is the only handle on a row, so it is the natural idempotency key,
+   but a future export could renumber and the key would then match different rows. Keep the
+   export's identity (file, run) next to the id.
+2. Consecutive ids on the same patient and day are the one thing the ordering does reveal: a
+   real double submission minutes apart. Useful as a side-by-side hint in the duplicate-intake
+   review, not as a rule.
+3. Store as text, opaque, like legacy_id. The numeric part is not a quantity.
+
+**Agreed** (2026-09-09, recorded by the agent under the standing instruction; checked against the
+two questions below)
+
+Store as-is, text, unique, opaque. Idempotency key for intake rows together with the import run's
+source identity. No normalisation, no review items.
+
+Check (1): no stored value differs from raw. Check (2): no review items.
+
