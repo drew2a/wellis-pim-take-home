@@ -6,6 +6,7 @@
  * which sections are added, never typed, so a new inventory cannot desynchronise the
  * cross-references.
  */
+import {PROFILE_JSON} from './cli.js';
 import {Counter, Grouper, KEY_SEP, collapsedShape, fold, hasEdgeWhitespace, shape} from './util.js';
 
 /** Above this many distinct raw values a column is inventoried by shape, not by value. */
@@ -210,7 +211,7 @@ export function columnSection(input: ColumnInput): ColumnSection {
       notes.push(
         `Shapes are too diverse for a table here (${exactShapes.size} distinct exact shapes, ` +
           `${collapsed.size} distinct collapsed shapes); the complete exact-shape inventory is in ` +
-          `docs/data-profile.json. The sub-analyses below carry the inventory instead.`,
+          `${PROFILE_JSON}. The sub-analyses below carry the inventory instead.`,
       );
       tables.push(shapeTableOf(values, 'collapsed'));
     } else if (exactShapes.size <= VALUE_TABLE_LIMIT) {
@@ -219,7 +220,7 @@ export function columnSection(input: ColumnInput): ColumnSection {
       notes.push(
         `${exactShapes.size} distinct exact shapes is past the ${VALUE_TABLE_LIMIT}-row table limit, so the ` +
           `table below collapses runs of one shape character (\`aaa\` becomes \`a+\`); the complete ` +
-          `exact-shape inventory is in docs/data-profile.json.`,
+          `exact-shape inventory is in ${PROFILE_JSON}.`,
       );
       tables.push(shapeTableOf(values, 'collapsed'));
     } else {
@@ -229,7 +230,7 @@ export function columnSection(input: ColumnInput): ColumnSection {
       notes.push(
         `Both the exact (${exactShapes.size}) and the collapsed (${collapsed.size}) shape inventories are past ` +
           `the ${VALUE_TABLE_LIMIT}-row table limit, so the table below inventories length and character ` +
-          `classes; both shape inventories are complete in docs/data-profile.json.`,
+          `classes; both shape inventories are complete in ${PROFILE_JSON}.`,
       );
       tables.push(maskTable(values));
     }

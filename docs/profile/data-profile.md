@@ -52,7 +52,7 @@ Conventions used throughout:
 
 2466 rows, 0 empty, 2466 distinct raw values, 2466 distinct folded values, 2461 distinct shapes. 0 rows (0 distinct values) carry leading or trailing whitespace.
 
-Both the exact (2461) and the collapsed (2368) shape inventories are past the 60-row table limit, so the table below inventories length and character classes; both shape inventories are complete in docs/data-profile.json.
+Both the exact (2461) and the collapsed (2368) shape inventories are past the 60-row table limit, so the table below inventories length and character classes; both shape inventories are complete in docs/profile/data-profile.json.
 
 2466 distinct ids over 2466 rows, so 0 id values are carried by more than one row (0 rows involved). Prefixes seen: `rec` 2466.
 
@@ -78,7 +78,7 @@ None.
 
 2466 rows, 0 empty, 1655 distinct raw values, 1614 distinct folded values, 115 distinct shapes. 72 rows (72 distinct values) carry leading or trailing whitespace.
 
-Shapes are too diverse for a table here (115 distinct exact shapes, 10 distinct collapsed shapes); the complete exact-shape inventory is in docs/data-profile.json. The sub-analyses below carry the inventory instead.
+Shapes are too diverse for a table here (115 distinct exact shapes, 10 distinct collapsed shapes); the complete exact-shape inventory is in docs/profile/data-profile.json. The sub-analyses below carry the inventory instead.
 
 72 rows have leading or trailing whitespace, 0 rows have a double space inside the name, 0 rows contain a digit, 0 rows contain a diacritic or other non-ASCII character, 0 rows are all lowercase and 0 rows are ALL CAPS.
 
@@ -119,7 +119,7 @@ None.
 
 2466 rows, 0 empty, 2447 distinct raw values, 2419 distinct folded values, 417 distinct shapes. 30 rows (30 distinct values) carry leading or trailing whitespace.
 
-417 distinct exact shapes is past the 60-row table limit, so the table below collapses runs of one shape character (`aaa` becomes `a+`); the complete exact-shape inventory is in docs/data-profile.json.
+417 distinct exact shapes is past the 60-row table limit, so the table below collapses runs of one shape character (`aaa` becomes `a+`); the complete exact-shape inventory is in docs/profile/data-profile.json.
 
 28 rows contain an uppercase character, 10 rows contain whitespace inside the value, 0 rows use plus-addressing. 16 distinct values fail the syntax check `^[^\s@]+@[^\s@]+\.[^\s@]{2,}$`.
 
@@ -645,7 +645,7 @@ None.
 
 2917 rows, 0 empty, 2040 distinct raw values, 2040 distinct folded values, 2035 distinct shapes. 0 rows (0 distinct values) carry leading or trailing whitespace.
 
-Both the exact (2035) and the collapsed (1965) shape inventories are past the 60-row table limit, so the table below inventories length and character classes; both shape inventories are complete in docs/data-profile.json.
+Both the exact (2035) and the collapsed (1965) shape inventories are past the 60-row table limit, so the table below inventories length and character classes; both shape inventories are complete in docs/profile/data-profile.json.
 
 2896 rows resolve to a patients.csv legacy_id, 21 rows do not. The unresolved rows carry 21 distinct ids, of which 0 also appear in consents.jsonl.
 
