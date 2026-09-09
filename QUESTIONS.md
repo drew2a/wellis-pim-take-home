@@ -234,7 +234,10 @@ Changes whether legacy intakes enter the Part B state machine at all.
 **Default if unanswered.** Store legacy outcome as-is (mapped to a terminal legacy state
 outside the new state machine), run the current ruleset over them in *shadow mode*,
 report disagreements in the import report, do not queue them. Orphan intakes are imported
-attached to a placeholder patient and queued.
+with a null patient reference and queued; **no placeholder patient is created** (changed
+2026-09-09 after profiling: the 21 orphans have no name, date of birth or email anywhere in the
+export, so a placeholder would be a fabricated patient record, while a null reference plus a
+review item states exactly what is known; see `docs/findings.md`, `legacy_patient_id`).
 
 **Why optional.** The default is defensible and demonstrates initiative; asking might
 pre-empt a finding they want me to make on my own.

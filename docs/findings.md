@@ -859,6 +859,21 @@ contradiction of the "fired before the row existed" story under unexpected findi
 Check (1): no stored value differs from raw. Check (2): 21 + 5 row items, each about a different
 person or pair and each with three distinct possible actions; nothing repeats identically.
 
-**Agreed**
+**Agreed** (2026-09-09)
 
-_Not yet discussed._
+As proposed, with two amendments. Store the raw id unchanged on every intake; resolution goes
+through the alias table. Orphans are stored in full with `patient_id` null and the raw
+`legacy_patient_id` kept; **no placeholder patient** is created: a synthetic patient row with no
+name, no date of birth and no email is a fabricated record, while a null reference plus a review
+item says what we actually know (departure from the Q9 default in `QUESTIONS.md`, updated there).
+Each orphan gets one row-level review item whose payload shows the intake and, as context only,
+its look-alike patients. The reviewer has **two** actions: attach to an existing patient (note
+required, because even the 3 single look-alikes are a guess) or leave unresolved. "Create a
+patient from the intake" is dropped: the intake carries no identity fields, so that patient would
+be the same placeholder made by hand. An orphan that stays unresolved is an acceptable outcome;
+the report counts them. The 5 same-day pairs get one item per pair, both intakes kept with their
+legacy outcome, no outcome of record until a reviewer decides; listed under unexpected findings
+as well as under quarantined.
+
+Check (1): no stored value differs from raw. Check (2): 21 + 5 row items, each a different person
+or pair with distinct actions.
