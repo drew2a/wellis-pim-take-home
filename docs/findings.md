@@ -1342,3 +1342,105 @@ future export: one vocabulary-level item, class `unknown` until resolved.
 Check (1): 1918 + 441 rows differ from raw, each with a record naming its rule. Check (2): two
 vocabulary-level items, each a decision about a rule or a product choice; the per-patient clinical
 questions come from the detectors.
+
+---
+
+## consents.jsonl
+
+Discussed as one unit: the five fields only mean something together as an event log.
+
+**Facts** (P-29 to P-33, P-35, plus the checks quoted below)
+
+| fact | value |
+|---|---|
+| lines / valid JSON / key sets / duplicates | 2643 / 2643 / one (`patient_legacy_id, type, action, at, version`) / 0; LF line endings |
+| `type` | `data_processing` 2643 |
+| `action` | `granted` 2367, `revoked` 276 |
+| `version` | `v1` 1136, `v2` 1507; `v1` only in 2022 and 2023, `v2` from 2024, with `v1` stragglers 49 in 2024 and 15 in 2025; every grant/revoke pair carries one version (276 of 276) |
+| `at` shape | `9999-99-99T99:99:99` on every line: seconds, no time zone |
+| `at` hour of day | every event between 07:00 and 22:59, none between 23:00 and 06:59 |
+| `at` range | 2022-03-03 to 2062-04-11; 42 events in 2027 to 2028 (all revocations, 42 patients, 319 to 699 days after their grant); 3 events in 2062 (the grants of the three shifted patients) |
+| references | 2643 of 2643 resolve to a patient; 2367 distinct patients; 99 patients have no event (signup years 2022: 25, 2023: 22, 2024: 21, 2025: 21, 2026: 10) |
+| events per patient | 1: 2091, 2: 276, more: 0 |
+| sequences in `at` order | granted only 2091; granted then revoked 269; revoked then granted 7; same action twice 0 |
+| the 7 revoked-first patients | the revoke is 3 to 23 days before the grant, and before the patient's signup_date in 6 of 7; statuses active, paused, opgezegd |
+| file order vs `at` order | differs for 131 patients; last state by `at`: granted 2098, revoked 269; by file order: granted 2221, revoked 146 |
+| first grant vs signup | same day 160, 1 to 7 days after 1122, 8 to 14 days after 1085; never before, never later than 14 days |
+| derived state (by `at`) x status class | revoked: churned 250, **active 19**; no event: **active 69**, churned 22, paused 4, prospect 4 |
+| intakes vs consent | 71 intakes (70 patients) submitted before the patient's first grant; 142 intakes belong to patients with no grant at all; 83 intakes submitted after a revocation with no later grant |
+| before 2023 | 477 events; 432 patients have no event dated 2023 or later |
+
+```sh
+grep -c '"action": "revoked"' legacy_export/consents.jsonl                       # 276
+grep -o '"at": "20[0-9][0-9]' legacy_export/consents.jsonl | sort | uniq -c       # 42 lines in 2027-2028
+```
+
+**Possible warnings**
+
+1. The log is not in time order for 131 patients. Reading it as an append-only log (last line wins)
+   would call 123 revoked patients granted. Consent state must be derived from timestamps, with
+   an explicit tie-break for equal timestamps (none occur, but the rule must exist).
+2. No time zone. The hour histogram (07:00 to 22:59, nothing at night) says the timestamps are
+   local Dutch time, not UTC; storing them as UTC would shift every event by one or two hours,
+   which changes the order of nothing here but is still a wrong statement about the data. Store as
+   a local timestamp with the assumption written down.
+3. 42 revocations are dated 2027 to 2028, after every other record in the export. They cannot be
+   real if the export was taken in 2026. Revocation is the safe direction: honouring a revocation
+   that may be mis-timed costs a re-consent; ignoring one that is real is a breach. So the derived
+   state must be revoked, and the timestamps still need a human.
+4. The 7 revoke-then-grant pairs revoke before the account existed. Either the two actions are
+   swapped or the timestamps are. Under "later event wins" they are granted; under "actions
+   swapped" they are revoked. The safe reading is not obvious: granting processing on a swapped
+   pair is a breach, refusing it on a correct pair blocks a patient who consented.
+5. 19 patients have revoked consent and an active status; 69 have no consent record and an active
+   status. Both are compliance facts about the old system that the new one inherits on day one,
+   and each is an action per patient (stop processing, or obtain consent).
+6. Consent always follows signup by 0 to 14 days, and 71 intakes were submitted before the first
+   grant. Medical data was collected before consent was recorded, for 70 patients. That is a
+   finding for the report, not something the importer can fix.
+7. `v1` and `v2` are consent-text versions. Which text a patient agreed to matters if the texts
+   differ in scope; the export does not contain the texts (unverifiable, P-30). Store the version
+   per event and never collapse it.
+8. Completeness before 2023 is unknowable from the inside. 432 patients have a 2022 grant and
+   nothing since; that is consistent both with "complete" and with "lost revocations".
+9. Type is one value. A future `marketing` or `research` type must not be folded into
+   `data_processing`; the state is per type.
+
+**Proposed** (awaiting explicit confirmation)
+
+Store every event as exported (`consent_events`: patient, type, action, at as a local timestamp
+without zone, version, source line number), no normalisation. Derive `consent_state` per patient
+and type by timestamp order with the tie-break "later line wins", producing
+`granted | revoked | no_record | conflict`. Assignments in this export:
+
+| derived state | patients | rule |
+|---|---|---|
+| `granted` | 2091 | granted only, or a grant after the last revoke |
+| `revoked` | 269 | the last event by `at` is a revoke, including the 42 dated 2027 to 2028 |
+| `no_record` | 99 | no event in the log |
+| `conflict` | 7 | revoke before grant and before signup: the pair is not trustworthy as ordered |
+
+`conflict` is treated as not granted for processing until resolved. Review items:
+
+- **7 row-level items** for the `conflict` patients, both events and the signup date side by side;
+  the reviewer sets the state, note required.
+- **19 row-level items** "consent revoked, patient active" and **73 row-level items** "no consent
+  record, patient active or paused" (69 active, 4 paused); action: obtain consent or pause
+  processing. The 26 churned and prospect patients with no record get no item; the report counts
+  them.
+- **One** vocabulary-level item "42 revocations are dated after the export" with the list; the state
+  stays revoked regardless of the answer.
+- The "local time" assumption for `at` goes into the rules applied with the hour-histogram
+  evidence, no item.
+
+Import report: the 71 intakes before first grant, the 83 intakes after a revocation, the 131
+out-of-order patients, the `v1` stragglers after the `v2` cut-over and the unknowable pre-2023
+completeness, all under unexpected findings.
+
+Check (1): no stored value differs from raw; the derived state is a new field with its rule
+recorded. Check (2): 99 row items, each a different patient with a distinct compliance action; one
+vocabulary item for a question about timestamps.
+
+**Agreed**
+
+_Not yet discussed._
