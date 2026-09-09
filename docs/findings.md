@@ -797,3 +797,68 @@ source identity. No normalisation, no review items.
 
 Check (1): no stored value differs from raw. Check (2): no review items.
 
+### legacy_patient_id
+
+**Facts** (P-17, P-27, P-32, H-1)
+
+| fact | value |
+|---|---|
+| rows / empty / distinct | 2917 / 0 / 2040 |
+| shape | same 17-character `rec...` format as patients.legacy_id on every row; no whitespace, no case issues |
+| resolves to patients.csv | 2896 rows; 21 do not |
+| orphans | 21 rows, 21 distinct ids; not case variants of any patient id; none appears in consents.jsonl |
+| orphans by submitted year | 2022: 3, 2023: 5, 2024: 6, 2025: 6, 2026: 1 (every year, no burst) |
+| orphans by questionnaire_version | `v1` 11, `v2` 10; none with `v3`, `2.0` or empty |
+| orphans' legacy outcome | approved-class 11 (`approved` 6, `goedgekeurd` 3, `ok` 2), rejected-class 5, pending-class 5; reviewer_note empty on all 21 |
+| orphans with a look-alike patient (same height, weight within 10 %, signup at most a year earlier) | none 7, exactly one 3, several 11 |
+| patients with no intake | 447 of 2466 |
+| intakes per patient | 1: 1311 patients, 2: 581, 3: 148 |
+| same patient, same submission day | 5 pairs once dates are read with the separator convention (P-27 counts 4 on raw strings); ids consecutive in 3 of them; weights differ by 1 to 3 kg; outcomes agree in 2 pairs, disagree in 3 (`in review` vs `goedgekeurd`, `Rejected` vs `in review`, `afgewezen` vs `rejected` agree) |
+
+```sh
+tail -n +2 legacy_export/patients.csv | cut -d, -f1 | sort -u > /tmp/p.txt
+tail -n +2 legacy_export/intakes.csv | cut -d, -f2 | grep -v -x -F -f /tmp/p.txt | wc -l   # 21
+```
+
+**Possible warnings**
+
+1. The notes say the automation "occasionally fired before the patient row existed". Under that
+   story the patient row would appear later and the orphan would resolve. In this export it never
+   does: 21 patient rows are simply missing, across all years. Either they were deleted, or the
+   export is incomplete, or the id was written wrongly. The export cannot say which.
+2. An orphan intake is medical data (weight, medication, conditions, an outcome) about a person
+   we cannot name. Dropping it loses a decision someone made; attaching it to a guessed patient
+   puts medical data on the wrong person. The 3 orphans with exactly one look-alike patient are
+   tempting and still a guess: same height and similar weight are shared by many people.
+3. 11 of the 21 orphans were approved. If the person later shows up as a new intake, the history
+   that a doctor approved them once is invisible unless the orphan is kept somewhere findable.
+4. A foreign key constraint from intakes to patients would reject the 21 rows at load time and
+   the importer would either fail or silently drop them. The schema needs a place for an intake
+   whose patient is unknown that still keeps referential integrity.
+5. Same-day double submissions are real duplicates of an intake, not of a patient. Two rows with
+   consecutive ids, weights 2 kg apart and one saying `in review` while the other says
+   `goedgekeurd` cannot both be the outcome of record. Which one counts is a decision.
+6. Once patient rows are merged (duplicate candidates), an intake's `legacy_patient_id` must still
+   resolve through the alias table decided under `patients.legacy_id`; the intake keeps the id it
+   was exported with.
+
+**Proposed** (awaiting explicit confirmation)
+
+Store the raw id on every intake unchanged. Resolution goes through the alias table, so after a
+merge the intake still resolves. For the 21 orphans: the intake is stored in full with
+`patient_id` null and the raw `legacy_patient_id` kept; a *placeholder patient* is **not** created
+(it would be a fabricated record). Each orphan gets one row-level review item "intake references a
+patient that does not exist" whose payload shows the intake and, as context only, the look-alike
+patients (0, 1 or several) with the fields that matched; the reviewer may attach the intake to an
+existing patient, create a patient from the intake's own data, or leave it unresolved. No proposed
+fix, not even for the 3 single look-alikes. The 5 same-day pairs get one row-level review item per
+pair, both intakes side by side, no proposed fix; both intakes stay stored and keep their legacy
+outcome. The import report lists 21 orphans and 5 same-day pairs under quarantined, and the
+contradiction of the "fired before the row existed" story under unexpected findings.
+
+Check (1): no stored value differs from raw. Check (2): 21 + 5 row items, each about a different
+person or pair and each with three distinct possible actions; nothing repeats identically.
+
+**Agreed**
+
+_Not yet discussed._
