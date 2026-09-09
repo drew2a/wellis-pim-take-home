@@ -1286,7 +1286,7 @@ Group counts are groups of two or more rows. A row can appear in several groupin
 
 Every "future" count in this profile is measured against the reference date 2026-09-08, given on the command line with `--as-of`; no reference is derived from the data. The table shows the observed range per column under any plausible reading and, in the last two columns, under a strict ISO-only reading (values shaped `9999-99-99` only).
 
-The second table lists each column's isolated tail: dates that sit after a gap of more than 365 days from the rest of the column, so the reader can see whether the extreme values are a boundary or a handful of outliers.
+The second table lists each column's isolated tail. The sorted dates are cut at every gap of more than 365 days; the bulk is the cluster holding the most rows, and the tail is everything after it, so the reader can see whether the extreme values are a boundary or a handful of outliers.
 
 **Date range per column**
 
@@ -1297,14 +1297,14 @@ The second table lists each column's isolated tail: dates that sit after a gap o
 | consents.jsonl.at | 2022-01-04 | 2062-11-04 | 2022-01-04 | 2062-11-04 |
 | patients.csv.dob (excluded from the reference) | 1958-01-02 | 2077-08-02 | 1958-01-02 | 2077-08-02 |
 
-**Isolated tail per column: dates that sit after a gap of more than 365 days, each row at its earliest candidate date**
+**Isolated tail per column: dates after the bulk (the largest cluster between gaps of more than 365 days), each row at its earliest candidate date**
 
-| column | last date before the gap | dates in the tail | rows in the tail |
-| --- | --- | --- | --- |
-| patients.csv.signup_date | 2026-06-20 | 2062-01-04 (1), 2062-01-25 (1), 2062-04-07 (1) | 3 |
-| intakes.csv.submitted_at | 2026-06-30 | 2062-01-04 (1), 2062-01-25 (2) | 3 |
-| consents.jsonl.at | 2028-04-11 | 2062-01-17 (1), 2062-02-07 (1), 2062-04-11 (1) | 3 |
-| patients.csv.dob (excluded from the reference) | 2009-03-20 | 2044-08-22 (1), 2049-01-04 (1), 2059-01-05 (1), 2060-09-13 (1), 2077-02-08 (1) | 5 |
+| column | rows before the bulk | last date of the bulk | dates in the tail | rows in the tail |
+| --- | --- | --- | --- | --- |
+| patients.csv.signup_date | 0 | 2026-06-20 | 2062-01-04 (1), 2062-01-25 (1), 2062-04-07 (1) | 3 |
+| intakes.csv.submitted_at | 0 | 2026-06-30 | 2062-01-04 (1), 2062-01-25 (2) | 3 |
+| consents.jsonl.at | 0 | 2028-04-11 | 2062-01-17 (1), 2062-02-07 (1), 2062-04-11 (1) | 3 |
+| patients.csv.dob (excluded from the reference) | 0 | 2009-03-20 | 2044-08-22 (1), 2049-01-04 (1), 2059-01-05 (1), 2060-09-13 (1), 2077-02-08 (1) | 5 |
 
 ### P-36 Columns whose value set or format changes with source or with year
 

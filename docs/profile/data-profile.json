@@ -47546,6 +47546,7 @@
           },
           "isolatedTail": {
             "bulkLatest": "2026-06-20",
+            "headRows": 0,
             "dates": [
               {
                 "date": "2062-01-04",
@@ -47575,6 +47576,7 @@
           },
           "isolatedTail": {
             "bulkLatest": "2026-06-30",
+            "headRows": 0,
             "dates": [
               {
                 "date": "2062-01-04",
@@ -47600,6 +47602,7 @@
           },
           "isolatedTail": {
             "bulkLatest": "2028-04-11",
+            "headRows": 0,
             "dates": [
               {
                 "date": "2062-01-17",
@@ -47629,6 +47632,7 @@
           },
           "isolatedTail": {
             "bulkLatest": "2009-03-20",
+            "headRows": 0,
             "dates": [
               {
                 "date": "2044-08-22",

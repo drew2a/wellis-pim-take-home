@@ -206,8 +206,10 @@ export function columnRange(values: readonly string[]): DateRange {
 }
 
 export interface TailAnalysis {
-  /** Last date before the first gap wider than `gapDays`; the bulk of the column ends here. */
+  /** Last date of the bulk: the cluster of dates, separated by gaps wider than `gapDays`, with the most rows. */
   readonly bulkLatest: string;
+  /** Rows dated before the bulk, i.e. early outliers. */
+  readonly headRows: number;
   readonly tail: ReadonlyArray<{readonly date: string; readonly rows: number}>;
   readonly tailRows: number;
 }
@@ -217,8 +219,10 @@ export interface TailAnalysis {
  *
  * Why: the latest dates in this export sit decades after everything else. Whether a column's
  * extreme values are a boundary or a handful of outliers is a fact the reader needs next to
- * the future counts, so the dates after the first gap wider than a year are listed as such.
- * Nothing is derived from them; the reference date is the `--as-of` argument.
+ * the future counts. The sorted dates are cut at every gap wider than `gapDays`; the bulk is
+ * the cluster holding the most rows, not the first one, so a single early outlier cannot turn
+ * the whole column into "tail". Nothing is derived from the result; the reference date is the
+ * `--as-of` argument.
  */
 export function isolatedTail(values: readonly string[], gapDays = 365): TailAnalysis {
   const counts = new Counter();
@@ -227,18 +231,27 @@ export function isolatedTail(values: readonly string[], gapDays = 365): TailAnal
     if (c.length > 0) counts.add(c[0] as string);
   }
   const dates = counts.keys();
-  if (dates.length === 0) return {bulkLatest: '', tail: [], tailRows: 0};
+  if (dates.length === 0) return {bulkLatest: '', headRows: 0, tail: [], tailRows: 0};
   const days = (iso: string): number => Date.parse(`${iso}T00:00:00Z`) / 86_400_000;
-  let cut = dates.length;
+  const clusters: string[][] = [[dates[0] as string]];
   for (let i = 1; i < dates.length; i++) {
-    if (days(dates[i] as string) - days(dates[i - 1] as string) > gapDays) {
-      cut = i;
-      break;
-    }
+    const d = dates[i] as string;
+    if (days(d) - days(dates[i - 1] as string) > gapDays) clusters.push([d]);
+    else (clusters[clusters.length - 1] as string[]).push(d);
   }
-  const tail = dates.slice(cut).map((d) => ({date: d, rows: counts.get(d)}));
+  const rowsIn = (cluster: readonly string[]): number => cluster.reduce((t, d) => t + counts.get(d), 0);
+  let bulk = 0;
+  clusters.forEach((c, i) => {
+    if (rowsIn(c) > rowsIn(clusters[bulk] as string[])) bulk = i;
+  });
+  const bulkCluster = clusters[bulk] as string[];
+  const tail = clusters
+    .slice(bulk + 1)
+    .flat()
+    .map((d) => ({date: d, rows: counts.get(d)}));
   return {
-    bulkLatest: dates[cut - 1] as string,
+    bulkLatest: bulkCluster[bulkCluster.length - 1] as string,
+    headRows: clusters.slice(0, bulk).reduce((t, c) => t + rowsIn(c), 0),
     tail,
     tailRows: tail.reduce((t, e) => t + e.rows, 0),
   };
@@ -265,9 +278,9 @@ export function dateRangeSection(ctx: CrossContext): Section {
         `command line with \`--as-of\`; no reference is derived from the data. The table shows the observed ` +
         `range per column under any plausible reading and, in the last two columns, under a strict ISO-only ` +
         `reading (values shaped \`9999-99-99\` only).`,
-      `The second table lists each column's isolated tail: dates that sit after a gap of more than 365 days ` +
-        `from the rest of the column, so the reader can see whether the extreme values are a boundary or a ` +
-        `handful of outliers.`,
+      `The second table lists each column's isolated tail. The sorted dates are cut at every gap of more than ` +
+        `365 days; the bulk is the cluster holding the most rows, and the tail is everything after it, so the ` +
+        `reader can see whether the extreme values are a boundary or a handful of outliers.`,
     ],
     [
       table(
@@ -282,10 +295,11 @@ export function dateRangeSection(ctx: CrossContext): Section {
         ]),
       ),
       table(
-        'Isolated tail per column: dates that sit after a gap of more than 365 days, each row at its earliest candidate date',
-        ['column', 'last date before the gap', 'dates in the tail', 'rows in the tail'],
+        'Isolated tail per column: dates after the bulk (the largest cluster between gaps of more than 365 days), each row at its earliest candidate date',
+        ['column', 'rows before the bulk', 'last date of the bulk', 'dates in the tail', 'rows in the tail'],
         rows.map((r) => [
           plain(r.label),
+          String(r.tail.headRows),
           r.tail.bulkLatest,
           r.tail.tail.length === 0
             ? 'none'
@@ -303,7 +317,7 @@ export function dateRangeSection(ctx: CrossContext): Section {
         column: r.label,
         anyReading: r.range,
         isoShapedOnly: r.isoOnly,
-        isolatedTail: {bulkLatest: r.tail.bulkLatest, dates: r.tail.tail, rows: r.tail.tailRows},
+        isolatedTail: {bulkLatest: r.tail.bulkLatest, headRows: r.tail.headRows, dates: r.tail.tail, rows: r.tail.tailRows},
       })),
       totalRowsInIsolatedTails: rows.reduce((t, r) => t + r.tail.tailRows, 0),
     },
