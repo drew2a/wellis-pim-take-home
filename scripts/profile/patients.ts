@@ -128,10 +128,8 @@ function duplicateTable(stats: DupStats, caption: string, limit = 12): Table {
 }
 
 export interface PatientsContext {
-  /** Latest date observed anywhere in the export except `dob`; the "future" reference. */
-  readonly now: string;
-  /** Second reference: the same, once the isolated tail of dates is set aside (P-35). */
-  readonly bulkNow: string;
+  /** Reference date (`--as-of`): a value after it is "future". */
+  readonly asOf: string;
 }
 
 export function patientsSections(p: Patients, ctx: PatientsContext): Section[] {
@@ -298,10 +296,8 @@ export function patientsSections(p: Patients, ctx: PatientsContext): Section[] {
 
   // ---- dob ----------------------------------------------------------------------
   const dobA = dateAnalysis(p.dob);
-  const dobFuture = p.dobCandidates.filter((c) => c.length > 0 && (c[c.length - 1] as string) > ctx.now);
-  const dobAllFuture = p.dobCandidates.filter((c) => c.length > 0 && (c[0] as string) > ctx.now);
-  const dobFutureBulk = p.dobCandidates.filter((c) => c.length > 0 && (c[c.length - 1] as string) > ctx.bulkNow);
-  const dobAllFutureBulk = p.dobCandidates.filter((c) => c.length > 0 && (c[0] as string) > ctx.bulkNow);
+  const dobFuture = p.dobCandidates.filter((c) => c.length > 0 && (c[c.length - 1] as string) > ctx.asOf);
+  const dobAllFuture = p.dobCandidates.filter((c) => c.length > 0 && (c[0] as string) > ctx.asOf);
   const ages: number[] = [];
   let ageUnder18 = 0;
   let ageOver100 = 0;
@@ -327,14 +323,12 @@ export function patientsSections(p: Patients, ctx: PatientsContext): Section[] {
         ...dobA.notes,
         `Shapes proven mixed (they carry both an unambiguous day-first and an unambiguous month-first value): ` +
           `${dobA.mixedShapes.length === 0 ? 'none' : dobA.mixedShapes.map((s) => code(s)).join(', ')}.`,
-        `Implausible values, measured against the latest date seen anywhere in the export except dob ` +
-          `(${ctx.now}) and against signup_date, using the earliest candidate date of each value: ` +
-          `${dobFuture.length} rows could be in the future under some ordering, ${dobAllFuture.length} are in ` +
-          `the future under every ordering, ${ageUnder18} rows give an age at signup below 18, ${ageOver100} ` +
-          `above 100, ${sameAsSignup} rows have dob byte-identical to signup_date and ${sameDateAsSignup} rows ` +
-          `have a dob candidate date equal to a signup_date candidate date. Against the second reference ` +
-          `${ctx.bulkNow} the future counts are ${dobFutureBulk.length} under some ordering and ` +
-          `${dobAllFutureBulk.length} under every ordering. Age at signup over ` +
+        `Implausible values, measured against the reference date ${ctx.asOf} and against signup_date, using ` +
+          `the earliest candidate date of each value: ` +
+          `${dobFuture.length} rows are in the future under some ordering, ${dobAllFuture.length} under every ` +
+          `ordering, ${ageUnder18} rows give an age at signup below 18, ${ageOver100} above 100, ` +
+          `${sameAsSignup} rows have dob byte-identical to signup_date and ${sameDateAsSignup} rows have a dob ` +
+          `candidate date equal to a signup_date candidate date. Age at signup over ` +
           `${numStats(ages).n} comparable rows: min ${fmtNum(numStats(ages).min)}, p5 ${fmtNum(numStats(ages).p5)}, ` +
           `median ${fmtNum(numStats(ages).median)}, p95 ${fmtNum(numStats(ages).p95)}, max ${fmtNum(numStats(ages).max)}.`,
       ],
@@ -352,8 +346,6 @@ export function patientsSections(p: Patients, ctx: PatientsContext): Section[] {
         ...dobA.json,
         futureUnderSomeOrdering: dobFuture.length,
         futureUnderEveryOrdering: dobAllFuture.length,
-        futureUnderSomeOrderingVsBulkReference: dobFutureBulk.length,
-        futureUnderEveryOrderingVsBulkReference: dobAllFutureBulk.length,
         ageAtSignupUnder18: ageUnder18,
         ageAtSignupOver100: ageOver100,
         dobIdenticalToSignupDateRaw: sameAsSignup,
@@ -623,10 +615,8 @@ export function patientsSections(p: Patients, ctx: PatientsContext): Section[] {
 
   // ---- signup_date --------------------------------------------------------------
   const suA = dateAnalysis(p.signupDate);
-  const suFuture = p.signupCandidates.filter((c) => c.length > 0 && (c[c.length - 1] as string) > ctx.now);
-  const suAllFuture = p.signupCandidates.filter((c) => c.length > 0 && (c[0] as string) > ctx.now);
-  const suFutureBulk = p.signupCandidates.filter((c) => c.length > 0 && (c[c.length - 1] as string) > ctx.bulkNow);
-  const suAllFutureBulk = p.signupCandidates.filter((c) => c.length > 0 && (c[0] as string) > ctx.bulkNow);
+  const suFuture = p.signupCandidates.filter((c) => c.length > 0 && (c[c.length - 1] as string) > ctx.asOf);
+  const suAllFuture = p.signupCandidates.filter((c) => c.length > 0 && (c[0] as string) > ctx.asOf);
   const suFirst = p.signupCandidates.flatMap((c) => (c.length > 0 ? [c[0] as string] : []));
   const suLast = p.signupCandidates.flatMap((c) => (c.length > 0 ? [c[c.length - 1] as string] : []));
   sections.push(
@@ -638,9 +628,8 @@ export function patientsSections(p: Patients, ctx: PatientsContext): Section[] {
         ...suA.notes,
         `Shapes proven mixed: ${suA.mixedShapes.length === 0 ? 'none' : suA.mixedShapes.map((s) => code(s)).join(', ')}.`,
         `Range under the earliest candidate reading: ${suFirst.sort()[0] ?? '-'} to ` +
-          `${suLast.sort()[suLast.length - 1] ?? '-'}. Measured against ${ctx.now}, ${suFuture.length} rows could ` +
-          `be in the future under some ordering and ${suAllFuture.length} are in the future under every ordering. ` +
-          `Against the second reference ${ctx.bulkNow}: ${suFutureBulk.length} and ${suAllFutureBulk.length}.`,
+          `${suLast.sort()[suLast.length - 1] ?? '-'}. Measured against ${ctx.asOf}, ${suFuture.length} rows are in ` +
+          `the future under some ordering and ${suAllFuture.length} under every ordering.`,
       ],
       tables: [
         ...suA.tables,
@@ -651,8 +640,6 @@ export function patientsSections(p: Patients, ctx: PatientsContext): Section[] {
         ...suA.json,
         futureUnderSomeOrdering: suFuture.length,
         futureUnderEveryOrdering: suAllFuture.length,
-        futureUnderSomeOrderingVsBulkReference: suFutureBulk.length,
-        futureUnderEveryOrderingVsBulkReference: suAllFutureBulk.length,
         earliest: suFirst[0] ?? null,
         latest: suLast[suLast.length - 1] ?? null,
       },

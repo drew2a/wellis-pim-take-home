@@ -1,6 +1,8 @@
 /**
  * Builds the browsable inventory page (docs/profile/legacy-export-inventory.html) from
- * docs/profile/data-profile.json. Run with `npm run profile:inventory` after `npm run profile`.
+ * docs/profile/data-profile.json. Run with `npm run profile:inventory -- --as-of YYYY-MM-DD`
+ * after `npm run profile` with the same date; the script refuses a JSON generated for another
+ * date, so the page can never show counts measured against a reference it does not print.
  *
  * Why: the markdown profile is the record; the page is the reading aid the reviewer uses to see
  * the diversity of every column at once. Long arrays are pruned to their head so the page stays
@@ -9,7 +11,7 @@
 import {readFileSync, writeFileSync} from 'node:fs';
 import {dirname, join} from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {INVENTORY_HTML, PROFILE_JSON, abs} from './cli.js';
+import {INVENTORY_HTML, PROFILE_JSON, abs, asOfFromArgv, reproduceCommand} from './cli.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CAP = 40;
@@ -50,10 +52,15 @@ function prune(value: Json): Json | Pruned {
   return value;
 }
 
+const asOf = asOfFromArgv();
 const source = JSON.parse(readFileSync(abs(PROFILE_JSON), 'utf8')) as Json;
+const jsonAsOf = source !== null && typeof source === 'object' && !Array.isArray(source) ? source['asOf'] : undefined;
+if (jsonAsOf !== asOf) {
+  throw new Error(`${PROFILE_JSON} was generated as of ${String(jsonAsOf)}, not ${asOf}; run \`${reproduceCommand('profile', asOf)}\` first`);
+}
 const data = prune(source);
 const template = readFileSync(join(HERE, 'inventory-template.html'), 'utf8');
 if (!template.includes('/*__DATA__*/')) throw new Error('template has no data slot');
 const html = template.replace('/*__DATA__*/', 'const DATA = ' + JSON.stringify(data).replace(/</gu, '\\u003c') + ';');
 writeFileSync(abs(INVENTORY_HTML), html);
-console.log(`wrote ${INVENTORY_HTML} (${html.length} bytes)`);
+console.log(`wrote ${INVENTORY_HTML} (${html.length} bytes), as of ${asOf}`);

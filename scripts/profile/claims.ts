@@ -32,6 +32,8 @@ export interface ClaimsInput {
   readonly patients: Patients;
   readonly intakes: Intakes;
   readonly consents: Consents;
+  /** Reference date (`--as-of`), quoted wherever a note says "future". */
+  readonly asOf: string;
 }
 
 function jsonOf(input: ClaimsInput, key: string): Record<string, unknown> {
@@ -245,7 +247,7 @@ export function claimRows(input: ClaimsInput): ClaimRow[] {
       claim: 'patients.csv: `dob` is the date of birth',
       verdict: 'partly',
       evidence: [`${P}.dob`],
-      note: `${dobAmbiguousShapes} values read as two different calendar dates depending on the ordering, ${dobMixed} shapes carry both an unambiguous day-first and an unambiguous month-first value, and the shapes point in opposite directions: ${orderingByShape(input, `${P}.dob`)}. ${num(input, `${P}.dob`, 'futureUnderSomeOrderingVsBulkReference')} values read as a date after the second reference date.`,
+      note: `${dobAmbiguousShapes} values read as two different calendar dates depending on the ordering, ${dobMixed} shapes carry both an unambiguous day-first and an unambiguous month-first value, and the shapes point in opposite directions: ${orderingByShape(input, `${P}.dob`)}. ${num(input, `${P}.dob`, 'futureUnderEveryOrdering')} values read as a date after ${input.asOf} under every ordering.`,
     },
     {
       claim: 'patients.csv: `sex` is whatever the form or the ops person entered at the time',
@@ -293,7 +295,7 @@ export function claimRows(input: ClaimsInput): ClaimRow[] {
       claim: 'patients.csv: `signup_date` is when the row was created',
       verdict: 'partly',
       evidence: [`${P}.signup_date`, 'cross.date-range'],
-      note: `${signupFuture} rows are dated after the latest date seen anywhere else in the export under every plausible ordering, and ${num(input, `${P}.signup_date`, 'futureUnderEveryOrderingVsBulkReference')} are after the second reference date.`,
+      note: `${signupFuture} rows are dated after the reference date ${input.asOf} under every plausible ordering.`,
     },
     {
       claim: 'patients.csv: `source` is the funnel: `typeform`, `website`, campaign tags, `import`',
@@ -483,7 +485,7 @@ export function notWarnedItems(input: ClaimsInput): NotWarnedItem[] {
     },
     {
       when: num(input, `${P}.signup_date`, 'futureUnderEveryOrdering') > 0 || num(input, `${I}.submitted_at`, 'futureUnderEveryOrdering') > 0,
-      text: `${num(input, `${P}.signup_date`, 'futureUnderEveryOrdering')} signup dates and ${num(input, `${I}.submitted_at`, 'futureUnderEveryOrdering')} intake dates lie after the latest date seen elsewhere in the export under every plausible ordering.`,
+      text: `${num(input, `${P}.signup_date`, 'futureUnderEveryOrdering')} signup dates and ${num(input, `${I}.submitted_at`, 'futureUnderEveryOrdering')} intake dates lie after the reference date ${input.asOf} under every plausible ordering.`,
       evidence: [`${P}.signup_date`, `${I}.submitted_at`, 'cross.date-range'],
     },
     {
@@ -567,8 +569,8 @@ export function notWarnedItems(input: ClaimsInput): NotWarnedItem[] {
       evidence: [`${C}.sequences`],
     },
     {
-      when: num(input, `${C}.at`, 'eventsAfterCsvLatestDate') > 0,
-      text: `${num(input, `${C}.at`, 'eventsAfterCsvLatestDate')} consent events are dated after the latest date in the two CSV files.`,
+      when: num(input, `${C}.at`, 'eventsAfterAsOf') > 0,
+      text: `${num(input, `${C}.at`, 'eventsAfterAsOf')} consent events are dated after the reference date ${input.asOf}.`,
       evidence: [`${C}.at`],
     },
     {
@@ -583,12 +585,12 @@ export function notWarnedItems(input: ClaimsInput): NotWarnedItem[] {
     },
     {
       when: num(input, 'cross.date-range', 'totalRowsInIsolatedTails') > 0,
-      text: `${num(input, 'cross.date-range', 'totalRowsInIsolatedTails')} rows carry a date that sits after a gap of more than a year from every other date in its column, so the single latest date in the export is an outlier rather than a boundary.`,
+      text: `${num(input, 'cross.date-range', 'totalRowsInIsolatedTails')} rows carry a date that sits after a gap of more than a year from every other date in its column, so the latest dates in the export are outliers rather than a boundary.`,
       evidence: ['cross.date-range'],
     },
     {
-      when: num(input, `${P}.dob`, 'futureUnderSomeOrderingVsBulkReference') > 0,
-      text: `${num(input, `${P}.dob`, 'futureUnderSomeOrderingVsBulkReference')} dob values read as a date after the second reference date under some ordering, ${num(input, `${P}.dob`, 'futureUnderEveryOrderingVsBulkReference')} under every ordering.`,
+      when: num(input, `${P}.dob`, 'futureUnderSomeOrdering') > 0,
+      text: `${num(input, `${P}.dob`, 'futureUnderSomeOrdering')} dob values read as a date after the reference date ${input.asOf} under some ordering, ${num(input, `${P}.dob`, 'futureUnderEveryOrdering')} under every ordering.`,
       evidence: [`${P}.dob`, 'cross.date-range'],
     },
     {

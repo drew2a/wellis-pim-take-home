@@ -118,8 +118,8 @@ function ratioTable(
 }
 
 export interface IntakesContext {
-  readonly now: string;
-  readonly bulkNow: string;
+  /** Reference date (`--as-of`): a value after it is "future". */
+  readonly asOf: string;
   readonly patients: Patients;
   /** patient_legacy_id values seen in consents.jsonl, for the orphan cross-check. */
   readonly consentPatientIds: ReadonlySet<string>;
@@ -205,10 +205,8 @@ export function intakesSections(it: Intakes, ctx: IntakesContext): Section[] {
 
   // ---- submitted_at -------------------------------------------------------------
   const saA = dateAnalysis(it.submittedAt);
-  const saFuture = it.submittedCandidates.filter((c) => c.length > 0 && (c[c.length - 1] as string) > ctx.now);
-  const saAllFuture = it.submittedCandidates.filter((c) => c.length > 0 && (c[0] as string) > ctx.now);
-  const saFutureBulk = it.submittedCandidates.filter((c) => c.length > 0 && (c[c.length - 1] as string) > ctx.bulkNow);
-  const saAllFutureBulk = it.submittedCandidates.filter((c) => c.length > 0 && (c[0] as string) > ctx.bulkNow);
+  const saFuture = it.submittedCandidates.filter((c) => c.length > 0 && (c[c.length - 1] as string) > ctx.asOf);
+  const saAllFuture = it.submittedCandidates.filter((c) => c.length > 0 && (c[0] as string) > ctx.asOf);
   let everBefore = 0;
   let alwaysBefore = 0;
   const gapBand = new Counter();
@@ -243,9 +241,8 @@ export function intakesSections(it: Intakes, ctx: IntakesContext): Section[] {
       notes: [
         ...saA.notes,
         `Shapes proven mixed: ${saA.mixedShapes.length === 0 ? 'none' : saA.mixedShapes.map((s) => code(s)).join(', ')}.`,
-        `Measured against ${ctx.now}: ${saFuture.length} rows could be in the future under some ordering, ` +
-          `${saAllFuture.length} under every ordering. Against the second reference ${ctx.bulkNow}: ` +
-          `${saFutureBulk.length} and ${saAllFutureBulk.length}.`,
+        `Measured against ${ctx.asOf}: ${saFuture.length} rows are in the future under some ordering, ` +
+          `${saAllFuture.length} under every ordering.`,
         `Against the patient row's signup_date (resolvable rows only): ${everBefore} intakes are earlier than ` +
           `signup under at least one combination of orderings and ${alwaysBefore} are earlier under every ` +
           `combination. The gap table uses the earliest candidate of each date; over ${gaps.length} negative ` +
@@ -265,8 +262,6 @@ export function intakesSections(it: Intakes, ctx: IntakesContext): Section[] {
         ...saA.json,
         futureUnderSomeOrdering: saFuture.length,
         futureUnderEveryOrdering: saAllFuture.length,
-        futureUnderSomeOrderingVsBulkReference: saFutureBulk.length,
-        futureUnderEveryOrderingVsBulkReference: saAllFutureBulk.length,
         beforeSignupUnderSomeOrdering: everBefore,
         beforeSignupUnderEveryOrdering: alwaysBefore,
         negativeGapStats: numStats(gaps),

@@ -253,13 +253,12 @@
   const main = document.getElementById('main'), nav = document.getElementById('nav');
   main.append($('header', { class: 'top' },
     $('h1', {}, 'Legacy Export Inventory'),
-    $('p', {}, 'Every column of legacy_export/ as it was exported: complete value tables where a column has few distinct values, shape tables where it has many. Nothing is mapped or corrected here. Leading and trailing whitespace is drawn as ', $('span', { class: 'ws mono' }, '␣'), ' so it cannot hide. Generated from docs/profile/data-profile.json (npm run profile).'),
+    $('p', {}, 'Every column of legacy_export/ as it was exported: complete value tables where a column has few distinct values, shape tables where it has many. Nothing is mapped or corrected here. Leading and trailing whitespace is drawn as ', $('span', { class: 'ws mono' }, '␣'), ` so it cannot hide. Generated from docs/profile/data-profile.json (${DATA.generatedBy}). Reference date ${DATA.asOf}: every "future" count means after that date.`),
   ));
   const filesRows = DATA.files.map((f) => $('tr', {}, $('td', { class: 'mono' }, f.name), $('td', { class: 'num' }, fmt(f.bytes)), $('td', {}, f.utf8Valid ? 'UTF-8' : 'not UTF-8', f.bom ? ', BOM' : ', no BOM'), $('td', {}, f.lineEndings.crlf ? 'CRLF' : 'LF'), $('td', { class: 'num' }, f.header.length), $('td', { class: 'num' }, fmt(f.dataRows)), $('td', { class: 'num' }, f.blankLines), $('td', { class: 'num' }, f.duplicateFullRows.rows)));
   const files = $('section', { class: 'panel', id: 'files' }, $('div', { class: 'eyebrow' }, 'Files'), $('h2', {}, 'As read from disk'),
     table(['file', { label: 'bytes', num: true }, 'encoding', 'line endings', { label: 'columns', num: true }, { label: 'data rows', num: true }, { label: 'blank lines', num: true }, { label: 'duplicate rows', num: true }], filesRows));
-  const rd = DATA.referenceDates;
-  files.append($('h3', {}, 'Reference dates derived from the data'), $('p', { class: 'note' }, `Earliest date anywhere (dob excluded): ${rd.earliest}. Latest under any reading: ${rd.now}, which sits in an isolated tail of ${fmt(DATA.crossFile['cross.date-range'].totalRowsInIsolatedTails)} rows more than a year past everything else. Latest once those tails are set aside: ${rd.bulkNow}. "Future" counts below use both.`));
+  files.append($('h3', {}, 'Reference date'), $('p', { class: 'note' }, `${DATA.asOf}, given with --as-of; nothing is read from the clock or derived from the data. ${fmt(DATA.crossFile['cross.date-range'].totalRowsInIsolatedTails)} rows carry a date more than a year past everything else in their column (see Date ranges per column).`));
   main.append(files);
 
   const groups = {};

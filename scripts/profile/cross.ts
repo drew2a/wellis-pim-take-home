@@ -1,6 +1,6 @@
 /**
- * Cross-file inventories: duplicate-patient candidates, the date range that defines
- * "future" for this export, and which columns change format with `source` or with year.
+ * Cross-file inventories: duplicate-patient candidates, the observed date range per column
+ * next to the reference date, and which columns change format with `source` or with year.
  *
  * Six independent groupings are reported side by side on purpose. Which of them a later
  * merge rule may trust is a decision for an ADR, not for this profile (CLAUDE.md §1).
@@ -16,10 +16,8 @@ export interface CrossContext {
   readonly patients: Patients;
   readonly intakes: Intakes;
   readonly consents: Consents;
-  readonly now: string;
-  /** Second reference: the latest date once the isolated tail is set aside. */
-  readonly bulkNow: string;
-  readonly earliest: string;
+  /** Reference date (`--as-of`): a value after it is "future". */
+  readonly asOf: string;
 }
 
 interface Grouping {
@@ -217,10 +215,10 @@ export interface TailAnalysis {
 /**
  * Splits a date column into its bulk and an isolated tail.
  *
- * Why: the single latest date in this export is 2062, so using the maximum as the "now"
- * reference makes every other date look fine. Walking the sorted dates and stopping at the
- * first gap wider than a year gives a second, equally data-derived reference, and both are
- * reported side by side rather than one being chosen.
+ * Why: the latest dates in this export sit decades after everything else. Whether a column's
+ * extreme values are a boundary or a handful of outliers is a fact the reader needs next to
+ * the future counts, so the dates after the first gap wider than a year are listed as such.
+ * Nothing is derived from them; the reference date is the `--as-of` argument.
  */
 export function isolatedTail(values: readonly string[], gapDays = 365): TailAnalysis {
   const counts = new Counter();
@@ -263,12 +261,13 @@ export function dateRangeSection(ctx: CrossContext): Section {
     'cross.date-range',
     'Earliest and latest dates across all files',
     [
-      `The reference date used for every "future" count in this profile is ${ctx.now}: the latest date any ` +
-        `plausible reading of any date column except dob yields. The earliest such date is ${ctx.earliest}. ` +
-        `Under a strict ISO-only reading (values shaped \`9999-99-99\` only) the range is given in the last two ` +
-        `columns, which is the honest alternative if the export is later declared ISO throughout.`,
-      `Because that latest date is itself isolated, every section also counts against a second reference, ` +
-        `${ctx.bulkNow}: the latest date of the three non-dob columns once the isolated tail below is set aside.`,
+      `Every "future" count in this profile is measured against the reference date ${ctx.asOf}, given on the ` +
+        `command line with \`--as-of\`; no reference is derived from the data. The table shows the observed ` +
+        `range per column under any plausible reading and, in the last two columns, under a strict ISO-only ` +
+        `reading (values shaped \`9999-99-99\` only).`,
+      `The second table lists each column's isolated tail: dates that sit after a gap of more than 365 days ` +
+        `from the rest of the column, so the reader can see whether the extreme values are a boundary or a ` +
+        `handful of outliers.`,
     ],
     [
       table(
@@ -299,9 +298,7 @@ export function dateRangeSection(ctx: CrossContext): Section {
       ),
     ],
     {
-      referenceNow: ctx.now,
-      referenceEarliest: ctx.earliest,
-      referenceBulkNow: ctx.bulkNow,
+      asOf: ctx.asOf,
       perColumn: rows.map((r) => ({
         column: r.label,
         anyReading: r.range,

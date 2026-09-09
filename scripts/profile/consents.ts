@@ -95,10 +95,8 @@ function valueTable(caption: string, values: readonly string[]): Table {
 }
 
 export interface ConsentsContext {
-  /** Latest date seen in the two CSVs, used as the "future" reference. */
-  readonly now: string;
-  /** Second reference: the same, once the isolated tail of dates is set aside (P-35). */
-  readonly bulkNow: string;
+  /** Reference date (`--as-of`): an event dated after it is "future". */
+  readonly asOf: string;
   readonly patientLegacyIds: ReadonlySet<string>;
 }
 
@@ -173,8 +171,9 @@ export function consentsSections(c: Consents, ctx: ConsentsContext): Section[] {
   const withSeconds = ev.filter((e) => /\d{2}:\d{2}:\d{2}/u.test(e.at));
   const dateOnly = ev.filter((e) => !/\d{2}:\d{2}/u.test(e.at));
   const sortedAt = [...ev].map((e) => e.at).sort();
-  const future = ev.filter((e) => e.at.slice(0, 10) > ctx.now);
-  const futureBulk = ev.filter((e) => e.at.slice(0, 10) > ctx.bulkNow);
+  const future = ev.filter((e) => e.at.slice(0, 10) > ctx.asOf);
+  const futureByAction = new Counter();
+  for (const e of future) futureByAction.add(e.action);
   const before2023 = ev.filter((e) => e.at.slice(0, 10) < '2023-01-01');
   const byPatient = new Map<string, ConsentEvent[]>();
   for (const e of ev) {
@@ -192,8 +191,9 @@ export function consentsSections(c: Consents, ctx: ConsentsContext): Section[] {
         `${withTz.length} values carry a timezone suffix, ${withSeconds.length} carry seconds, ${dateOnly.length} ` +
         `carry no time at all.`,
       `Range as strings: ${sortedAt[0] ?? '-'} to ${sortedAt[sortedAt.length - 1] ?? '-'}. ${future.length} events ` +
-        `are dated after ${ctx.now}, the latest date seen in the two CSV files, and ${futureBulk.length} are dated ` +
-        `after the second reference ${ctx.bulkNow}. ${before2023.length} events are dated before 2023-01-01, and ` +
+        `are dated after the reference date ${ctx.asOf}` +
+        (future.length > 0 ? ` (${futureByAction.entries().map((e) => `${e.value} ${e.count}`).join(', ')})` : '') +
+        `. ${before2023.length} events are dated before 2023-01-01, and ` +
         `${onlyBefore2023.length} patients have no event dated 2023 or later.`,
     ],
     tables: [
@@ -210,8 +210,8 @@ export function consentsSections(c: Consents, ctx: ConsentsContext): Section[] {
       dateOnly: dateOnly.length,
       earliest: sortedAt[0] ?? null,
       latest: sortedAt[sortedAt.length - 1] ?? null,
-      eventsAfterCsvLatestDate: future.length,
-      eventsAfterBulkReference: futureBulk.length,
+      eventsAfterAsOf: future.length,
+      eventsAfterAsOfByAction: Object.fromEntries(futureByAction.entries().map((e) => [e.value, e.count])),
       eventsBefore2023: before2023.length,
       patientsWithNoEventFrom2023: onlyBefore2023.length,
     },

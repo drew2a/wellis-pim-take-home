@@ -1,12 +1,7 @@
 {
-  "generatedBy": "npm run profile",
-  "reproduce": "npm run profile",
-  "referenceDates": {
-    "now": "2062-11-04",
-    "bulkNow": "2028-04-11",
-    "earliest": "2022-01-04",
-    "csvOnlyLatest": "2062-07-04"
-  },
+  "generatedBy": "npm run profile -- --as-of 2026-09-08",
+  "reproduce": "npm run profile -- --as-of 2026-09-08",
+  "asOf": "2026-09-08",
   "files": [
     {
       "name": "patients.csv",
@@ -25896,10 +25891,8 @@
       "twoDigitYears": 0,
       "valuesWithMultipleCandidateDates": 921,
       "nonEmptyValuesWithNoCandidateDate": 0,
-      "futureUnderSomeOrdering": 1,
-      "futureUnderEveryOrdering": 1,
-      "futureUnderSomeOrderingVsBulkReference": 5,
-      "futureUnderEveryOrderingVsBulkReference": 5,
+      "futureUnderSomeOrdering": 5,
+      "futureUnderEveryOrdering": 5,
       "ageAtSignupUnder18": 103,
       "ageAtSignupOver100": 1,
       "dobIdenticalToSignupDateRaw": 0,
@@ -26907,10 +26900,8 @@
       "twoDigitYears": 0,
       "valuesWithMultipleCandidateDates": 874,
       "nonEmptyValuesWithNoCandidateDate": 0,
-      "futureUnderSomeOrdering": 0,
-      "futureUnderEveryOrdering": 0,
-      "futureUnderSomeOrderingVsBulkReference": 3,
-      "futureUnderEveryOrderingVsBulkReference": 3,
+      "futureUnderSomeOrdering": 23,
+      "futureUnderEveryOrdering": 3,
       "earliest": "2022-01-04",
       "latest": "2062-07-04"
     },
@@ -41365,10 +41356,8 @@
       "twoDigitYears": 0,
       "valuesWithMultipleCandidateDates": 1033,
       "nonEmptyValuesWithNoCandidateDate": 0,
-      "futureUnderSomeOrdering": 0,
-      "futureUnderEveryOrdering": 0,
-      "futureUnderSomeOrderingVsBulkReference": 3,
-      "futureUnderEveryOrderingVsBulkReference": 3,
+      "futureUnderSomeOrdering": 70,
+      "futureUnderEveryOrdering": 3,
       "beforeSignupUnderSomeOrdering": 297,
       "beforeSignupUnderEveryOrdering": 0,
       "negativeGapStats": {
@@ -43278,8 +43267,11 @@
       "dateOnly": 0,
       "earliest": "2022-03-03T20:50:00",
       "latest": "2062-04-11T09:27:00",
-      "eventsAfterCsvLatestDate": 0,
-      "eventsAfterBulkReference": 3,
+      "eventsAfterAsOf": 69,
+      "eventsAfterAsOfByAction": {
+        "revoked": 66,
+        "granted": 3
+      },
       "eventsBefore2023": 477,
       "patientsWithNoEventFrom2023": 432
     },
@@ -47518,9 +47510,7 @@
       ]
     },
     "cross.date-range": {
-      "referenceNow": "2062-11-04",
-      "referenceEarliest": "2022-01-04",
-      "referenceBulkNow": "2028-04-11",
+      "asOf": "2026-09-08",
       "perColumn": [
         {
           "column": "patients.csv.signup_date",
@@ -51831,7 +51821,7 @@
       "evidenceKeys": [
         "patients.csv.dob"
       ],
-      "note": "921 values read as two different calendar dates depending on the ordering, 0 shapes carry both an unambiguous day-first and an unambiguous month-first value, and the shapes point in opposite directions: `9999-99-99` month-first only (1118 of 1828), `99-99-9999` day-first only (207 of 328), `99/99/9999` month-first only (154 of 310). 5 values read as a date after the second reference date."
+      "note": "921 values read as two different calendar dates depending on the ordering, 0 shapes carry both an unambiguous day-first and an unambiguous month-first value, and the shapes point in opposite directions: `9999-99-99` month-first only (1118 of 1828), `99-99-9999` day-first only (207 of 328), `99/99/9999` month-first only (154 of 310). 5 values read as a date after 2026-09-08 under every ordering."
     },
     {
       "claim": "patients.csv: `sex` is whatever the form or the ops person entered at the time",
@@ -51923,7 +51913,7 @@
         "patients.csv.signup_date",
         "cross.date-range"
       ],
-      "note": "0 rows are dated after the latest date seen anywhere else in the export under every plausible ordering, and 3 are after the second reference date."
+      "note": "3 rows are dated after the reference date 2026-09-08 under every plausible ordering."
     },
     {
       "claim": "patients.csv: `source` is the funnel: `typeform`, `website`, campaign tags, `import`",
@@ -52226,6 +52216,19 @@
       ]
     },
     {
+      "finding": "3 signup dates and 3 intake dates lie after the reference date 2026-09-08 under every plausible ordering.",
+      "evidence": [
+        "P-13",
+        "P-18",
+        "P-35"
+      ],
+      "evidenceKeys": [
+        "patients.csv.signup_date",
+        "intakes.csv.submitted_at",
+        "cross.date-range"
+      ]
+    },
+    {
       "finding": "30 bsn values are shared by more than one row, which is an identity collision rather than a formatting problem.",
       "evidence": [
         "P-6",
@@ -52302,6 +52305,15 @@
       ]
     },
     {
+      "finding": "69 consent events are dated after the reference date 2026-09-08.",
+      "evidence": [
+        "P-31"
+      ],
+      "evidenceKeys": [
+        "consents.jsonl.at"
+      ]
+    },
+    {
       "finding": "alcohol_units_week mixes numbers with 1 non-numeric spelling on 272 rows, next to 290 empty values, so \"no alcohol\" and \"not answered\" are not distinguishable by type alone.",
       "evidence": [
         "P-24"
@@ -52320,7 +52332,7 @@
       ]
     },
     {
-      "finding": "14 rows carry a date that sits after a gap of more than a year from every other date in its column, so the single latest date in the export is an outlier rather than a boundary.",
+      "finding": "14 rows carry a date that sits after a gap of more than a year from every other date in its column, so the latest dates in the export are outliers rather than a boundary.",
       "evidence": [
         "P-35"
       ],
@@ -52329,7 +52341,7 @@
       ]
     },
     {
-      "finding": "5 dob values read as a date after the second reference date under some ordering, 5 under every ordering.",
+      "finding": "5 dob values read as a date after the reference date 2026-09-08 under some ordering, 5 under every ordering.",
       "evidence": [
         "P-4",
         "P-35"
