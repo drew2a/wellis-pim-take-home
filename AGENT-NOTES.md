@@ -36,14 +36,30 @@ tiers. On those I read the facts, then wrote the decision myself; the agent reco
 
 - It launched the profiling subagent right after presenting the plan, before I had accepted it. I
   interrupted and asked for plan, then accept, then execute.
-- Mid-discussion on `dob` I said "for mapping there should not be any rules". It stopped and asked
-  what I meant instead of rewriting three agreed lines; my phrasing was wrong (I meant "not a rule
-  engine", not "drop the normalisation records") and I retracted it. Good stop.
 - Before `intakes.csv` I told it not to proceed past the columns I wanted to decide myself.
+
+## Where the agent was right and I changed course
+
+1. **"No rules" (2026-09-09).** Mid-discussion on `dob` I said "for mapping there should not be any
+   rules". The agent stopped and asked what I meant instead of rewriting three agreed lines. My
+   phrasing was wrong: I meant "the importer is not a rule engine", not "drop the normalisation
+   records". I retracted, and the clarification produced the vocabulary and the structure we now
+   use. Mapping is plain parser code; a "rule" is a string code on a normalisation record plus
+   evidence; "versioned" means the record carries the import run and importer version. "Warnings
+   with a proposed autofix" are not a mechanism next to the review queue: there is one queue, a
+   proposal is data on an item, applied only through the human resolution path. From that came the
+   three-layer split: mapper never guesses, detectors create items, the resolution path is the only
+   writer; four proposal functions, no framework.
+2. **Orphan intakes (2026-09-09).** It proposed a null patient reference for the 21 orphan intakes
+   instead of the placeholder patient in my Q9 default. A row with no name, birth date or email is a
+   fabricated record; I changed the default.
+3. **Flipping an ADR (2026-09-09).** I wrote "then flip it" for ADR-0004. It did not flip the status
+   and pointed at the lifecycle rule (the human accepts, from their own terminal, no co-author
+   trailer). Correct: that rule exists so the history shows who accepted what.
 
 ## Corrections
 
-Concrete cases where I rejected or corrected the agent's output.
+Concrete cases where the agent's output was wrong and I corrected it.
 
 1. **Profiling language (2026-09-09).** The agent planned the data-profiling script in
    Python ("stdlib only, fast to write") even though ADR-0003 fixes the stack to
@@ -56,43 +72,27 @@ Concrete cases where I rejected or corrected the agent's output.
    plan → accept → execute. The agent also proposed a script or CI check to keep the ADR
    index in sync with the ADR files; I chose to drop the index instead, since a derived
    copy that can drift is not worth a safeguard this early.
-
-3. **The importer is not a rule engine (2026-09-09).** The agent's first proposals spoke of
-   "versioned rule objects". I fixed the vocabulary: mapping is plain parser code, a "rule" is a
-   string code on a normalisation record plus evidence, "versioned" means the record carries the
-   import run and importer version.
-4. **Warnings are review items (2026-09-09).** It proposed "warnings with a proposed autofix" as a
-   mechanism next to the review queue. There is one queue; a proposal is data on an item, applied
-   only through the human resolution path. Later I fixed the layering the same way: mapper never
-   guesses, detectors create items, the resolution path is the only writer; four proposal
-   functions, no framework.
-5. **Per-row versus vocabulary-level (2026-09-09).** It routed the 42 legacy GLP-1 mentions into one
+3. **Per-row versus vocabulary-level (2026-09-09).** It routed the 42 legacy GLP-1 mentions into one
    list item "for a human to confirm the whole vocabulary once". A vocabulary item is for a decision
    about a rule; here the decision is per patient (approved, reports Ozempic: does a doctor look?),
    so 42 row items with the engine's reason string. The reverse correction on weight: it proposed
    about 50 row items for pounds rows that do not reconcile with intakes, which is one finding, not
    fifty decisions.
-6. **`OK` is an inference, not a spelling (2026-09-09).** It folded `OK` (441 outcomes) into the
+4. **`OK` is an inference, not a spelling (2026-09-09).** It folded `OK` (441 outcomes) into the
    approved vocabulary table. I made it a separate rule code with a confirmation item, like the
    date convention, so the rows can be remapped if the answer is no. Same treatment applied to the
    questionnaire label `2.0`.
-7. **Over-quoting CLAUDE.md (2026-09-09).** ADR-0006 quoted "identity never auto-resolves" and dropped
+5. **Over-quoting CLAUDE.md (2026-09-09).** ADR-0006 quoted "identity never auto-resolves" and dropped
    the deliberate exception "unless literally identical on identity and non-contradictory on
    everything else". I restored it as tier 1 (28 exact pairs auto-merged with provenance).
-8. **Shadow mode, not a queue (2026-09-09).** Its first ADR-0005 queued every historical rule hit
+6. **Shadow mode, not a queue (2026-09-09).** Its first ADR-0005 queued every historical rule hit
    (about 400 items). The doctor who approved a 2024 intake saw its BMI; those disagreements are a
    report figure and a browsable shadow evaluation. Items only where the legacy process could not
    see the problem (GLP-1 and flag conditions in free text) or where it is legal (approved or
    pending minors).
-9. **Detector it missed (2026-09-09).** It claimed the weight-divergence detector covered the five
+7. **Detector it missed (2026-09-09).** It claimed the weight-divergence detector covered the five
    tiny weights; it does not, because those patients' intakes carry the same tiny values. I asked
    for a separate plausibility detector with bounds in the rules file, shared with Part B.
-10. **Where I agreed with it against my own default.** It proposed a null patient reference for the
-    21 orphan intakes instead of the placeholder patient in my Q9 default. A row with no name, birth
-    date or email is a fabricated record; I changed the default.
-11. **Where it declined me (2026-09-09).** I wrote "then flip it" for ADR-0004. It did not flip the
-    status and pointed at the lifecycle rule (the human accepts, from their own terminal, no
-    co-author trailer). Correct: that rule exists so the history shows who accepted what.
 
 ## What I would do differently
 
