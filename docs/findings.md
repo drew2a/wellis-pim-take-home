@@ -1240,7 +1240,8 @@ Store the raw text unchanged as `conditions_raw`; derive `condition_report` with
 dictionary at import. The history audit runs the Part B matcher over the text: specific terms only
 (`schildklierkanker`, `schildkliercarcinoom`, `thyroid cancer`, `medullary thyroid`,
 `pancreatitis`, `alvleesklierontsteking`) from `rules/v1.json`, word boundaries after lowercasing,
-never bare substring. Each match is **one row-level review item per intake** with the engine's
+never bare substring, and the value is split on `;` first so `hoge bloeddruk; slaapapneu` yields two
+conditions. Each match is **one row-level review item per intake** with the engine's
 reason string ("flagged: self-reported history of thyroid cancer (schildklierkanker (2019))"),
 payload carrying the legacy outcome, outcome untouched: 15 items in this export. The
 weight-related list is a separate entry in `rules/v1.json`, seeded from the 7 values seen and
@@ -1316,6 +1317,28 @@ Check (1): 2359 rows differ from raw, each with a record. Check (2): one item fo
 decision about 332 rows; the per-patient clinical questions come from the detectors, not from
 this column.
 
-**Agreed**
+**Agreed** (2026-09-09)
 
-_Not yet discussed._
+Closed table for the twelve spellings other than `OK`, normalisation record `VOCAB_OUTCOME` per
+row whose raw spelling differs from the canonical string (1918 rows). `OK` is not a spelling of
+approved but an inference about 441 medical decisions, so it is treated like the separator
+convention: mapped to `approved` with its own rule code `OUTCOME_OK_ASSUMED_APPROVED` on each of the
+441 rows, plus **one** vocabulary-level review item "confirm `OK` = approved" carrying the evidence
+(used in every year alongside `approved`; rejected and pending have their own spellings; no
+correlation with notes, BMI, year or version). If the human says no, the records identify exactly
+which rows to remap. A line in the report is not a decision; a review item is.
+
+Legacy states: `legacy_approved` and `legacy_rejected` terminal, `legacy_pending` non-terminal, all
+outside the Part B state machine, one audit entry each from actor "legacy import" with reason
+"legacy outcome `<raw>`". Requirement for Part C: these states are reachable in the console through
+the status filter; they are not in the work queue.
+
+The 332 pending: **one** vocabulary-level item with **three** resolutions (open as `in_review`,
+close as `legacy_expired`, leave as `legacy_pending`) and a **cutoff date** rather than
+all-or-nothing, so the reviewer can say "open 2026, leave the rest"; 19 intakes from 2022 and 76
+from 2026 are not the same question. Payload carries the per-year breakdown. Unseen spellings in a
+future export: one vocabulary-level item, class `unknown` until resolved.
+
+Check (1): 1918 + 441 rows differ from raw, each with a record naming its rule. Check (2): two
+vocabulary-level items, each a decision about a rule or a product choice; the per-patient clinical
+questions come from the detectors.
