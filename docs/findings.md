@@ -582,6 +582,61 @@ tail -n +2 legacy_export/patients.csv | cut -d, -f11 | awk '$1<100 || $1>230' | 
 4. The 300 is possibly 200 with a typo and the 15 possibly 150 with a dropped digit. Both are
    hypotheses; neither has evidence in the export and neither becomes a proposed fix.
 
+**Agreed** (2026-09-09)
+
+Canonical `height_cm` integer, stored unchanged, raw kept. No normalisation in this export. The
+shared plausibility detector (weight item 6, bounds in the rules file) handles the 5 out-of-range
+rows: canonical null, per-row review item. The item carries a **proposed fix when exactly one
+decimal shift lands in the plausible range**: `15` → 150 (×10), and for future exports `1.5` → 150
+and `1.75` → 175 (×100, metres). `45`, `51` and `300` have no shift that lands in range and get no
+proposed fix. The import report records under unexpected findings that intake height is a copy of
+the patient row in 2896 of 2896 cases, contradicting the notes. Any non-integer or unit-bearing
+value in a future export is a review item, with the same decimal-shift proposal where it applies.
+
+### status
+
+**Facts** (P-12, H-4)
+
+| fact | value |
+|---|---|
+| rows / empty / distinct raw / distinct folded | 2466 / 0 / 17 / 11 |
+| trailing whitespace | 251 rows, all the single value `active ` |
+| languages | English and Dutch, words and phrases; casing varies (`ACTIEF`, `Churned`) |
+| spread | every spelling in every source and every signup year (H-4); no automation owns one |
+| relation to intakes.outcome | 0 folded values in common (P-25); the two vocabularies do not overlap |
+
+Closed mapping onto the four classes EXPORT-NOTES.md names, covering all 2466 rows:
+
+| canonical | raw spellings (rows) | rows |
+|---|---|---|
+| `active` | `Active` 297, `active` 268, `active ` 251, `ACTIEF` 275, `actief` 273 | 1364 |
+| `churned` | `cancelled` 170, `Churned` 164, `churned` 158, `opgezegd` 158 | 650 |
+| `paused` | `paused` 73, `on hold` 59, `Paused` 56, `gepauzeerd` 54 | 242 |
+| `prospect` | `Prospect` 56, `new` 53, `lead` 51, `prospect` 50 | 210 |
+
+```sh
+tail -n +2 legacy_export/patients.csv | cut -d, -f12 | sort | uniq -c | sort -rn   # 17 spellings
+```
+
+**Possible warnings**
+
+1. Status is the patient's *commercial* standing and outcome is the intake's *medical* result
+   (CLAUDE.md §6). The two vocabularies happen not to overlap here, but `ok`, `open` and
+   `pending` would read naturally as statuses; the mapping tables must stay separate and a value
+   from one must never be looked up in the other.
+2. Three of the class assignments are inferences about meaning, not spelling: `cancelled` →
+   churned, `on hold` → paused, `new` and `lead` → prospect. They are the obvious readings and
+   the notes give only these four classes, but "cancelled" could have meant "cancelled before
+   ever starting" in some funnel, which is closer to prospect than to churned. Low consequence
+   (nothing medical depends on status), so a documented mapping is enough; it should still be
+   visible in the import report so the ops team can object.
+3. The 251 `active ` rows are the largest single whitespace defect in the file. Trimming is safe
+   and needs a normalisation record like every other trim.
+4. Status is a snapshot at export time with no date. It must be shown as "status at export", and
+   the new system must not treat it as current once patients start interacting again.
+5. Any unseen value in a future export produces one vocabulary-level review item and maps to
+   `unknown` until resolved, exactly as for `sex`.
+
 **Agreed**
 
 _Not yet discussed._
