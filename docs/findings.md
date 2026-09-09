@@ -689,6 +689,55 @@ tail -n +2 legacy_export/patients.csv | cut -d, -f13 | grep -c '^2062'   # 3
    patients (P-33). That points at timestamp trouble in the consent log rather than in this column;
    handled under consents.
 
+**Agreed** (2026-09-09, recorded by the agent under the standing instruction; checked against the
+two questions below)
+
+Same handling as dob: separator convention, one normalisation record with rule code
+`DATE_ORDER_FROM_SEPARATOR` per non-ISO row (647 rows), stored as a calendar date, raw kept, covered
+by the same single confirmation item as dob. The 3 rows in 2062 get canonical null and one review
+item each that lists all of that patient's shifted dates (signup, intakes, consents) side by side,
+no proposed fix. The zero-intakes-before-signup result and the May 2024 cut-over go into the import
+report under unexpected findings.
+
+Check (1): the 647 converted values are the only stored values that differ from raw and each has a
+record naming `DATE_ORDER_FROM_SEPARATOR`; the 1819 ISO values are stored unchanged. Check (2): the
+convention itself is one vocabulary-level item shared with dob, not 647 row items; the 3 row items
+are distinct patients whose whole record is shifted, each an individual decision.
+
+### source
+
+**Facts** (P-14, P-36, H-4)
+
+| fact | value |
+|---|---|
+| rows / empty / distinct | 2466 / 0 / 5 |
+| values | `typeform` 845, `import` 417, `campaign_expat_2023` 415, `website` 400, `referral` 389 |
+| whitespace, case variants | none |
+| named in EXPORT-NOTES.md | `typeform`, `website`, "campaign tags" (`campaign_expat_2023` is the only one), `import`; `referral` is not mentioned |
+| what source explains | nothing measurable: every status, sex and date spelling appears in every source at about the same rate (H-4); non-ISO dates are about a quarter of every source |
+| `lbs` by source | typeform 17, referral 14, campaign_expat_2023 12, import 6, website 6 |
+| empty weight unit by source | campaign 6, typeform 5, import 4, referral 2, website 1 |
+| bsn present by source | 36 % to 41 % in every source |
+| the 5 tiny weights | campaign 2, referral 2, import 1 |
+| the 3 rows dated 2062 | typeform 2, import 1 |
+
+```sh
+tail -n +2 legacy_export/patients.csv | awk -F, '{print $14" "($10==""?"(empty)":$10)}' | sort | uniq -c
+```
+
+**Possible warnings**
+
+1. The notes tie pounds to "an early campaign targeting expats". The data does not: `lbs` rows
+   come from every source and typeform has the most. Whatever produced pounds was not one funnel.
+   The same holds for date styles and status spellings. Source-specific parsers would be built on
+   a story the data contradicts, so there must be none.
+2. `import` is "a bulk load nobody remembers well". Its 417 rows are indistinguishable from the
+   rest on every measure we have. That is reassuring for the import and useless for provenance.
+3. `referral` exists and is not in the notes. Harmless, but it shows the notes' value list is
+   incomplete, which is the general lesson for every "closed" list they give.
+4. Source is a filter for the console and a dimension for the import report, nothing else. It is
+   not identity and not medical.
+
 **Agreed**
 
 _Not yet discussed._
