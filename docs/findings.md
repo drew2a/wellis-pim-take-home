@@ -952,3 +952,43 @@ item; the count goes into the import report.
 Check (1): 394 rows whose canonical value differs from raw, each with a record; the label column
 is unchanged for all. Check (2): one item for one question; per-row items would be 394 copies of
 it.
+
+### weight
+
+**Facts** (P-20, H-2)
+
+| fact | value |
+|---|---|
+| rows / empty / numeric | 2917 / 0 / 2917; decimal point on every value; no unit column |
+| shapes | `999.9` 1685, `99.9` 1226, `9.9` 6 |
+| distribution | min 5.7, p5 72, median 103.7, p95 146.2, max 167.1; 0 values above 200; 2 in 30 .. 60 |
+| unit evidence | read as kilograms the median BMI is 34.7 and 0 % of intakes are underweight; read as pounds the median BMI is 15.7 and 88.4 % are underweight |
+| agreement with the patient row (`kg` rows) | 2684 of 2688 within 10 % (H-2) |
+| below 30 | 6 rows (5.7 to 9.1), all belonging to the 5 patients whose signup weight is tiny too (one patient has two such intakes) |
+
+**Possible warnings**
+
+1. There is no unit column, so "kilograms" is an assumption. It is the only reading under which
+   a weight-care population is not 88 % underweight, and it agrees with the patient rows that say
+   `kg`. The assumption must still be written down as such, in the rules applied, with this
+   evidence; a future export with a pounds-scale intake would show up as BMI outliers, not as an
+   error.
+2. Intake weight is the weight the eligibility rules use in Part B and the weight a reviewer will
+   compare with the signup weight. It is the more trustworthy of the two (no unit mess) and should
+   be the default for BMI on a legacy intake.
+3. The 6 tiny values are the same patients as the 5 tiny signup weights. One review item per
+   patient covering every implausible value of that patient is one decision; separate items per
+   file would be the same decision twice.
+
+**Agreed** (2026-09-09, recorded by the agent under the standing instruction; checked against the
+two questions below)
+
+Canonical `weight_kg` stored unchanged; kilograms by documented assumption, evidence recorded in
+the rules applied (0 of 2917 above 200; BMI medians 34.7 vs 15.7). The shared plausibility detector
+nulls the 6 values below 30 (raw kept) and folds them into the existing per-patient plausibility
+item of their 5 patients, which lists every implausible weight and height of that patient across
+patient row and intakes, with the decimal-shift proposal per value (5.7 → 57). BMI on a legacy
+intake is computed from the intake's own weight and height.
+
+Check (1): no stored value differs from raw. Check (2): 0 new items; the 5 patient-level items
+gain rows.
