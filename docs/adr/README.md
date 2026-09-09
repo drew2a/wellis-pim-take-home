@@ -29,7 +29,7 @@ what may be edited and when.
 - Once **`accepted`**, its content is immutable except the status line and trivial fixes
   (typos, broken links).
 - Any change of substance is a **new ADR** that states `supersedes ADR-NNNN`; the old one
-  gets status `superseded by ADR-MMMM`. **Both stay in the index** — nothing is deleted.
+  gets status `superseded by ADR-MMMM`. **Both files stay** — nothing is deleted.
 - The agent never self-accepts. The human flips `proposed` → `accepted` themselves, in a
   **separate commit from their own terminal with no co-author trailer**, so the history
   distinguishes *agent proposed* from *human accepted*.
@@ -54,10 +54,12 @@ being written, not before.
    branch**. If it invalidates an ADR already `accepted` in `main`, that is a supersede —
    also **on the branch**.
 
-## Index
+## Listing the ADRs
 
-| ADR | Title | Status |
-|---|---|---|
-| [0001](0001-record-architecture-decisions.md) | Record architecture decisions as ADRs | accepted |
-| [0002](0002-adopt-ivory-tower-engineering-conventions.md) | Adopt ivory-tower engineering conventions | accepted |
-| [0003](0003-stack-nextjs-postgres-drizzle.md) | Stack: Next.js, Postgres (Supabase-hosted), Drizzle, Vitest | accepted |
+There is no hand-maintained index: filenames carry number and title, each file carries
+its own `Status:` line, and a second copy would only drift. To list every ADR with its
+status:
+
+```sh
+grep -H '^- \*\*Status:\*\*' docs/adr/[0-9]*.md
+```

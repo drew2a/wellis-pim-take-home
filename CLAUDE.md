@@ -154,7 +154,7 @@ Fixed terms, used verbatim in code, schema and UI. No synonyms.
 
 ## 7. Sessions
 
-Sessions are short and scoped to one block of work. Before ending a session: update the ADR index and any affected docs, run lint, typecheck and the full test suite, commit. The next session starts from the files in this repo, not from memory of this one.
+Sessions are short and scoped to one block of work. Before ending a session: update any affected docs, run lint, typecheck and the full test suite, commit. The next session starts from the files in this repo, not from memory of this one.
 
 ## 8. Stack
 
