@@ -544,8 +544,9 @@ npm run profile:hypotheses    # H-2 tables
    outside [100, 230] produces a per-row review item, canonical null, raw kept, no proposed fix.
    The divergence detector is silent on these rows because the intakes repeat the same values
    (tiny weights 5.7 to 9.1, heights 15, 45, 45, 51, 300), so a separate detector is needed. In
-   this export it fires on 5 patient weights (6.5 to 8.6, the decimal-shift reading 7.8 → 78 goes
-   into the payload as a hypothesis only) and 5 patient heights; over `intakes.csv` on 6 weights
+   this export it fires on 5 patient weights (6.5 to 8.6) and 5 patient heights; the item carries a
+   proposed fix when exactly one decimal shift lands in the plausible range (7.8 → 78, 15 → 150),
+   the same rule for weight and height (amended 2026-09-09); over `intakes.csv` on 6 weights
    below 30 and 6 heights out of range. The bounds live in the rules file, not in code: the same
    definition of "physically possible" becomes the Part B form validation and Part B will version
    it.
