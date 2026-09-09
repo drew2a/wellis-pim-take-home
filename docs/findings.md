@@ -1097,3 +1097,68 @@ to the actor "legacy import".
 
 Check (1): no stored value differs from raw. Check (2): one item; 73 row items would all say the
 same thing, and the payload lets the reviewer still act per row.
+
+### meds_current
+
+**Facts** (P-22, P-36, H-4)
+
+| fact | value |
+|---|---|
+| rows / empty / distinct raw / distinct folded | 2917 / 144 / 30 / 30 |
+| whitespace | none; case variants only in `Ozempic`/`ozempic`, `Semaglutide`/`semaglutide`, `Wegovy`/`wegovy`, `vitamine D` |
+| "no medication" spellings | `geen` 175, `-` 171, `geen medicatie` 165, `n.v.t.` 160, `none` 144, plus 144 empty: 959 rows say nothing is taken, in 6 ways |
+| common medications | 18 values, 137 to 178 rows each (`multivitamine`, `cetirizine`, `levothyroxine 50mcg`, `omeprazol`, `ibuprofen soms`, `amlodipine 5mg`, `metformine 500mg`, `simvastatine 20 mg`, `paracetamol zo nodig`, `vitamine D`, `de pil`, `sertraline 50mg`, ...) |
+| GLP-1 mentions | 12 distinct values on 42 rows: `semaglutide` 7, `Ozempic 0,5 mg` 5, `Semaglutide 0.25` 4, `Wegovy 1,7mg` 4, `ozempic (via huisarts)` 4, `ozempic 1mg wekelijks` 4, `rybelsus 7 mg` 4, `tirzepatide` 3, `Mounjaro 5mg` 2, `Saxenda dagelijks` 2, `wegovy` 2, `liraglutide` 1 |
+| GLP-1 spelling | brand names and INNs, Dutch and English, doses in three notations; 0 misspellings (every token containing `glut`, `ozem`, `sema`, `tide` is one of the 12) |
+| GLP-1 rows by legacy outcome (provisional classes) | approved 28, rejected 7, pending 7; BMI below 27 on 3 of them, 27 to 30 on 8 |
+| several medications in one value | **none**. The 9 rows the profile counts as containing `,` are decimal commas in doses (`Ozempic 0,5 mg`, `Wegovy 1,7mg`); 4 more doses use a decimal point (`Semaglutide 0.25`) |
+| `metformine 500mg` | 160 rows; a diabetes medication, but its rows carry every condition value at the same rate, `diabetes type 2` on only 9 |
+| `levothyroxine 50mcg` | 174 rows; thyroid hormone, `hypothyreoidie` on only 5 of them, `schildklierkanker` on 2 |
+| by version and year | the vocabulary is the same under every questionnaire label and in every year; the few gaps are single-digit counts |
+
+```sh
+tail -n +2 legacy_export/intakes.csv | grep -ciE 'semaglutide|ozempic|wegovy|rybelsus|liraglutide|saxenda|tirzepatide|mounjaro'   # 42
+```
+
+**Possible warnings**
+
+1. The column is free text in the schema and a 30-value pick-list in practice. Part B's GLP-1 rule
+   will run on free text from the new form, where `ozempik`, `Ozempic 0.5`, `semaglutide (Wegovy)`
+   and a comma-separated list are all possible. Nothing in the legacy data exercises that: it is
+   too clean to be a test of the matcher.
+2. Six spellings of "nothing". If the canonical record does not distinguish "no medication
+   reported" from "field left empty", 144 empty rows become indistinguishable from 815 explicit
+   negatives; the distinction matters when a reviewer asks whether the question was answered.
+3. A GLP-1 detector over history will flag 42 legacy intakes, 28 of them approved. Under the new
+   rules they would have been flagged for review, not auto-cleared; that is a finding about the
+   old process, not a reason to change the old outcome. Forty-two row items saying "the new rule
+   would have flagged this" is residue; one item with the list is a decision.
+4. Metformine and levothyroxine are signals a clinician reads (diabetes, thyroid disease) and the
+   condition column does not confirm them. Whether medication should imply a condition is a rule
+   question for Part B, not a mapping question here.
+5. Dose notation mixes decimal comma and decimal point. Irrelevant for storage as text, relevant
+   the moment anyone parses a dose.
+
+**Proposed** (awaiting explicit confirmation)
+
+Store the raw text unchanged as the intake's `meds_current_raw`; no trimming (none needed), no
+case change, no splitting. Derive one canonical field `medication_report` with three states:
+`none_reported` for the 5 "nothing" spellings (815 rows, normalisation record `VOCAB_NONE_MEDICATION`
+naming the matched spelling), `not_answered` for the 144 empty rows (no record; empty is empty),
+and `reported` for the rest (1958 rows), where the text itself stays the value. No medication
+dictionary is applied at import: classification (GLP-1 or not) is the Part B ruleset's job, run
+over history as a detector. That detector's result on the legacy data is **one** vocabulary-level
+review item "42 legacy intakes report a GLP-1 medication; 28 were approved", payload listing the
+intakes with outcome and BMI, no proposed fix, historical outcomes untouched. The versioned GLP-1
+term list for Part B starts from the 12 spellings seen here plus the brands and INNs absent from
+the export (victoza, zepbound, trulicity, dulaglutide, exenatide, byetta, bydureon, lixisenatide).
+The import report records that the "free text" is a 30-value list, that no value holds two
+medications, and that `,` here is a decimal separator.
+
+Check (1): 815 rows whose canonical state differs from raw, each with a record; the raw text is
+stored unchanged for all 2917. Check (2): one item for the GLP-1 history finding; 42 row items
+would be identical.
+
+**Agreed**
+
+_Not yet discussed._
