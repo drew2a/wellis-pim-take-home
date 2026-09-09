@@ -54,13 +54,17 @@ function prune(value: Json): Json | Pruned {
 
 const asOf = asOfFromArgv();
 const source = JSON.parse(readFileSync(abs(PROFILE_JSON), 'utf8')) as Json;
-const jsonAsOf = source !== null && typeof source === 'object' && !Array.isArray(source) ? source['asOf'] : undefined;
-if (jsonAsOf !== asOf) {
-  throw new Error(`${PROFILE_JSON} was generated as of ${String(jsonAsOf)}, not ${asOf}; run \`${reproduceCommand('profile', asOf)}\` first`);
+if (source === null || typeof source !== 'object' || Array.isArray(source)) throw new Error(`${PROFILE_JSON} is not an object`);
+if (source['asOf'] !== asOf) {
+  throw new Error(`${PROFILE_JSON} was generated as of ${String(source['asOf'])}, not ${asOf}; run \`${reproduceCommand('profile', asOf)}\` first`);
 }
-const data = prune(source);
+// Only the inventories are pruned. The top-level lists (`sections`, `exportNotesClaims`,
+// `notWarnedAbout`) are read with plain `.map` by the template and must stay arrays however
+// long they get; the page would otherwise render blank while this script still exits 0.
+const data: {[k: string]: Json} = {...source, columns: prune(source['columns'] ?? null) as Json, crossFile: prune(source['crossFile'] ?? null) as Json};
 const template = readFileSync(join(HERE, 'inventory-template.html'), 'utf8');
 if (!template.includes('/*__DATA__*/')) throw new Error('template has no data slot');
-const html = template.replace('/*__DATA__*/', 'const DATA = ' + JSON.stringify(data).replace(/</gu, '\\u003c') + ';');
+// A function replacement, so `$&` and friends inside the JSON are never expanded.
+const html = template.replace('/*__DATA__*/', () => 'const DATA = ' + JSON.stringify(data).replace(/</gu, '\\u003c') + ';');
 writeFileSync(abs(INVENTORY_HTML), html);
 console.log(`wrote ${INVENTORY_HTML} (${html.length} bytes), as of ${asOf}`);
