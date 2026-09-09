@@ -405,6 +405,47 @@ tail -n +2 legacy_export/patients.csv | cut -d, -f7 | grep -v '^$' | sed 's/^06/
    constraint should encode exactly that (`^\+316[0-9]{8}$`) so a wrong length cannot be stored as
    canonical.
 
+**Agreed** (2026-09-09)
+
+Canonical phone in E.164. The 1064 `+316` values are stored unchanged; the 1259 `06` values are
+converted with rule code `PHONE_E164_NL_MOBILE`, one normalisation record each. Check constraint
+`^\+316[0-9]{8}$` on the canonical column, raw kept. Any value that does not match one of the
+three seen forms maps to null and gets a per-row review item with a proposed fix when a reading is
+obvious (for example `0031 6...`) and none otherwise. Shared canonical phone creates a
+duplicate-candidate conflict, never a merge. Empties are null, no item.
+
+### city
+
+**Facts** (P-8)
+
+| fact | value |
+|---|---|
+| rows / empty / distinct raw / distinct folded | 2466 / 0 / 20 / 20 |
+| whitespace, case variants, misspellings | none: 20 folded values each have exactly one raw spelling |
+| values | 20 real Dutch cities, `Zwolle` 156 down to `Groningen` 104; `Den Haag` written that way on all 123 rows |
+| spread | every city in every year and source (P-36) |
+| agreement inside duplicate-candidate pairs | name+dob pairs 0 of 31 differ, phone pairs 0 of 61 differ, email pairs 2 of 44 differ, bsn pairs 5 of 30 differ |
+
+The bsn pairs that differ on city are among the pairs that also differ on name and dob, i.e. the
+ones that look like two different people sharing a bsn.
+
+```sh
+tail -n +2 legacy_export/patients.csv | cut -d, -f8 | sort | uniq -c | wc -l   # 20
+```
+
+**Possible warnings**
+
+1. Nothing to normalise. The column is cleaner than the notes suggest ("self-reported" implied
+   variation that is not there). Any cleanup would be a change without evidence.
+2. The uniform spread across 20 cities with no small towns, no postcode and no street is a sign
+   that the value comes from a pick-list, not free text. Good for us, but it also means the
+   column carries little information: it cannot locate a patient or a pharmacy.
+3. City is not identity and not medical. It must not enter duplicate detection as a key, but it is
+   a useful side-by-side field in a conflict: two rows with the same bsn and different cities are
+   more likely two people.
+4. Self-reported city can lag a move. Nothing in the export dates it, so it should be shown as
+   "city at signup", not as a current address.
+
 **Agreed**
 
 _Not yet discussed._
