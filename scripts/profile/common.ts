@@ -6,6 +6,29 @@ import {code, plain, table, type Table} from './report.js';
 import {Counter, Grouper, KEY_SEP, band, bandLabels, fmtNum, fold, numStats, parseNumber, shape} from './util.js';
 import {TWO_DIGIT_YEAR_PIVOT, candidateDates, classifyOrder, splitDateParts, yearLabel, yearPosition, type OrderClass} from './dates.js';
 
+/**
+ * Band edges and windows shared by the profile and by the hypothesis tests, defined once so
+ * the two documents band the same rows the same way. `band()` treats every edge as the
+ * exclusive upper bound of the band below it.
+ */
+export const WEIGHT_BAND_EDGES: readonly number[] = [35, 60, 100, 150, 200, 300];
+export const HEIGHT_BAND_EDGES: readonly number[] = [3, 100, 140, 220];
+/** Intake value / patient value; 0.4..0.5 and 2..2.4 bracket the kilogram/pound factor 2.20462. */
+export const RATIO_EDGES: readonly number[] = [0.4, 0.5, 0.9, 1.1, 2.0, 2.4];
+/** The same, with 1 / 2.20462 = 0.454 bracketed tightly (0.42..0.49) for the weight-unit test. */
+export const POUNDS_RATIO_EDGES: readonly number[] = [0.4, 0.42, 0.49, 0.9, 1.1, 2.0, 2.4];
+/** A BMI outside this window is treated as implausible in the unit cross-checks. */
+export const BMI_WINDOW = {min: 15, max: 70} as const;
+
+export function bmi(weightKg: number, heightCm: number): number {
+  const m = heightCm / 100;
+  return weightKg / (m * m);
+}
+
+export function bmiInWindow(x: number): boolean {
+  return x >= BMI_WINDOW.min && x <= BMI_WINDOW.max;
+}
+
 export interface DateValueFacts {
   readonly raw: string;
   readonly shape: string;

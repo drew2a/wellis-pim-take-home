@@ -106,34 +106,40 @@ Test: for every patient with at least one intake, divide each intake weight by t
 
 | intake weight / patient weight | intakes |
 | --- | --- |
-| < 0.40 | 0 |
-| 0.40 .. 0.42 | 0 |
+| < 0.4 | 0 |
+| 0.4 .. 0.42 | 0 |
 | 0.42 .. 0.49 (pounds) | 0 |
-| 0.49 .. 0.90 | 2 |
-| 0.90 .. 1.10 (same unit) | 2684 |
-| > 1.10 | 2 |
+| 0.49 .. 0.9 | 2 |
+| 0.9 .. 1.1 (same unit) | 2684 |
+| 1.1 .. 2 | 2 |
+| 2 .. 2.4 | 0 |
+| >= 2.4 | 0 |
 
 **weight_unit `lbs`** (rows without any intake: 9)
 
 | intake weight / patient weight | intakes |
 | --- | --- |
-| < 0.40 | 23 |
-| 0.40 .. 0.42 | 5 |
+| < 0.4 | 23 |
+| 0.4 .. 0.42 | 5 |
 | 0.42 .. 0.49 (pounds) | 15 |
-| 0.49 .. 0.90 | 25 |
-| 0.90 .. 1.10 (same unit) | 0 |
-| > 1.10 | 0 |
+| 0.49 .. 0.9 | 25 |
+| 0.9 .. 1.1 (same unit) | 0 |
+| 1.1 .. 2 | 0 |
+| 2 .. 2.4 | 0 |
+| >= 2.4 | 0 |
 
 **weight_unit (empty)** (rows without any intake: 2)
 
 | intake weight / patient weight | intakes |
 | --- | --- |
-| < 0.40 | 8 |
-| 0.40 .. 0.42 | 1 |
+| < 0.4 | 8 |
+| 0.4 .. 0.42 | 1 |
 | 0.42 .. 0.49 (pounds) | 1 |
-| 0.49 .. 0.90 | 10 |
-| 0.90 .. 1.10 (same unit) | 0 |
-| > 1.10 | 0 |
+| 0.49 .. 0.9 | 10 |
+| 0.9 .. 1.1 (same unit) | 0 |
+| 1.1 .. 2 | 0 |
+| 2 .. 2.4 | 0 |
+| >= 2.4 | 0 |
 
 
 ### Rows that no unit explains

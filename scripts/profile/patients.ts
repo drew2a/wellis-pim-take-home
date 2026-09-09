@@ -7,7 +7,17 @@
  */
 import {column, type Csv} from './csv.js';
 import {candidateDates} from './dates.js';
-import {dateAnalysis, foldingMerge, numericAnalysis, shapeCrossTab} from './common.js';
+import {
+  BMI_WINDOW,
+  HEIGHT_BAND_EDGES,
+  WEIGHT_BAND_EDGES,
+  bmi,
+  bmiInWindow,
+  dateAnalysis,
+  foldingMerge,
+  numericAnalysis,
+  shapeCrossTab,
+} from './common.js';
 import {code, columnSection, crossTab, plain, table, type Section, type Table} from './report.js';
 import {
   Counter,
@@ -500,7 +510,7 @@ export function patientsSections(p: Patients, ctx: PatientsContext): Section[] {
   );
 
   // ---- weight and weight_unit ---------------------------------------------------
-  const weightNum = numericAnalysis(p.weight, [35, 60, 100, 150, 200, 300], 'weight');
+  const weightNum = numericAnalysis(p.weight, WEIGHT_BAND_EDGES, 'weight');
   const unitStatsRows: string[][] = [];
   const perUnit = new Map<string, number[]>();
   const heavyLight = new Counter();
@@ -524,12 +534,10 @@ export function patientsSections(p: Patients, ctx: PatientsContext): Section[] {
     const w = parseNumber(raw);
     const h = parseNumber(p.heightCm[i] ?? '');
     if (!w.ok || !h.ok || h.value <= 0) return;
-    const m = h.value / 100;
-    const bmiKg = w.value / (m * m);
-    const bmiLb = w.value / 2.20462 / (m * m);
-    const inRange = (x: number): boolean => x >= 15 && x <= 70;
-    if (!inRange(bmiKg) && inRange(bmiLb)) kgOutLbIn++;
-    if (!inRange(bmiLb) && inRange(bmiKg)) lbOutKgIn++;
+    const bmiKg = bmi(w.value, h.value);
+    const bmiLb = bmi(w.value / 2.20462, h.value);
+    if (!bmiInWindow(bmiKg) && bmiInWindow(bmiLb)) kgOutLbIn++;
+    if (!bmiInWindow(bmiLb) && bmiInWindow(bmiKg)) lbOutKgIn++;
   });
   sections.push(
     columnSection({
@@ -539,7 +547,7 @@ export function patientsSections(p: Patients, ctx: PatientsContext): Section[] {
       forceShapeTable: true,
       notes: [
         ...weightNum.notes,
-        `BMI cross-check with height_cm read as centimetres and a 15..70 BMI window: ${kgOutLbIn} rows sit ` +
+        `BMI cross-check with height_cm read as centimetres and a ${BMI_WINDOW.min}..${BMI_WINDOW.max} BMI window: ${kgOutLbIn} rows sit ` +
           `outside the window under the kilogram reading but inside it under the pound reading ` +
           `(weight / 2.20462); ${lbOutKgIn} rows are the reverse.`,
       ],
@@ -579,8 +587,7 @@ export function patientsSections(p: Patients, ctx: PatientsContext): Section[] {
   );
 
   // ---- height_cm ----------------------------------------------------------------
-  const heightEdges = [3, 100, 140, 220];
-  const heightNum = numericAnalysis(p.heightCm, heightEdges, 'height_cm');
+  const heightNum = numericAnalysis(p.heightCm, HEIGHT_BAND_EDGES, 'height_cm');
   sections.push(
     columnSection({
       file: FILE,
@@ -590,7 +597,7 @@ export function patientsSections(p: Patients, ctx: PatientsContext): Section[] {
       notes: [
         ...heightNum.notes,
         `Bands are the ones a reader would ask about: below 3 (a value in metres), 3..100, 100..140, 140..220 ` +
-          `and 220 or more. Band labels below follow ${bandLabels(heightEdges).join(', ')}.`,
+          `and 220 or more. Band labels below follow ${bandLabels(HEIGHT_BAND_EDGES).join(', ')}.`,
       ],
       tables: heightNum.tables,
       json: heightNum.json,

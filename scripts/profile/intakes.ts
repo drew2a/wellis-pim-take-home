@@ -4,7 +4,17 @@
  */
 import {column, type Csv} from './csv.js';
 import {candidateDates} from './dates.js';
-import {dateAnalysis, foldingMerge, freeTextAnalysis, numericAnalysis, shapeCrossTab, type TermSpec} from './common.js';
+import {
+  HEIGHT_BAND_EDGES,
+  RATIO_EDGES,
+  WEIGHT_BAND_EDGES,
+  dateAnalysis,
+  foldingMerge,
+  freeTextAnalysis,
+  numericAnalysis,
+  shapeCrossTab,
+  type TermSpec,
+} from './common.js';
 import {code, columnSection, crossTab, table, type Section, type Table} from './report.js';
 import type {Patients} from './patients.js';
 import {Counter, KEY_SEP, band, bandLabels, fold, numStats, parseNumber} from './util.js';
@@ -85,12 +95,7 @@ const CONDITION_TERMS: readonly TermSpec[] = [
   {label: 'depress', patterns: ['depress']},
 ];
 
-const RATIO_EDGES = [0.4, 0.5, 0.9, 1.1, 2.0, 2.4] as const;
-
-/**
- * Intake value against the patient-row value, as a ratio. The 0.4..0.5 and 2.0..2.4 bands
- * bracket 1/2.20462 and 2.20462, the kilogram/pound factor.
- */
+/** Intake value against the patient-row value, as a ratio, banded by RATIO_EDGES. */
 function ratioTable(
   caption: string,
   intakeValues: readonly string[],
@@ -107,9 +112,9 @@ function ratioTable(
     if (!a.ok || !b.ok || b.value === 0) return;
     const r = a.value / b.value;
     ratios.push(r);
-    c.add(band(r, [...RATIO_EDGES]));
+    c.add(band(r, RATIO_EDGES));
   });
-  const labels = bandLabels([...RATIO_EDGES]);
+  const labels = bandLabels(RATIO_EDGES);
   return {
     table: table(caption, ['ratio band', 'rows'], labels.map((l) => [l, String(c.get(l))])),
     json: labels.map((l) => ({band: l, rows: c.get(l)})),
@@ -284,7 +289,7 @@ export function intakesSections(it: Intakes, ctx: IntakesContext): Section[] {
   );
 
   // ---- weight -------------------------------------------------------------------
-  const wNum = numericAnalysis(it.weight, [35, 60, 100, 150, 200, 300], 'weight');
+  const wNum = numericAnalysis(it.weight, WEIGHT_BAND_EDGES, 'weight');
   const wRatio = ratioTable('intakes.weight / patients.weight', it.weight, p.weight, patientIndex);
   sections.push(
     columnSection({
@@ -303,7 +308,7 @@ export function intakesSections(it: Intakes, ctx: IntakesContext): Section[] {
   );
 
   // ---- height -------------------------------------------------------------------
-  const hNum = numericAnalysis(it.height, [3, 100, 140, 220], 'height');
+  const hNum = numericAnalysis(it.height, HEIGHT_BAND_EDGES, 'height');
   const hRatio = ratioTable('intakes.height / patients.height_cm', it.height, p.heightCm, patientIndex);
   sections.push(
     columnSection({
