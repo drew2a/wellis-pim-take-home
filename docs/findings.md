@@ -992,3 +992,35 @@ intake is computed from the intake's own weight and height.
 
 Check (1): no stored value differs from raw. Check (2): 0 new items; the 5 patient-level items
 gain rows.
+
+### height
+
+**Facts** (P-21, H-3)
+
+| fact | value |
+|---|---|
+| rows / empty / distinct | 2917 / 0 / 51; integers only |
+| distribution | min 15, p5 153, median 175, p95 196, max 300 |
+| identity with the patient row | byte-identical on 2896 of 2896 resolvable intakes; the 21 orphans' heights are all within 140 .. 220 |
+| outside [100, 230] | 6 rows (15, 45, 45, 45, 51, 300), the intakes of the same 5 patients found under patients.height_cm |
+
+**Possible warnings**
+
+1. EXPORT-NOTES.md says intake height is self-reported at submission time. In this export it is a
+   copy of the patient row, without exception. Either the form pre-filled it or the automation
+   overwrote it. So intake height adds no information and cannot cross-check the patient row, and
+   a wrong patient height is wrong on every intake of that patient.
+2. Because it is a copy, a divergence detector between intake and patient height would never
+   fire; it must not be built.
+3. The 6 out-of-range values belong to the 5 patients already carrying a plausibility item.
+
+**Agreed** (2026-09-09, recorded by the agent under the standing instruction; checked against the
+two questions below)
+
+Canonical `height_cm` integer stored unchanged, raw kept. The shared plausibility detector nulls the
+6 out-of-range values and folds them into the existing per-patient item of their 5 patients, with
+the decimal-shift proposal where exactly one shift lands in range (15 → 150; none for 45, 51, 300).
+No divergence detector for height. The import report states under unexpected findings that intake
+height equals the patient row in 2896 of 2896 cases.
+
+Check (1): no stored value differs from raw. Check (2): 0 new items.
