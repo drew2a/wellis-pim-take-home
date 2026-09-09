@@ -46,8 +46,9 @@ supersession makes revisions explicit — which a README section or commit histo
 
 ### Confirmation
 
-`docs/adr/README.md` index lists every ADR; README "Key decisions" links only to accepted
-ADRs; no accepted ADR is ever edited except to change its status line.
+Every ADR carries a `Status:` line (listed with the command in `docs/adr/README.md`);
+README "Key decisions" links only to accepted ADRs; no accepted ADR is ever edited except
+to change its status line.
 
 ## Pros and cons of the options
 
