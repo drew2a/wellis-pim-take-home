@@ -18,6 +18,9 @@ function createDb() {
     // open forever.
     max: 5,
     idle_timeout: 20,
+    // The health probe must answer 503 within a Vercel function's budget when the database host
+    // drops packets; the default of 30 s is longer than that budget and than any uptime monitor.
+    connect_timeout: 5,
     // Supabase only accepts TLS; the compose database has no certificate.
     ssl: process.env.NODE_ENV === 'production' ? 'require' : false,
   });
