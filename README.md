@@ -37,14 +37,13 @@ installed on the machine cannot shadow it.
 ### Checks
 
 ```sh
-npm run typecheck           # tsc --noEmit
-npm run lint                # ESLint, typescript-eslint strict
-npm run format:check        # Prettier (npm run format rewrites)
-npm test                    # unit tests, no database
-npm run test:integration    # against the compose database; fails if DATABASE_URL is unset
+npm run check               # typecheck, lint, format check, unit tests, integration tests
 ```
 
-CI (`.github/workflows/ci.yml`) runs the same commands against a Postgres service container.
+The integration tests need the compose database and fail if `DATABASE_URL` is unset. The
+individual steps are `typecheck`, `lint`, `format:check` (`format` rewrites), `test` and
+`test:integration` in `package.json`. CI (`.github/workflows/ci.yml`) runs `npm run check`
+against a Postgres service container, then `npm run build`.
 
 ## Deploy
 
