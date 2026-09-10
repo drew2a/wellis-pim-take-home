@@ -26,10 +26,5 @@ export default defineConfig(
       '@typescript-eslint/non-nullable-type-assertion-style': 'off',
     },
   },
-  {
-    // Config files export objects for their tools, not a module API.
-    files: ['*.config.ts'],
-    rules: { '@typescript-eslint/explicit-module-boundary-types': 'off' },
-  },
   prettier,
 );
