@@ -8,12 +8,20 @@
   },
   "type": "module",
   "scripts": {
-    "profile": "tsx scripts/profile/profile.ts",
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
     "typecheck": "tsc --noEmit",
-    "profile:hypotheses": "tsx scripts/profile/hypotheses.ts",
-    "profile:inventory": "tsx scripts/profile/inventory.ts",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "test": "vitest run",
-    "test:integration": "vitest run --config vitest.integration.config.ts"
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "db:up": "docker compose up -d --wait",
+    "db:migrate": "drizzle-kit migrate",
+    "profile": "tsx scripts/profile/profile.ts",
+    "profile:hypotheses": "tsx scripts/profile/hypotheses.ts",
+    "profile:inventory": "tsx scripts/profile/inventory.ts"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
