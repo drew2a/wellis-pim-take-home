@@ -2,7 +2,7 @@ import { getTableName, type Table } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import * as schema from '@/db/schema';
-import { createTestDatabase, type TestDatabase } from '@/test/database';
+import { createTestDatabase, expectDatabaseError, type TestDatabase } from '@/test/database';
 import * as rows from '@/test/rows';
 
 // ADR-0007: what is evidence is immutable in the database; what is derived or decided is not.
@@ -89,11 +89,11 @@ describe('evidence tables are append-only (R-B21, ADR-0007)', () => {
       it('rejects UPDATE, even one that changes nothing', async () => {
         const statement = `update "${name}" set "${column}" = "${column}"`;
 
-        await expect(database.sql.unsafe(statement)).rejects.toThrow(APPEND_ONLY);
+        await expectDatabaseError(database.sql.unsafe(statement), APPEND_ONLY);
       });
 
       it('rejects DELETE', async () => {
-        await expect(database.sql.unsafe(`delete from "${name}"`)).rejects.toThrow(APPEND_ONLY);
+        await expectDatabaseError(database.sql.unsafe(`delete from "${name}"`), APPEND_ONLY);
 
         expect(await count()).toBe(1);
       });
@@ -101,9 +101,7 @@ describe('evidence tables are append-only (R-B21, ADR-0007)', () => {
       it('rejects TRUNCATE', async () => {
         // CASCADE so that a referencing table (consent_states on consent_events) is not what
         // stops the statement: the trigger must be the reason.
-        await expect(database.sql.unsafe(`truncate "${name}" cascade`)).rejects.toThrow(
-          APPEND_ONLY,
-        );
+        await expectDatabaseError(database.sql.unsafe(`truncate "${name}" cascade`), APPEND_ONLY);
 
         expect(await count()).toBe(1);
       });

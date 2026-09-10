@@ -74,3 +74,27 @@ async function withMaintenanceConnection(
     await admin.end();
   }
 }
+
+/**
+ * Asserts that a database operation is rejected with a Postgres error matching `pattern`.
+ * Drizzle wraps driver errors in a "Failed query" error and keeps the Postgres message in
+ * `cause`; raw postgres-js calls throw the Postgres error itself. Both are handled here.
+ */
+export async function expectDatabaseError(
+  operation: Promise<unknown>,
+  pattern: RegExp,
+): Promise<void> {
+  const error: unknown = await operation.then(
+    () => undefined,
+    (reason: unknown) => reason,
+  );
+  if (!(error instanceof Error)) {
+    throw new Error(`expected a database error matching ${pattern.source}, but nothing was thrown`);
+  }
+  const postgresError = error.cause instanceof Error ? error.cause : error;
+  if (!pattern.test(postgresError.message)) {
+    throw new Error(
+      `expected a database error matching ${pattern.source}, got: ${postgresError.message}`,
+    );
+  }
+}
