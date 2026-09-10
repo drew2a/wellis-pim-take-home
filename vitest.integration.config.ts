@@ -11,7 +11,10 @@ export default defineConfig({
   resolve: { tsconfigPaths: true },
   test: {
     include: ['src/**/*.integration.test.ts'],
-    // One connection at a time: the tests share the compose database.
+    // No tables exist yet, so there is nothing to isolate between files. The isolation strategy
+    // ADR-0003 calls for (a schema per file or a transaction per test) is chosen in the schema
+    // branch, where tables appear; until then files run one at a time against the shared
+    // compose database.
     fileParallelism: false,
   },
 });
