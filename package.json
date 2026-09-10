@@ -17,12 +17,13 @@
     "format:check": "prettier --check .",
     "test": "vitest run",
     "test:integration": "vitest run --config vitest.integration.config.ts",
-    "check": "npm run typecheck && npm run lint && npm run format:check && npm test && npm run test:integration",
+    "check": "npm run typecheck && npm run lint && npm run format:check && npm run schema:diagram -- --check && npm test && npm run test:integration",
     "db:up": "docker compose up -d --wait",
     "db:migrate": "drizzle-kit migrate",
     "profile": "tsx scripts/profile/profile.ts",
     "profile:hypotheses": "tsx scripts/profile/hypotheses.ts",
-    "profile:inventory": "tsx scripts/profile/inventory.ts"
+    "profile:inventory": "tsx scripts/profile/inventory.ts",
+    "schema:diagram": "tsx scripts/schema/diagram.ts"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",
