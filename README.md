@@ -45,3 +45,17 @@ npm run test:integration    # against the compose database; skipped with a messa
 ```
 
 CI (`.github/workflows/ci.yml`) runs the same commands against a Postgres service container.
+
+## Deploy
+
+The app runs on Vercel against Supabase-hosted Postgres, used only through its Postgres
+connection string (ADR-0003). `DATABASE_URL` in the Vercel project is Supabase's **pooled**
+connection string (transaction mode). The client in `src/db/client.ts` is configured for that
+target: prepared statements are off because the transaction-mode pooler does not support them,
+each function instance holds a pool of at most 5 connections and drops idle ones after 20
+seconds, and TLS is required whenever `NODE_ENV` is `production`. The compose database has no
+certificate, so `next start` locally is not a supported way to run the production build; use
+`npm run dev`.
+
+The production database is seeded by running the importer (`npm run import`, Part A) against
+that connection string once the schema and migrations exist.
