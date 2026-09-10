@@ -2,8 +2,14 @@ import { z } from 'zod';
 
 // Validated once, at the process boundary (CLAUDE.md §2, ADR-0003). Everything downstream
 // trusts the resulting type and never re-checks the raw environment.
+const postgresUrl = z.url({ protocol: /^postgres(ql)?$/ });
+
 const envSchema = z.object({
-  DATABASE_URL: z.url({ protocol: /^postgres(ql)?$/ }),
+  DATABASE_URL: postgresUrl,
+  // Production migrations and the importer go through the Supabase session pooler (port 5432);
+  // the app through the transaction pooler (6543), which cannot run migrations. Locally and in
+  // CI one URL serves both, so this is optional and db:migrate falls back to DATABASE_URL.
+  MIGRATION_URL: postgresUrl.optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;
