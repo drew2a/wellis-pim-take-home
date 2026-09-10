@@ -1,6 +1,6 @@
 # ADR-0007: Amendments to ADR-0004: append-only evidence by trigger, consent timestamps as instants
 
-- **Status:** proposed
+- **Status:** accepted
 - **Date:** 2026-09-10
 - **Deciders:** Andrei Andreev
 - **Requirements:** R-A7, R-A8, R-A15, R-B20, R-B21 · **Amends:** ADR-0004 (the audit_entries
