@@ -2,8 +2,8 @@
  * Inventories for `legacy_export/intakes.csv`, including the joins back to
  * `patients.csv` (resolution, self-reported weight and height against the patient row).
  */
-import {column, type Csv} from './csv.js';
-import {candidateDates} from './dates.js';
+import { column, type Csv } from './csv.js';
+import { candidateDates } from './dates.js';
 import {
   HEIGHT_BAND_EDGES,
   RATIO_EDGES,
@@ -15,9 +15,18 @@ import {
   shapeCrossTab,
   type TermSpec,
 } from './common.js';
-import {code, columnSection, crossTab, table, type Section, type Table} from './report.js';
-import type {Patients} from './patients.js';
-import {Counter, KEY_SEP, UnionFind, band, bandLabels, fold, numStats, parseNumber} from './util.js';
+import { code, columnSection, crossTab, table, type Section, type Table } from './report.js';
+import type { Patients } from './patients.js';
+import {
+  Counter,
+  KEY_SEP,
+  UnionFind,
+  band,
+  bandLabels,
+  fold,
+  numStats,
+  parseNumber,
+} from './util.js';
 
 const FILE = 'intakes.csv';
 
@@ -34,7 +43,7 @@ export interface Intakes {
   readonly alcohol: readonly string[];
   readonly outcome: readonly string[];
   readonly reviewerNote: readonly string[];
-  readonly submittedCandidates: ReadonlyArray<readonly string[]>;
+  readonly submittedCandidates: readonly (readonly string[])[];
 }
 
 export function loadIntakes(csv: Csv): Intakes {
@@ -57,42 +66,42 @@ export function loadIntakes(csv: Csv): Intakes {
 }
 
 const MED_TERMS: readonly TermSpec[] = [
-  {label: 'semaglutide', patterns: ['semaglutide']},
-  {label: 'ozempic', patterns: ['ozempic']},
-  {label: 'wegovy', patterns: ['wegovy']},
-  {label: 'rybelsus', patterns: ['rybelsus']},
-  {label: 'liraglutide', patterns: ['liraglutide']},
-  {label: 'saxenda', patterns: ['saxenda']},
-  {label: 'victoza', patterns: ['victoza']},
-  {label: 'tirzepatide', patterns: ['tirzepatide']},
-  {label: 'mounjaro', patterns: ['mounjaro']},
-  {label: 'zepbound', patterns: ['zepbound']},
-  {label: 'dulaglutide', patterns: ['dulaglutide']},
-  {label: 'trulicity', patterns: ['trulicity']},
-  {label: 'exenatide', patterns: ['exenatide']},
-  {label: 'byetta', patterns: ['byetta']},
-  {label: 'bydureon', patterns: ['bydureon']},
-  {label: 'lixisenatide', patterns: ['lixisenatide']},
-  {label: 'metformin / metformine', patterns: ['metformin']},
+  { label: 'semaglutide', patterns: ['semaglutide'] },
+  { label: 'ozempic', patterns: ['ozempic'] },
+  { label: 'wegovy', patterns: ['wegovy'] },
+  { label: 'rybelsus', patterns: ['rybelsus'] },
+  { label: 'liraglutide', patterns: ['liraglutide'] },
+  { label: 'saxenda', patterns: ['saxenda'] },
+  { label: 'victoza', patterns: ['victoza'] },
+  { label: 'tirzepatide', patterns: ['tirzepatide'] },
+  { label: 'mounjaro', patterns: ['mounjaro'] },
+  { label: 'zepbound', patterns: ['zepbound'] },
+  { label: 'dulaglutide', patterns: ['dulaglutide'] },
+  { label: 'trulicity', patterns: ['trulicity'] },
+  { label: 'exenatide', patterns: ['exenatide'] },
+  { label: 'byetta', patterns: ['byetta'] },
+  { label: 'bydureon', patterns: ['bydureon'] },
+  { label: 'lixisenatide', patterns: ['lixisenatide'] },
+  { label: 'metformin / metformine', patterns: ['metformin'] },
 ];
 
 const CONDITION_TERMS: readonly TermSpec[] = [
-  {label: 'thyroid', patterns: ['thyroid']},
-  {label: 'schildklier', patterns: ['schildklier']},
-  {label: 'pancrea', patterns: ['pancrea']},
-  {label: 'alvleesklier', patterns: ['alvleesklier']},
-  {label: 'diabetes', patterns: ['diabetes']},
-  {label: 'suikerziekte', patterns: ['suikerziekte']},
-  {label: 'hypertens', patterns: ['hypertens']},
-  {label: 'hoge bloeddruk', patterns: ['hoge bloeddruk']},
-  {label: 'bloeddruk', patterns: ['bloeddruk']},
-  {label: 'apnea / apnoe / slaapapneu', patterns: ['apnea', 'apnoe', 'slaapapneu']},
-  {label: 'cholesterol', patterns: ['cholesterol']},
-  {label: 'pcos', patterns: ['pcos']},
-  {label: 'lever / nafld', patterns: ['lever', 'nafld']},
-  {label: 'reflux', patterns: ['reflux']},
-  {label: 'artrose / osteoarth', patterns: ['artrose', 'osteoarth']},
-  {label: 'depress', patterns: ['depress']},
+  { label: 'thyroid', patterns: ['thyroid'] },
+  { label: 'schildklier', patterns: ['schildklier'] },
+  { label: 'pancrea', patterns: ['pancrea'] },
+  { label: 'alvleesklier', patterns: ['alvleesklier'] },
+  { label: 'diabetes', patterns: ['diabetes'] },
+  { label: 'suikerziekte', patterns: ['suikerziekte'] },
+  { label: 'hypertens', patterns: ['hypertens'] },
+  { label: 'hoge bloeddruk', patterns: ['hoge bloeddruk'] },
+  { label: 'bloeddruk', patterns: ['bloeddruk'] },
+  { label: 'apnea / apnoe / slaapapneu', patterns: ['apnea', 'apnoe', 'slaapapneu'] },
+  { label: 'cholesterol', patterns: ['cholesterol'] },
+  { label: 'pcos', patterns: ['pcos'] },
+  { label: 'lever / nafld', patterns: ['lever', 'nafld'] },
+  { label: 'reflux', patterns: ['reflux'] },
+  { label: 'artrose / osteoarth', patterns: ['artrose', 'osteoarth'] },
+  { label: 'depress', patterns: ['depress'] },
 ];
 
 /** Intake value against the patient-row value, as a ratio, banded by RATIO_EDGES. */
@@ -100,8 +109,8 @@ function ratioTable(
   caption: string,
   intakeValues: readonly string[],
   patientValues: readonly string[],
-  rowPatientIndex: ReadonlyArray<number | null>,
-): {table: Table; json: Array<Record<string, unknown>>; comparable: number} {
+  rowPatientIndex: readonly (number | null)[],
+): { table: Table; json: Record<string, unknown>[]; comparable: number } {
   const c = new Counter();
   const ratios: number[] = [];
   intakeValues.forEach((raw, i) => {
@@ -116,8 +125,12 @@ function ratioTable(
   });
   const labels = bandLabels(RATIO_EDGES);
   return {
-    table: table(caption, ['ratio band', 'rows'], labels.map((l) => [l, String(c.get(l))])),
-    json: labels.map((l) => ({band: l, rows: c.get(l)})),
+    table: table(
+      caption,
+      ['ratio band', 'rows'],
+      labels.map((l) => [l, String(c.get(l))]),
+    ),
+    json: labels.map((l) => ({ band: l, rows: c.get(l) })),
     comparable: ratios.length,
   };
 }
@@ -135,7 +148,7 @@ export function intakesSections(it: Intakes, ctx: IntakesContext): Section[] {
   const p = ctx.patients;
 
   /** Row -> patients.csv row index, or null when the id does not resolve. */
-  const patientIndex: Array<number | null> = it.patientId.map((id) => {
+  const patientIndex: (number | null)[] = it.patientId.map((id) => {
     const rows = p.byLegacyId.get(id);
     return rows === undefined ? null : (rows[0] as number);
   });
@@ -160,7 +173,10 @@ export function intakesSections(it: Intakes, ctx: IntakesContext): Section[] {
           idDups.slice(0, 30).map((e) => [code(e.value), String(e.count)]),
         ),
       ],
-      json: {duplicateGroups: idDups.length, duplicateRows: idDups.reduce((t, e) => t + e.count, 0)},
+      json: {
+        duplicateGroups: idDups.length,
+        duplicateRows: idDups.reduce((t, e) => t + e.count, 0),
+      },
     }),
   );
 
@@ -169,7 +185,7 @@ export function intakesSections(it: Intakes, ctx: IntakesContext): Section[] {
   const orphanRows = it.patientId.filter((_, i) => patientIndex[i] === null);
   const orphanIds = [...new Set(orphanRows)].sort();
   const orphanInConsents = orphanIds.filter((id) => ctx.consentPatientIds.has(id));
-  const orphanPairs: Array<readonly [string, string]> = [];
+  const orphanPairs: (readonly [string, string])[] = [];
   it.patientId.forEach((_, i) => {
     if (patientIndex[i] !== null) return;
     const year = (it.submittedCandidates[i] ?? [])[0]?.slice(0, 4) ?? '(unparsed)';
@@ -191,11 +207,17 @@ export function intakesSections(it: Intakes, ctx: IntakesContext): Section[] {
           `patients.csv ids have no intake.`,
       ],
       tables: [
-        crossTab('Unresolved (orphan) intakes: submitted year x questionnaire_version', 'submitted year', orphanPairs),
+        crossTab(
+          'Unresolved (orphan) intakes: submitted year x questionnaire_version',
+          'submitted year',
+          orphanPairs,
+        ),
         table(
           `Orphan ids also present in consents.jsonl${orphanInConsents.length > 20 ? ` (first 20 of ${orphanInConsents.length})` : ''}`,
           ['legacy_patient_id', 'intake rows'],
-          orphanInConsents.slice(0, 20).map((id) => [code(id), String(orphanRows.filter((x) => x === id).length)]),
+          orphanInConsents
+            .slice(0, 20)
+            .map((id) => [code(id), String(orphanRows.filter((x) => x === id).length)]),
         ),
       ],
       json: {
@@ -210,8 +232,12 @@ export function intakesSections(it: Intakes, ctx: IntakesContext): Section[] {
 
   // ---- submitted_at -------------------------------------------------------------
   const saA = dateAnalysis(it.submittedAt);
-  const saFuture = it.submittedCandidates.filter((c) => c.length > 0 && (c[c.length - 1] as string) > ctx.asOf);
-  const saAllFuture = it.submittedCandidates.filter((c) => c.length > 0 && (c[0] as string) > ctx.asOf);
+  const saFuture = it.submittedCandidates.filter(
+    (c) => c.length > 0 && (c[c.length - 1] as string) > ctx.asOf,
+  );
+  const saAllFuture = it.submittedCandidates.filter(
+    (c) => c.length > 0 && (c[0] as string) > ctx.asOf,
+  );
   let everBefore = 0;
   let alwaysBefore = 0;
   const gapBand = new Counter();
@@ -224,14 +250,17 @@ export function intakesSections(it: Intakes, ctx: IntakesContext): Section[] {
     const combos: number[] = [];
     for (const s of sc) {
       for (const g of gc) {
-        combos.push(Math.round((Date.parse(`${s}T00:00:00Z`) - Date.parse(`${g}T00:00:00Z`)) / 86_400_000));
+        combos.push(
+          Math.round((Date.parse(`${s}T00:00:00Z`) - Date.parse(`${g}T00:00:00Z`)) / 86_400_000),
+        );
       }
     }
     if (combos.some((x) => x < 0)) everBefore++;
     if (combos.every((x) => x < 0)) alwaysBefore++;
     // Reported gap: earliest candidate of each date, so the figure is reproducible.
     const gap = Math.round(
-      (Date.parse(`${sc[0] as string}T00:00:00Z`) - Date.parse(`${gc[0] as string}T00:00:00Z`)) / 86_400_000,
+      (Date.parse(`${sc[0] as string}T00:00:00Z`) - Date.parse(`${gc[0] as string}T00:00:00Z`)) /
+        86_400_000,
     );
     if (gap < 0) {
       gaps.push(gap);
@@ -255,8 +284,18 @@ export function intakesSections(it: Intakes, ctx: IntakesContext): Section[] {
       ],
       tables: [
         ...saA.tables,
-        shapeCrossTab('Shape x year (year of the value itself)', saA.facts.map((f) => f.shape), saA.facts.map((f) => f.year), 'year'),
-        shapeCrossTab('Shape x questionnaire_version', saA.facts.map((f) => f.shape), it.version, 'questionnaire_version'),
+        shapeCrossTab(
+          'Shape x year (year of the value itself)',
+          saA.facts.map((f) => f.shape),
+          saA.facts.map((f) => f.year),
+          'year',
+        ),
+        shapeCrossTab(
+          'Shape x questionnaire_version',
+          saA.facts.map((f) => f.shape),
+          it.version,
+          'questionnaire_version',
+        ),
         table(
           'Gap in days between submitted_at and the patient row signup_date, negative gaps only',
           ['gap band (days)', 'rows'],
@@ -270,7 +309,10 @@ export function intakesSections(it: Intakes, ctx: IntakesContext): Section[] {
         beforeSignupUnderSomeOrdering: everBefore,
         beforeSignupUnderEveryOrdering: alwaysBefore,
         negativeGapStats: numStats(gaps),
-        negativeGapBands: bandLabels([-365, -180, -90, -30, -7, 0]).map((l) => ({band: l, rows: gapBand.get(l)})),
+        negativeGapBands: bandLabels([-365, -180, -90, -30, -7, 0]).map((l) => ({
+          band: l,
+          rows: gapBand.get(l),
+        })),
       },
     }),
   );
@@ -282,9 +324,11 @@ export function intakesSections(it: Intakes, ctx: IntakesContext): Section[] {
       file: FILE,
       column: 'questionnaire_version',
       values: it.version,
-      notes: [`Folding merges ${verMerge.groups} groups of raw spellings, covering ${verMerge.rows} rows.`],
+      notes: [
+        `Folding merges ${verMerge.groups} groups of raw spellings, covering ${verMerge.rows} rows.`,
+      ],
       tables: [verMerge.table],
-      json: {foldingMerges: verMerge.json},
+      json: { foldingMerges: verMerge.json },
     }),
   );
 
@@ -303,22 +347,30 @@ export function intakesSections(it: Intakes, ctx: IntakesContext): Section[] {
           `0.4..0.5 and 2 .. 2.4 bands bracket the kilogram/pound factor 2.20462.`,
       ],
       tables: [...wNum.tables, wRatio.table],
-      json: {...wNum.json, comparableRows: wRatio.comparable, ratioBands: wRatio.json},
+      json: { ...wNum.json, comparableRows: wRatio.comparable, ratioBands: wRatio.json },
     }),
   );
 
   // ---- height -------------------------------------------------------------------
   const hNum = numericAnalysis(it.height, HEIGHT_BAND_EDGES, 'height');
-  const hRatio = ratioTable('intakes.height / patients.height_cm', it.height, p.heightCm, patientIndex);
+  const hRatio = ratioTable(
+    'intakes.height / patients.height_cm',
+    it.height,
+    p.heightCm,
+    patientIndex,
+  );
   sections.push(
     columnSection({
       file: FILE,
       column: 'height',
       values: it.height,
       forceShapeTable: true,
-      notes: [...hNum.notes, `${hRatio.comparable} rows have a resolvable patient row and a numeric height on both sides.`],
+      notes: [
+        ...hNum.notes,
+        `${hRatio.comparable} rows have a resolvable patient row and a numeric height on both sides.`,
+      ],
       tables: [...hNum.tables, hRatio.table],
-      json: {...hNum.json, comparableRows: hRatio.comparable, ratioBands: hRatio.json},
+      json: { ...hNum.json, comparableRows: hRatio.comparable, ratioBands: hRatio.json },
     }),
   );
 
@@ -336,7 +388,13 @@ export function intakesSections(it: Intakes, ctx: IntakesContext): Section[] {
   );
 
   // ---- conditions ---------------------------------------------------------------
-  const conds = freeTextAnalysis(it.conditions, CONDITION_TERMS, ['diabet', 'apne', 'thyro', 'schildk', 'bloeddr']);
+  const conds = freeTextAnalysis(it.conditions, CONDITION_TERMS, [
+    'diabet',
+    'apne',
+    'thyro',
+    'schildk',
+    'bloeddr',
+  ]);
   sections.push(
     columnSection({
       file: FILE,
@@ -373,13 +431,17 @@ export function intakesSections(it: Intakes, ctx: IntakesContext): Section[] {
           `${outMerge.groups} groups of raw spellings, covering ${outMerge.rows} rows.`,
       ],
       tables: [outMerge.table],
-      json: {foldingMergeGroups: outMerge.groups, foldingMerges: outMerge.json},
+      json: { foldingMergeGroups: outMerge.groups, foldingMerges: outMerge.json },
     }),
   );
 
   // ---- reviewer_note ------------------------------------------------------------
-  const notePairs: Array<readonly [string, string]> = it.reviewerNote.map((v, i) => [fold(v), fold(it.outcome[i] ?? '')] as const);
-  const notesOnEmptyOutcome = it.reviewerNote.filter((v, i) => v !== '' && (it.outcome[i] ?? '') === '').length;
+  const notePairs: (readonly [string, string])[] = it.reviewerNote.map(
+    (v, i) => [fold(v), fold(it.outcome[i] ?? '')] as const,
+  );
+  const notesOnEmptyOutcome = it.reviewerNote.filter(
+    (v, i) => v !== '' && (it.outcome[i] ?? '') === '',
+  ).length;
   sections.push(
     columnSection({
       file: FILE,
@@ -389,7 +451,9 @@ export function intakesSections(it: Intakes, ctx: IntakesContext): Section[] {
         `${notesOnEmptyOutcome} rows carry a non-empty reviewer_note while outcome is empty. The cross-tab ` +
           `below shows which note text sits with which outcome; both are folded.`,
       ],
-      tables: [crossTab('Folded reviewer_note x folded outcome', 'folded reviewer_note', notePairs)],
+      tables: [
+        crossTab('Folded reviewer_note x folded outcome', 'folded reviewer_note', notePairs),
+      ],
       json: {
         notesOnEmptyOutcome,
         noteByOutcome: (() => {
@@ -397,7 +461,7 @@ export function intakesSections(it: Intakes, ctx: IntakesContext): Section[] {
           for (const [a, b] of notePairs) c.add(`${a}||${b}`);
           return c.entries().map((e) => {
             const [note, outcome] = e.value.split('||') as [string, string];
-            return {note, outcome, rows: e.count};
+            return { note, outcome, rows: e.count };
           });
         })(),
       },
@@ -418,7 +482,8 @@ export function intakesSections(it: Intakes, ctx: IntakesContext): Section[] {
       else list.push(i);
     }
   });
-  for (const rows of bucket.values()) for (let k = 1; k < rows.length; k++) uf.union(rows[0] as number, rows[k] as number);
+  for (const rows of bucket.values())
+    for (let k = 1; k < rows.length; k++) uf.union(rows[0] as number, rows[k] as number);
   const sameDayGroups = uf.components();
   const sameDayRows = sameDayGroups.reduce((t, g) => t + g.length, 0);
   const perPatient = new Counter();
@@ -451,12 +516,14 @@ export function intakesSections(it: Intakes, ctx: IntakesContext): Section[] {
       table(
         `Same patient, same submission day${sameDayGroups.length > 20 ? ` (first 20 of ${sameDayGroups.length})` : ''}`,
         ['legacy_patient_id', 'submitted_at values', 'intake_id values', 'rows'],
-        sameDayGroups.slice(0, 20).map((g) => [
-          code(it.patientId[g[0] as number] ?? ''),
-          g.map((r) => code(it.submittedAt[r] ?? '')).join(' '),
-          g.map((r) => code(it.intakeId[r] ?? '')).join(' '),
-          String(g.length),
-        ]),
+        sameDayGroups
+          .slice(0, 20)
+          .map((g) => [
+            code(it.patientId[g[0] as number] ?? ''),
+            g.map((r) => code(it.submittedAt[r] ?? '')).join(' '),
+            g.map((r) => code(it.intakeId[r] ?? '')).join(' '),
+            String(g.length),
+          ]),
       ),
       table(
         `Groups identical apart from intake_id${identicalApartFromId.length > 10 ? ` (first 10 of ${identicalApartFromId.length})` : ''}`,
@@ -467,7 +534,12 @@ export function intakesSections(it: Intakes, ctx: IntakesContext): Section[] {
             const hi = it.csv.header.indexOf(name);
             return fields[hi > idIdx ? hi - 1 : hi] ?? '';
           };
-          return [String(e.count), code(at('legacy_patient_id')), code(at('submitted_at')), code(at('outcome'))];
+          return [
+            String(e.count),
+            code(at('legacy_patient_id')),
+            code(at('submitted_at')),
+            code(at('outcome')),
+          ];
         }),
       ),
     ],
@@ -475,7 +547,9 @@ export function intakesSections(it: Intakes, ctx: IntakesContext): Section[] {
       sameDayGroups: sameDayGroups.length,
       sameDayRows,
       sameDayGroupMembers: sameDayGroups.map((g) => g.map((r) => it.intakeId[r] ?? '')),
-      intakesPerPatient: perPatientDist.entries().map((e) => ({intakes: Number(e.value), patientIds: e.count})),
+      intakesPerPatient: perPatientDist
+        .entries()
+        .map((e) => ({ intakes: Number(e.value), patientIds: e.count })),
       identicalApartFromIntakeIdGroups: identicalApartFromId.length,
       identicalApartFromIntakeIdRows: identicalApartFromId.reduce((t, e) => t + e.count, 0),
     },
@@ -509,7 +583,9 @@ export function intakesSections(it: Intakes, ctx: IntakesContext): Section[] {
       raggedRows: it.csv.raggedRows.length,
       fieldsWithNewline: it.csv.fieldsWithNewline,
       duplicatePhysicalLines: dupLines.length,
-      fieldCounts: it.csv.fieldCounts.entries().map((e) => ({fields: Number(e.value), rows: e.count})),
+      fieldCounts: it.csv.fieldCounts
+        .entries()
+        .map((e) => ({ fields: Number(e.value), rows: e.count })),
     },
   });
 

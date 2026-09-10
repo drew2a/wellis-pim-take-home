@@ -6,8 +6,8 @@
  * value, never in place of it, so the profile can state what the export contains and
  * what a later normalisation rule would change.
  */
-import {readFileSync} from 'node:fs';
-import {basename} from 'node:path';
+import { readFileSync } from 'node:fs';
+import { basename } from 'node:path';
 
 export interface FileInfo {
   readonly path: string;
@@ -38,7 +38,7 @@ export function readFileInfo(path: string): FileInfo {
 
   let utf8Valid = true;
   try {
-    new TextDecoder('utf-8', {fatal: true}).decode(body);
+    new TextDecoder('utf-8', { fatal: true }).decode(body);
   } catch {
     utf8Valid = false;
   }
@@ -95,7 +95,10 @@ export function eolLabel(info: FileInfo): string {
 
 /** Digits to `9`, lowercase letters to `a`, uppercase letters to `A`; everything else verbatim. */
 export function shape(s: string): string {
-  return s.replace(/\p{Nd}/gu, '9').replace(/\p{Ll}/gu, 'a').replace(/\p{Lu}/gu, 'A');
+  return s
+    .replace(/\p{Nd}/gu, '9')
+    .replace(/\p{Ll}/gu, 'a')
+    .replace(/\p{Lu}/gu, 'A');
 }
 
 /** `shape()` with runs of one identical character collapsed to `X+` (e.g. `aaa.aa` -> `a+.a+`). */
@@ -165,9 +168,9 @@ export class Counter {
   }
 
   /** Sorted by count desc, then key asc, so the output is deterministic. */
-  entries(): Array<{value: string; count: number}> {
+  entries(): { value: string; count: number }[] {
     return [...this.m.entries()]
-      .map(([value, count]) => ({value, count}))
+      .map(([value, count]) => ({ value, count }))
       .sort((a, b) => b.count - a.count || (a.value < b.value ? -1 : a.value > b.value ? 1 : 0));
   }
 }
@@ -180,12 +183,12 @@ export interface Group {
 
 /** Counts keys and keeps up to three example source values per key. */
 export class Grouper {
-  private readonly m = new Map<string, {count: number; examples: string[]}>();
+  private readonly m = new Map<string, { count: number; examples: string[] }>();
 
   add(key: string, example: string): void {
     const g = this.m.get(key);
     if (g === undefined) {
-      this.m.set(key, {count: 1, examples: [example]});
+      this.m.set(key, { count: 1, examples: [example] });
       return;
     }
     g.count++;
@@ -198,7 +201,7 @@ export class Grouper {
 
   entries(): Group[] {
     return [...this.m.entries()]
-      .map(([key, g]) => ({key, count: g.count, examples: g.examples}))
+      .map(([key, g]) => ({ key, count: g.count, examples: g.examples }))
       .sort((a, b) => b.count - a.count || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
   }
 }
@@ -214,7 +217,7 @@ export interface NumStats {
 
 /** Nearest-rank percentiles: no interpolation, so every reported figure is an observed value. */
 export function numStats(xs: readonly number[]): NumStats {
-  if (xs.length === 0) return {n: 0, min: null, p5: null, median: null, p95: null, max: null};
+  if (xs.length === 0) return { n: 0, min: null, p5: null, median: null, p95: null, max: null };
   const s = [...xs].sort((a, b) => a - b);
   const at = (p: number): number =>
     s[Math.min(s.length - 1, Math.max(0, Math.ceil(p * s.length) - 1))] as number;
@@ -234,7 +237,15 @@ export function fmtNum(x: number | null): string {
 }
 
 export function statsRow(label: string, s: NumStats): string[] {
-  return [label, String(s.n), fmtNum(s.min), fmtNum(s.p5), fmtNum(s.median), fmtNum(s.p95), fmtNum(s.max)];
+  return [
+    label,
+    String(s.n),
+    fmtNum(s.min),
+    fmtNum(s.p5),
+    fmtNum(s.median),
+    fmtNum(s.p95),
+    fmtNum(s.max),
+  ];
 }
 
 export const STATS_HEADER = ['group', 'n', 'min', 'p5', 'median', 'p95', 'max'] as const;
@@ -250,10 +261,10 @@ export interface ParsedNumber {
 export function parseNumber(raw: string): ParsedNumber {
   const t = raw.trim();
   const m = /^([+-]?\d+)(?:([.,])(\d+))?$/u.exec(t);
-  if (m === null) return {ok: false, value: Number.NaN, separator: ''};
+  if (m === null) return { ok: false, value: Number.NaN, separator: '' };
   const sep = m[2] ?? '';
   const value = Number(`${m[1] ?? ''}${sep === '' ? '' : '.'}${m[3] ?? ''}`);
-  return {ok: Number.isFinite(value), value, separator: sep};
+  return { ok: Number.isFinite(value), value, separator: sep };
 }
 
 /** Buckets a value into the first band whose upper bound it is below. */
@@ -277,7 +288,7 @@ export class UnionFind {
   private readonly parent: number[];
 
   constructor(n: number) {
-    this.parent = Array.from({length: n}, (_, i) => i);
+    this.parent = Array.from({ length: n }, (_, i) => i);
   }
 
   find(i: number): number {

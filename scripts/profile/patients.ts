@@ -5,8 +5,8 @@
  * regex, an age window), the rule is stated in the note next to the number so the reader
  * can disagree with the rule without doubting the count.
  */
-import {column, type Csv} from './csv.js';
-import {candidateDates} from './dates.js';
+import { column, type Csv } from './csv.js';
+import { candidateDates } from './dates.js';
 import {
   BMI_WINDOW,
   HEIGHT_BAND_EDGES,
@@ -18,7 +18,7 @@ import {
   numericAnalysis,
   shapeCrossTab,
 } from './common.js';
-import {code, columnSection, crossTab, plain, table, type Section, type Table} from './report.js';
+import { code, columnSection, crossTab, plain, table, type Section, type Table } from './report.js';
 import {
   Counter,
   Grouper,
@@ -54,8 +54,8 @@ export interface Patients {
   readonly source: readonly string[];
   /** legacy_id -> row indices (a list, because uniqueness is a finding, not an assumption). */
   readonly byLegacyId: ReadonlyMap<string, readonly number[]>;
-  readonly signupCandidates: ReadonlyArray<readonly string[]>;
-  readonly dobCandidates: ReadonlyArray<readonly string[]>;
+  readonly signupCandidates: readonly (readonly string[])[];
+  readonly dobCandidates: readonly (readonly string[])[];
 }
 
 export function loadPatients(csv: Csv): Patients {
@@ -116,7 +116,7 @@ function lengthTable(values: readonly string[]): Table {
 
 interface DupStats {
   /** Values carried by more than one row, count desc. */
-  readonly entries: ReadonlyArray<{readonly value: string; readonly count: number}>;
+  readonly entries: readonly { readonly value: string; readonly count: number }[];
   readonly groups: number;
   readonly rows: number;
 }
@@ -126,7 +126,7 @@ function duplicateStats(values: readonly string[]): DupStats {
   const c = new Counter();
   for (const v of values) if (v !== '') c.add(v);
   const entries = c.entries().filter((e) => e.count > 1);
-  return {entries, groups: entries.length, rows: entries.reduce((t, e) => t + e.count, 0)};
+  return { entries, groups: entries.length, rows: entries.reduce((t, e) => t + e.count, 0) };
 }
 
 function duplicateTable(stats: DupStats, caption: string, limit = 12): Table {
@@ -158,16 +158,20 @@ export function patientsSections(p: Patients, ctx: PatientsContext): Section[] {
       notes: [
         `${new Set(p.legacyId).size} distinct ids over ${n} rows, so ${idDup.groups} id values are carried by ` +
           `more than one row (${idDup.rows} rows involved). Prefixes seen: ` +
-          `${prefix.entries().map((e) => `${code(e.value)} ${e.count}`).join(', ')}.`,
+          `${prefix
+            .entries()
+            .map((e) => `${code(e.value)} ${e.count}`)
+            .join(', ')}.`,
       ],
       tables: [lengthTable(p.legacyId), duplicateTable(idDup, 'Duplicate legacy_id values')],
-      json: {duplicateGroups: idDup.groups, duplicateRows: idDup.rows},
+      json: { duplicateGroups: idDup.groups, duplicateRows: idDup.rows },
     }),
   );
 
   // ---- full_name ----------------------------------------------------------------
   const tokenCounts = new Counter();
-  for (const v of p.fullName) tokenCounts.add(String(fold(v) === '' ? 0 : fold(v).split(' ').length));
+  for (const v of p.fullName)
+    tokenCounts.add(String(fold(v) === '' ? 0 : fold(v).split(' ').length));
   const withDigits = p.fullName.filter((v) => /\d/u.test(v));
   const unusual = new Grouper();
   for (const v of p.fullName) for (const ch of unusualNameChars(v)) unusual.add(ch, v);
@@ -208,7 +212,9 @@ export function patientsSections(p: Patients, ctx: PatientsContext): Section[] {
         table(
           'Characters outside letters, marks, space, apostrophe, hyphen and dot',
           ['character', 'rows', 'examples'],
-          unusual.entries().map((e) => [code(e.key), String(e.count), e.examples.map((x) => code(x)).join(' ')]),
+          unusual
+            .entries()
+            .map((e) => [code(e.key), String(e.count), e.examples.map((x) => code(x)).join(' ')]),
         ),
         table(
           'Rows containing a digit (up to 20 shown)',
@@ -220,7 +226,7 @@ export function patientsSections(p: Patients, ctx: PatientsContext): Section[] {
         ),
       ],
       json: {
-        tokenCounts: tokenCounts.entries().map((e) => ({tokens: Number(e.value), rows: e.count})),
+        tokenCounts: tokenCounts.entries().map((e) => ({ tokens: Number(e.value), rows: e.count })),
         rowsWithDigits: withDigits.length,
         rowsWithDiacritics: diacritics.length,
         allLowercaseRows: allLower.length,
@@ -232,7 +238,9 @@ export function patientsSections(p: Patients, ctx: PatientsContext): Section[] {
         foldedDuplicateRows: nameFoldedDup.rows,
         foldingMergeGroups: nameMerge.groups,
         foldingMergeRows: nameMerge.rows,
-        unusualCharacters: unusual.entries().map((e) => ({character: e.key, rows: e.count, examples: e.examples})),
+        unusualCharacters: unusual
+          .entries()
+          .map((e) => ({ character: e.key, rows: e.count, examples: e.examples })),
       },
     }),
   );
@@ -276,14 +284,21 @@ export function patientsSections(p: Patients, ctx: PatientsContext): Section[] {
       ],
       tables: [
         table(
-          domains.size <= 15 ? `Complete domain inventory (${domains.size} distinct)` : `Top 15 domains of ${domains.size}`,
+          domains.size <= 15
+            ? `Complete domain inventory (${domains.size} distinct)`
+            : `Top 15 domains of ${domains.size}`,
           ['domain', 'rows'],
-          domains.entries().slice(0, 15).map((e) => [code(e.value), String(e.count)]),
+          domains
+            .entries()
+            .slice(0, 15)
+            .map((e) => [code(e.value), String(e.count)]),
         ),
         table(
           `Values failing the syntax check${emailFailures.length > 30 ? ` (first 30 of ${emailFailures.length})` : ''}`,
           ['raw value', 'rows'],
-          emailFailures.slice(0, 30).map((v) => [code(v), String(p.email.filter((x) => x === v).length)]),
+          emailFailures
+            .slice(0, 30)
+            .map((v) => [code(v), String(p.email.filter((x) => x === v).length)]),
         ),
         duplicateTable(emailFolded, 'Duplicate emails after case folding'),
         table(
@@ -292,27 +307,41 @@ export function patientsSections(p: Patients, ctx: PatientsContext): Section[] {
           localMulti
             .sort((a, b) => b[1].size - a[1].size || (a[0] < b[0] ? -1 : 1))
             .slice(0, 8)
-            .map(([l, d]) => [code(l), [...d].sort().map((x) => code(x)).join(' ')]),
+            .map(([l, d]) => [
+              code(l),
+              [...d]
+                .sort()
+                .map((x) => code(x))
+                .join(' '),
+            ]),
         ),
       ],
       json: {
         rowsWithUppercase: hasUpper.length,
         rowsWithInternalWhitespace: internalWs.length,
         plusAddressingRows: plusAddr.length,
-        syntaxFailures: emailFailures.map((v) => ({raw: v, rows: p.email.filter((x) => x === v).length})),
-        domains: domains.entries().map((e) => ({domain: e.value, rows: e.count})),
+        syntaxFailures: emailFailures.map((v) => ({
+          raw: v,
+          rows: p.email.filter((x) => x === v).length,
+        })),
+        domains: domains.entries().map((e) => ({ domain: e.value, rows: e.count })),
         exactDuplicateGroups: emailExact.groups,
         exactDuplicateRows: emailExact.rows,
         foldedDuplicateGroups: emailFolded.groups,
         foldedDuplicateRows: emailFolded.rows,
-        localPartsOnSeveralDomains: localMulti.map(([l, d]) => ({localPart: l, domains: [...d].sort()})),
+        localPartsOnSeveralDomains: localMulti.map(([l, d]) => ({
+          localPart: l,
+          domains: [...d].sort(),
+        })),
       },
     }),
   );
 
   // ---- dob ----------------------------------------------------------------------
   const dobA = dateAnalysis(p.dob);
-  const dobFuture = p.dobCandidates.filter((c) => c.length > 0 && (c[c.length - 1] as string) > ctx.asOf);
+  const dobFuture = p.dobCandidates.filter(
+    (c) => c.length > 0 && (c[c.length - 1] as string) > ctx.asOf,
+  );
   const dobAllFuture = p.dobCandidates.filter((c) => c.length > 0 && (c[0] as string) > ctx.asOf);
   const ages: number[] = [];
   let ageUnder18 = 0;
@@ -325,7 +354,9 @@ export function patientsSections(p: Patients, ctx: PatientsContext): Section[] {
     const sc = p.signupCandidates[i] ?? [];
     if (dc.length > 0 && sc.length > 0 && dc.some((d) => sc.includes(d))) sameDateAsSignup++;
     if (dc.length === 0 || sc.length === 0) return;
-    const years = (Date.parse(`${sc[0] as string}T00:00:00Z`) - Date.parse(`${dc[0] as string}T00:00:00Z`)) / (365.25 * 86_400_000);
+    const years =
+      (Date.parse(`${sc[0] as string}T00:00:00Z`) - Date.parse(`${dc[0] as string}T00:00:00Z`)) /
+      (365.25 * 86_400_000);
     ages.push(years);
     if (years < 18) ageUnder18++;
     if (years > 100) ageOver100++;
@@ -350,7 +381,12 @@ export function patientsSections(p: Patients, ctx: PatientsContext): Section[] {
       ],
       tables: [
         ...dobA.tables,
-        shapeCrossTab('Shape x source', dobA.facts.map((f) => f.shape), p.source, 'source'),
+        shapeCrossTab(
+          'Shape x source',
+          dobA.facts.map((f) => f.shape),
+          p.source,
+          'source',
+        ),
         shapeCrossTab(
           'Shape x signup year (year taken from signup_date)',
           dobA.facts.map((f) => f.shape),
@@ -378,9 +414,15 @@ export function patientsSections(p: Patients, ctx: PatientsContext): Section[] {
       file: FILE,
       column: 'sex',
       values: p.sex,
-      notes: [`Folding merges ${sexMerge.groups} groups of raw spellings, covering ${sexMerge.rows} rows.`],
+      notes: [
+        `Folding merges ${sexMerge.groups} groups of raw spellings, covering ${sexMerge.rows} rows.`,
+      ],
       tables: [sexMerge.table],
-      json: {foldingMergeGroups: sexMerge.groups, foldingMergeRows: sexMerge.rows, foldingMerges: sexMerge.json},
+      json: {
+        foldingMergeGroups: sexMerge.groups,
+        foldingMergeRows: sexMerge.rows,
+        foldingMerges: sexMerge.json,
+      },
     }),
   );
 
@@ -411,10 +453,20 @@ export function patientsSections(p: Patients, ctx: PatientsContext): Section[] {
         crossTab(
           'bsn presence x signup year (year from the earliest candidate reading of signup_date)',
           'bsn',
-          p.bsn.map((v, i) => [v === '' ? 'empty' : 'non-empty', (p.signupCandidates[i] ?? [])[0]?.slice(0, 4) ?? '(unparsed)'] as const),
+          p.bsn.map(
+            (v, i) =>
+              [
+                v === '' ? 'empty' : 'non-empty',
+                (p.signupCandidates[i] ?? [])[0]?.slice(0, 4) ?? '(unparsed)',
+              ] as const,
+          ),
         ),
         duplicateTable(bsnDup, 'Duplicate bsn values'),
-        table('Non-digit values', ['raw value', 'rows'], nonDigit.slice(0, 30).map((v) => [code(v), String(p.bsn.filter((x) => x === v).length)])),
+        table(
+          'Non-digit values',
+          ['raw value', 'rows'],
+          nonDigit.slice(0, 30).map((v) => [code(v), String(p.bsn.filter((x) => x === v).length)]),
+        ),
       ],
       json: {
         nonEmpty: bsnNonEmpty.length,
@@ -456,7 +508,9 @@ export function patientsSections(p: Patients, ctx: PatientsContext): Section[] {
                   : 'other',
     );
   }
-  const nonNl = [...new Set(p.phone.filter((v) => v !== '' && !/^(\+31|0031|0)/u.test(v.trim())))].sort();
+  const nonNl = [
+    ...new Set(p.phone.filter((v) => v !== '' && !/^(\+31|0031|0)/u.test(v.trim()))),
+  ].sort();
   const phoneDup = duplicateStats(phoneDigits);
   sections.push(
     columnSection({
@@ -490,8 +544,8 @@ export function patientsSections(p: Patients, ctx: PatientsContext): Section[] {
         duplicateTable(phoneDup, 'Duplicate phone numbers (digits-only comparison)'),
       ],
       json: {
-        digitCounts: digitCount.entries().map((e) => ({digits: Number(e.value), rows: e.count})),
-        prefixClasses: phonePrefix.entries().map((e) => ({prefixClass: e.value, rows: e.count})),
+        digitCounts: digitCount.entries().map((e) => ({ digits: Number(e.value), rows: e.count })),
+        prefixClasses: phonePrefix.entries().map((e) => ({ prefixClass: e.value, rows: e.count })),
         nonDutchPrefixValues: nonNl,
         duplicateGroups: phoneDup.groups,
         duplicateRows: phoneDup.rows,
@@ -511,7 +565,11 @@ export function patientsSections(p: Patients, ctx: PatientsContext): Section[] {
           `groups of raw spellings, covering ${cityMerge.rows} rows.`,
       ],
       tables: [cityMerge.table],
-      json: {foldingMergeGroups: cityMerge.groups, foldingMergeRows: cityMerge.rows, foldingMerges: cityMerge.json},
+      json: {
+        foldingMergeGroups: cityMerge.groups,
+        foldingMergeRows: cityMerge.rows,
+        foldingMerges: cityMerge.json,
+      },
     }),
   );
 
@@ -563,13 +621,15 @@ export function patientsSections(p: Patients, ctx: PatientsContext): Section[] {
         table(
           'Extreme values per weight_unit value',
           ['weight_unit x threshold', 'rows'],
-          heavyLight.entries().map((e) => [plain(e.value === '' ? '(empty)' : e.value), String(e.count)]),
+          heavyLight
+            .entries()
+            .map((e) => [plain(e.value === '' ? '(empty)' : e.value), String(e.count)]),
         ),
       ],
       json: {
         ...weightNum.json,
-        perUnit: [...perUnit.entries()].map(([unit, list]) => ({unit, stats: numStats(list)})),
-        extremes: heavyLight.entries().map((e) => ({key: e.value, rows: e.count})),
+        perUnit: [...perUnit.entries()].map(([unit, list]) => ({ unit, stats: numStats(list) })),
+        extremes: heavyLight.entries().map((e) => ({ key: e.value, rows: e.count })),
         bmiKgOutsideLbInside: kgOutLbIn,
         bmiLbOutsideKgInside: lbOutKgIn,
       },
@@ -588,7 +648,7 @@ export function patientsSections(p: Patients, ctx: PatientsContext): Section[] {
         `Folding merges ${unitMerge.groups} groups of raw spellings, covering ${unitMerge.rows} rows.`,
       ],
       tables: [unitMerge.table],
-      json: {foldingMerges: unitMerge.json},
+      json: { foldingMerges: unitMerge.json },
     }),
   );
 
@@ -622,16 +682,24 @@ export function patientsSections(p: Patients, ctx: PatientsContext): Section[] {
           `${statusMerge.groups} groups of raw spellings, covering ${statusMerge.rows} rows.`,
       ],
       tables: [statusMerge.table],
-      json: {foldingMergeGroups: statusMerge.groups, foldingMergeRows: statusMerge.rows, foldingMerges: statusMerge.json},
+      json: {
+        foldingMergeGroups: statusMerge.groups,
+        foldingMergeRows: statusMerge.rows,
+        foldingMerges: statusMerge.json,
+      },
     }),
   );
 
   // ---- signup_date --------------------------------------------------------------
   const suA = dateAnalysis(p.signupDate);
-  const suFuture = p.signupCandidates.filter((c) => c.length > 0 && (c[c.length - 1] as string) > ctx.asOf);
+  const suFuture = p.signupCandidates.filter(
+    (c) => c.length > 0 && (c[c.length - 1] as string) > ctx.asOf,
+  );
   const suAllFuture = p.signupCandidates.filter((c) => c.length > 0 && (c[0] as string) > ctx.asOf);
   const suFirst = p.signupCandidates.flatMap((c) => (c.length > 0 ? [c[0] as string] : []));
-  const suLast = p.signupCandidates.flatMap((c) => (c.length > 0 ? [c[c.length - 1] as string] : []));
+  const suLast = p.signupCandidates.flatMap((c) =>
+    c.length > 0 ? [c[c.length - 1] as string] : [],
+  );
   sections.push(
     columnSection({
       file: FILE,
@@ -646,8 +714,18 @@ export function patientsSections(p: Patients, ctx: PatientsContext): Section[] {
       ],
       tables: [
         ...suA.tables,
-        shapeCrossTab('Shape x source', suA.facts.map((f) => f.shape), p.source, 'source'),
-        shapeCrossTab('Shape x year (year of the value itself)', suA.facts.map((f) => f.shape), suA.facts.map((f) => f.year), 'year'),
+        shapeCrossTab(
+          'Shape x source',
+          suA.facts.map((f) => f.shape),
+          p.source,
+          'source',
+        ),
+        shapeCrossTab(
+          'Shape x year (year of the value itself)',
+          suA.facts.map((f) => f.shape),
+          suA.facts.map((f) => f.year),
+          'year',
+        ),
       ],
       json: {
         ...suA.json,
@@ -685,7 +763,9 @@ export function patientsSections(p: Patients, ctx: PatientsContext): Section[] {
       `The header has ${p.csv.header.length} fields. ${p.csv.raggedRows.length} data rows have a different ` +
         `field count. ${p.csv.fieldsWithNewline} fields contain a line break. ${dupLines.length} physical data ` +
         `lines are byte-identical to another line (${dupLines.reduce((t, e) => t + e.count, 0)} lines involved).` +
-        (p.csv.relaxedQuotes ? ' The strict quote reader rejected the file, so relax_quotes was used.' : ''),
+        (p.csv.relaxedQuotes
+          ? ' The strict quote reader rejected the file, so relax_quotes was used.'
+          : ''),
     ],
     tables: [
       table(
@@ -699,7 +779,9 @@ export function patientsSections(p: Patients, ctx: PatientsContext): Section[] {
     ],
     json: {
       headerFields: p.csv.header.length,
-      fieldCounts: p.csv.fieldCounts.entries().map((e) => ({fields: Number(e.value), rows: e.count})),
+      fieldCounts: p.csv.fieldCounts
+        .entries()
+        .map((e) => ({ fields: Number(e.value), rows: e.count })),
       raggedRows: p.csv.raggedRows.length,
       fieldsWithNewline: p.csv.fieldsWithNewline,
       duplicatePhysicalLines: dupLines.length,

@@ -5,12 +5,12 @@
  * verdict cannot drift away from its evidence. `unverifiable` is used wherever the claim
  * is about the old team's intent or history, which this export cannot show.
  */
-import type {Consents} from './consents.js';
-import type {Intakes} from './intakes.js';
-import type {Patients} from './patients.js';
-import {candidateDates} from './dates.js';
-import type {Section} from './report.js';
-import {fold, shape} from './util.js';
+import type { Consents } from './consents.js';
+import type { Intakes } from './intakes.js';
+import type { Patients } from './patients.js';
+import { candidateDates } from './dates.js';
+import type { Section } from './report.js';
+import { fold, shape } from './util.js';
 
 export type Verdict = 'confirmed' | 'contradicted' | 'partly' | 'unverifiable';
 
@@ -52,9 +52,9 @@ function num(input: ClaimsInput, key: string, field: string): number {
 function bandRows(input: ClaimsInput, key: string, field: string, bandLabel: string): number {
   const v = jsonOf(input, key)[field];
   if (!Array.isArray(v)) throw new Error(`${key}.${field} is not an array`);
-  for (const e of v as Array<Record<string, unknown>>) {
+  for (const e of v as Record<string, unknown>[]) {
     // Band inventories carry `rows` (ratio bands) or `count` (numeric bands).
-    if (e['band'] === bandLabel) return Number(e['rows'] ?? e['count'] ?? 0);
+    if (e.band === bandLabel) return Number(e.rows ?? e.count ?? 0);
   }
   throw new Error(`${key}.${field} has no band ${bandLabel}`);
 }
@@ -62,23 +62,28 @@ function bandRows(input: ClaimsInput, key: string, field: string, bandLabel: str
 function valueCount(input: ClaimsInput, key: string, field: string, raw: string): number {
   const v = jsonOf(input, key)[field];
   if (!Array.isArray(v)) throw new Error(`${key}.${field} is not an array`);
-  for (const e of v as Array<Record<string, unknown>>) {
-    if (e['raw'] === raw || e['value'] === raw || e['folded'] === raw) return Number(e['count'] ?? e['rows'] ?? 0);
+  for (const e of v as Record<string, unknown>[]) {
+    if (e.raw === raw || e.value === raw || e.folded === raw) return Number(e.count ?? e.rows ?? 0);
   }
   return 0;
 }
 
 /** Per-shape ordering evidence, e.g. "`99/99/9999` month-first only (154 of 287)". */
 function orderingByShape(input: ClaimsInput, key: string): string {
-  const shapes = jsonOf(input, key)['shapes'];
+  const shapes = jsonOf(input, key).shapes;
   if (!Array.isArray(shapes)) throw new Error(`${key}.shapes is not an array`);
-  return (shapes as Array<Record<string, unknown>>)
+  return (shapes as Record<string, unknown>[])
     .map((s) => {
-      const by = s['byOrderClass'] as Record<string, number>;
+      const by = s.byOrderClass as Record<string, number>;
       const day = by['day-first'] ?? 0;
       const month = by['month-first'] ?? 0;
-      const label = day > 0 && month === 0 ? `day-first only (${day}` : month > 0 && day === 0 ? `month-first only (${month}` : `neither ordering proven (0`;
-      return `\`${String(s['shape'])}\` ${label} of ${String(s['count'])})`;
+      const label =
+        day > 0 && month === 0
+          ? `day-first only (${day}`
+          : month > 0 && day === 0
+            ? `month-first only (${month}`
+            : `neither ordering proven (0`;
+      return `\`${String(s.shape)}\` ${label} of ${String(s.count)})`;
     })
     .join(', ');
 }
@@ -86,7 +91,11 @@ function orderingByShape(input: ClaimsInput, key: string): string {
 function distinctValues(input: ClaimsInput, key: string, field: string): string[] {
   const v = jsonOf(input, key)[field];
   if (!Array.isArray(v)) throw new Error(`${key}.${field} is not an array`);
-  return (v as Array<Record<string, unknown>>).map((e) => String(e['raw'] ?? e['value'] ?? e['folded'] ?? ''));
+  return (v as Record<string, unknown>[]).map((e) => {
+    const text = e.raw ?? e.value ?? e.folded ?? '';
+    if (typeof text !== 'string') throw new Error(`${key}.${field} entry is not a string`);
+    return text;
+  });
 }
 
 /** Derived facts that need the rows themselves rather than an inventory field. */
@@ -118,8 +127,10 @@ interface ConditionLanguages {
   readonly neutralValues: readonly string[];
 }
 
-const DUTCH_ONLY = /schildklier|alvleesklier|suikerziekte|bloeddruk|slaapapneu|lever|artrose|hoog cholesterol|depressie|hypertensie|astma|hypothyreoidie|\bgeen\b/u;
-const ENGLISH_ONLY = /thyroid|hypertension|apnea|osteoarth|depression|asthma|\bliver\b|high cholesterol|high blood pressure/u;
+const DUTCH_ONLY =
+  /schildklier|alvleesklier|suikerziekte|bloeddruk|slaapapneu|lever|artrose|hoog cholesterol|depressie|hypertensie|astma|hypothyreoidie|\bgeen\b/u;
+const ENGLISH_ONLY =
+  /thyroid|hypertension|apnea|osteoarth|depression|asthma|\bliver\b|high cholesterol|high blood pressure/u;
 
 function conditionLanguages(values: readonly string[]): ConditionLanguages {
   let dutchOnly = 0;
@@ -142,7 +153,14 @@ function conditionLanguages(values: readonly string[]): ConditionLanguages {
       neutralValues.add(f);
     }
   }
-  return {dutchOnly, englishOnly, englishNone, neutral, empty, neutralValues: [...neutralValues].sort()};
+  return {
+    dutchOnly,
+    englishOnly,
+    englishNone,
+    neutral,
+    empty,
+    neutralValues: [...neutralValues].sort(),
+  };
 }
 
 function extras(input: ClaimsInput): ExtraFacts {
@@ -179,7 +197,7 @@ function extras(input: ClaimsInput): ExtraFacts {
   const REJECTION = ['rejected', 'afgewezen', 'declined'];
   const APPROVAL = ['approved', 'goedgekeurd', 'ok'];
   const twijfelRows = it.reviewerNote
-    .map((v, i) => ({note: fold(v), outcome: fold(it.outcome[i] ?? '')}))
+    .map((v, i) => ({ note: fold(v), outcome: fold(it.outcome[i] ?? '') }))
     .filter((r) => r.note.includes('twijfel'));
   const twijfelOnRejection = twijfelRows.filter((r) => REJECTION.includes(r.outcome)).length;
   const twijfelOnNeither = twijfelRows.filter(
@@ -210,9 +228,9 @@ export function claimRows(input: ClaimsInput): ClaimRow[] {
   const intakeOrphans = num(input, `${I}.legacy_patient_id`, 'orphanRows');
   const consentOrphans = num(input, `${C}.patient_legacy_id`, 'unresolvedEvents');
   const emailFoldedDupGroups = num(input, `${P}.email`, 'foldedDuplicateGroups');
-  const emailSyntaxFailures = (jsonOf(input, `${P}.email`)['syntaxFailures'] as unknown[]).length;
+  const emailSyntaxFailures = (jsonOf(input, `${P}.email`).syntaxFailures as unknown[]).length;
   const dobAmbiguousShapes = num(input, `${P}.dob`, 'valuesWithMultipleCandidateDates');
-  const dobMixed = (jsonOf(input, `${P}.dob`)['mixedShapes'] as unknown[]).length;
+  const dobMixed = (jsonOf(input, `${P}.dob`).mixedShapes as unknown[]).length;
   const sexDistinct = num(input, `${P}.sex`, 'distinct');
   const sexFolded = num(input, `${P}.sex`, 'distinctFolded');
   const bsnFail = num(input, `${P}.bsn`, 'nineDigitElfproefFail');
@@ -230,41 +248,59 @@ export function claimRows(input: ClaimsInput): ClaimRow[] {
   const signupFuture = num(input, `${P}.signup_date`, 'futureUnderEveryOrdering');
   const sourceValues = distinctValues(input, `${P}.source`, 'values');
   const notesSources = ['typeform', 'website', 'import'];
-  const unnamedSources = sourceValues.filter((v) => !notesSources.includes(fold(v)) && !fold(v).startsWith('campaign'));
+  const unnamedSources = sourceValues.filter(
+    (v) => !notesSources.includes(fold(v)) && !fold(v).startsWith('campaign'),
+  );
   const intakeIdDupGroups = num(input, `${I}.intake_id`, 'duplicateGroups');
   const versionDistinct = num(input, `${I}.questionnaire_version`, 'distinct');
-  const weightRatioFar = bandRows(input, `${I}.weight`, 'ratioBands', '2 .. 2.4') + bandRows(input, `${I}.weight`, 'ratioBands', '0.4 .. 0.5');
+  const weightRatioFar =
+    bandRows(input, `${I}.weight`, 'ratioBands', '2 .. 2.4') +
+    bandRows(input, `${I}.weight`, 'ratioBands', '0.4 .. 0.5');
   const medsDistinct = num(input, `${I}.meds_current`, 'distinctFolded');
   const medsCommaRows = (() => {
-    const seps = jsonOf(input, `${I}.meds_current`)['separators'] as Array<Record<string, unknown>>;
-    return Number(seps.find((s) => s['separator'] === ',')?.['rows'] ?? 0);
+    const seps = jsonOf(input, `${I}.meds_current`).separators as Record<string, unknown>[];
+    return Number(seps.find((s) => s.separator === ',')?.rows ?? 0);
   })();
-  const medsEmptyLike = (jsonOf(input, `${I}.meds_current`)['emptyLike'] as unknown[]).length;
-  const alcoholNonNumeric = (jsonOf(input, `${I}.alcohol_units_week`)['nonNumericValues'] as unknown[]).length;
+  const medsEmptyLike = (jsonOf(input, `${I}.meds_current`).emptyLike as unknown[]).length;
+  const alcoholNonNumeric = (jsonOf(input, `${I}.alcohol_units_week`).nonNumericValues as unknown[])
+    .length;
   const outcomeFolded = num(input, `${I}.outcome`, 'distinctFolded');
   const outcomeEmpty = num(input, `${I}.outcome`, 'empty');
   const noteDistinct = num(input, `${I}.reviewer_note`, 'distinct');
   // Do the two vocabularies actually stay apart? Counted, not asserted.
   const statusFoldedSet = new Set(input.patients.status.map((v) => fold(v)));
-  const sharedVocabulary = [...new Set(input.intakes.outcome.map((v) => fold(v)))].filter((v) => statusFoldedSet.has(v)).length;
-  const consentTypes = Object.keys(jsonOf(input, `${C}.type-action-version`)['types'] as Record<string, unknown>);
-  const consentActions = Object.keys(jsonOf(input, `${C}.type-action-version`)['actions'] as Record<string, unknown>);
-  const consentVersions = Object.keys(jsonOf(input, `${C}.type-action-version`)['versions'] as Record<string, unknown>);
-  const invalidLines = (jsonOf(input, `${C}.structure`)['invalidLines'] as unknown[]).length;
+  const sharedVocabulary = [...new Set(input.intakes.outcome.map((v) => fold(v)))].filter((v) =>
+    statusFoldedSet.has(v),
+  ).length;
+  const consentTypes = Object.keys(
+    jsonOf(input, `${C}.type-action-version`).types as Record<string, unknown>,
+  );
+  const consentActions = Object.keys(
+    jsonOf(input, `${C}.type-action-version`).actions as Record<string, unknown>,
+  );
+  const consentVersions = Object.keys(
+    jsonOf(input, `${C}.type-action-version`).versions as Record<string, unknown>,
+  );
+  const invalidLines = (jsonOf(input, `${C}.structure`).invalidLines as unknown[]).length;
   const atTz = num(input, `${C}.at`, 'withTimezoneSuffix');
   const before2023 = num(input, `${C}.at`, 'eventsBefore2023');
   const outOfOrder = num(input, `${C}.sequences`, 'patientsWithFileOrderDifferentFromAtOrder');
   const beforeSignup = num(input, `${I}.submitted_at`, 'beforeSignupUnderEveryOrdering');
   const lbsUnitRows = valueCount(input, `${P}.weight_unit`, 'values', 'lbs');
-  const dupCandidateGroupings = jsonOf(input, 'cross.duplicate-candidates')['groupings'] as Array<Record<string, unknown>>;
-  const cGrouping = dupCandidateGroupings.find((g) => g['id'] === 'c') ?? {};
-  const cGroups = Number(cGrouping['groups'] ?? 0);
-  const cSpanningEmails = Number(cGrouping['groupsSpanningSeveralFoldedEmails'] ?? 0);
+  const dupCandidateGroupings = jsonOf(input, 'cross.duplicate-candidates').groupings as Record<
+    string,
+    unknown
+  >[];
+  const cGrouping = dupCandidateGroupings.find((g) => g.id === 'c') ?? {};
+  const cGroups = Number(cGrouping.groups ?? 0);
+  const cSpanningEmails = Number(cGrouping.groupsSpanningSeveralFoldedEmails ?? 0);
 
   return [
     {
-      claim: 'patients.csv: `legacy_id` is an auto-generated row id, referenced by intakes.csv and consents.jsonl',
-      verdict: idDupGroups === 0 && intakeOrphans === 0 && consentOrphans === 0 ? 'confirmed' : 'partly',
+      claim:
+        'patients.csv: `legacy_id` is an auto-generated row id, referenced by intakes.csv and consents.jsonl',
+      verdict:
+        idDupGroups === 0 && intakeOrphans === 0 && consentOrphans === 0 ? 'confirmed' : 'partly',
       evidence: [`${P}.legacy_id`, `${I}.legacy_patient_id`, `${C}.patient_legacy_id`],
       note: `${idDupGroups} duplicate id values; ${intakeOrphans} intake rows and ${consentOrphans} consent events reference an id that is not in patients.csv.`,
     },
@@ -275,7 +311,8 @@ export function claimRows(input: ClaimsInput): ClaimRow[] {
       note: 'The export carries no provenance per field. The inventory shows the variation that "as typed" implies.',
     },
     {
-      claim: 'patients.csv: `email` is the primary contact and was also used as a login by one automation',
+      claim:
+        'patients.csv: `email` is the primary contact and was also used as a login by one automation',
       verdict: 'partly',
       evidence: [`${P}.email`],
       note: `Login use is not visible in the export. ${emailFoldedDupGroups} case-insensitive duplicate groups and ${emailSyntaxFailures} values failing the syntax check mean the column is not a unique identifier as exported.`,
@@ -311,19 +348,24 @@ export function claimRows(input: ClaimsInput): ClaimRow[] {
       note: `Provenance is not in the export; ${cityMergeGroups} folded values have more than one raw spelling.`,
     },
     {
-      claim: 'patients.csv: `weight` / `weight_unit` is weight at signup, with the unit column added late and backfilled "where obvious"',
+      claim:
+        'patients.csv: `weight` / `weight_unit` is weight at signup, with the unit column added late and backfilled "where obvious"',
       verdict: 'partly',
       evidence: [`${P}.weight`, `${P}.weight_unit`],
       note: `${unitEmpty} rows have no unit and ${lbsUnitRows} say lbs; ${bmiKgOut} rows sit outside a 15..70 BMI window under the kilogram reading but inside it under the pound reading. When the backfill happened is not visible.`,
     },
     {
       claim: 'patients.csv: `height_cm` was always intended as centimetres',
-      verdict: heightMetres + heightBelow100 + heightBelow140 + heightAbove220 === 0 ? 'confirmed' : 'partly',
+      verdict:
+        heightMetres + heightBelow100 + heightBelow140 + heightAbove220 === 0
+          ? 'confirmed'
+          : 'partly',
       evidence: [`${P}.height_cm`],
       note: `${heightMetres} values below 3, ${heightBelow100} in 3..100, ${heightBelow140} in 100..140 and ${heightAbove220} at 220 or more.`,
     },
     {
-      claim: 'patients.csv: `status` is roughly active / paused / churned / prospect, spelled many ways',
+      claim:
+        'patients.csv: `status` is roughly active / paused / churned / prospect, spelled many ways',
       verdict: 'confirmed',
       evidence: [`${P}.status`],
       note: `${statusDistinct} raw spellings, ${statusFolded} after folding, including Dutch words and trailing whitespace.`,
@@ -350,7 +392,8 @@ export function claimRows(input: ClaimsInput): ClaimRow[] {
       note: `${intakeIdDupGroups} id values appear on more than one row.`,
     },
     {
-      claim: 'intakes.csv: `legacy_patient_id` should reference patients.csv:legacy_id, but the automation occasionally fired before the patient row existed',
+      claim:
+        'intakes.csv: `legacy_patient_id` should reference patients.csv:legacy_id, but the automation occasionally fired before the patient row existed',
       verdict: 'confirmed',
       evidence: [`${I}.legacy_patient_id`, `${I}.submitted_at`],
       note: `${intakeOrphans} rows do not resolve; ${num(input, `${I}.submitted_at`, 'beforeSignupUnderSomeOrdering')} resolvable intakes are dated before their patient's signup_date under at least one ordering and ${beforeSignup} under every ordering.`,
@@ -368,7 +411,8 @@ export function claimRows(input: ClaimsInput): ClaimRow[] {
       note: `${versionDistinct} distinct raw values including an empty one.`,
     },
     {
-      claim: 'intakes.csv: `weight` / `height` are self-reported at submission time and can legitimately differ from patients.csv',
+      claim:
+        'intakes.csv: `weight` / `height` are self-reported at submission time and can legitimately differ from patients.csv',
       verdict: 'partly',
       evidence: [`${I}.weight`, `${I}.height`],
       note: `They do differ, and ${weightRatioFar} rows differ by roughly the kilogram/pound factor, which is not a difference "self-reported" explains on its own.`,
@@ -381,7 +425,10 @@ export function claimRows(input: ClaimsInput): ClaimRow[] {
     },
     {
       claim: 'intakes.csv: `conditions` is free text, Dutch and English mixed',
-      verdict: x.conditionLanguages.dutchOnly > 0 && x.conditionLanguages.englishOnly > 0 ? 'confirmed' : 'partly',
+      verdict:
+        x.conditionLanguages.dutchOnly > 0 && x.conditionLanguages.englishOnly > 0
+          ? 'confirmed'
+          : 'partly',
       evidence: [`${I}.conditions`],
       note:
         `Each row in one class: ${x.conditionLanguages.dutchOnly} rows carry a Dutch-only spelling, ` +
@@ -396,7 +443,8 @@ export function claimRows(input: ClaimsInput): ClaimRow[] {
       note: `${alcoholNonNumeric} distinct non-empty value is not a number, on ${valueCount(input, `${I}.alcohol_units_week`, 'nonNumericValues', 'n.v.t.')} rows.`,
     },
     {
-      claim: 'intakes.csv: `outcome` is approved / rejected / pending, spelled many ways, and is distinct from the patient-level status',
+      claim:
+        'intakes.csv: `outcome` is approved / rejected / pending, spelled many ways, and is distinct from the patient-level status',
       verdict: 'confirmed',
       evidence: [`${I}.outcome`, `${P}.status`],
       note: `${outcomeFolded} distinct folded values plus ${outcomeEmpty} empty ones; ${sharedVocabulary} folded values appear in both this column and patients.csv.status.`,
@@ -415,13 +463,18 @@ export function claimRows(input: ClaimsInput): ClaimRow[] {
     },
     {
       claim: 'consents.jsonl: `type` has only `data_processing` in this export',
-      verdict: consentTypes.length === 1 && consentTypes[0] === 'data_processing' ? 'confirmed' : 'contradicted',
+      verdict:
+        consentTypes.length === 1 && consentTypes[0] === 'data_processing'
+          ? 'confirmed'
+          : 'contradicted',
       evidence: [`${C}.type-action-version`],
       note: `Values present: ${consentTypes.map((t) => `\`${t}\``).join(', ')}.`,
     },
     {
       claim: 'consents.jsonl: `action` is `granted` or `revoked`',
-      verdict: consentActions.every((a) => a === 'granted' || a === 'revoked') ? 'confirmed' : 'contradicted',
+      verdict: consentActions.every((a) => a === 'granted' || a === 'revoked')
+        ? 'confirmed'
+        : 'contradicted',
       evidence: [`${C}.type-action-version`],
       note: `Values present: ${consentActions.map((t) => `\`${t}\``).join(', ')}.`,
     },
@@ -438,7 +491,8 @@ export function claimRows(input: ClaimsInput): ClaimRow[] {
       note: `Values present: ${consentVersions.map((t) => `\`${t}\``).join(', ')}; the export contains no consent texts to compare against.`,
     },
     {
-      claim: 'Caveat: several automations plus manual ops edits wrote to patients.csv over the years',
+      claim:
+        'Caveat: several automations plus manual ops edits wrote to patients.csv over the years',
       verdict: 'partly',
       evidence: ['cross.variation'],
       note: 'No provenance column exists, but format and vocabulary differ measurably by source and by year.',
@@ -456,31 +510,39 @@ export function claimRows(input: ClaimsInput): ClaimRow[] {
       note: `${before2023} events are dated before 2023-01-01, and ${num(input, `${C}.at`, 'patientsWithNoEventFrom2023')} patients have no event dated 2023 or later. Completeness cannot be checked from inside the export.`,
     },
     {
-      claim: 'Caveat: the form tool was set to ISO at some point in 2024; before that it depended on the automation, at least one of them US-style',
-      verdict: x.nonIsoShapeSubmitted2024OrLater > 0 || x.nonIsoShapeSignup2024OrLater > 0 ? 'contradicted' : 'partly',
+      claim:
+        'Caveat: the form tool was set to ISO at some point in 2024; before that it depended on the automation, at least one of them US-style',
+      verdict:
+        x.nonIsoShapeSubmitted2024OrLater > 0 || x.nonIsoShapeSignup2024OrLater > 0
+          ? 'contradicted'
+          : 'partly',
       evidence: [`${I}.submitted_at`, `${P}.signup_date`],
       note: `${x.nonIsoShapeSubmitted2024OrLater} intakes dated 2024 or later still carry a non-ISO shape (and ${x.isoShapeSubmittedBefore2024} intakes before 2024 are already ISO); for signup_date the figures are ${x.nonIsoShapeSignup2024OrLater} and ${x.isoShapeSignupBefore2024}. Non-ISO shapes appear in every year.`,
     },
     {
-      claim: 'Caveat: weights are probably kilograms, an early expat campaign briefly offered pounds, and the unit column was backfilled "where obvious"',
+      claim:
+        'Caveat: weights are probably kilograms, an early expat campaign briefly offered pounds, and the unit column was backfilled "where obvious"',
       verdict: 'partly',
       evidence: [`${P}.weight`, `${P}.weight_unit`, `${I}.weight`],
       note: `${lbsUnitRows} rows carry \`lbs\` and ${unitEmpty} carry no unit; ${bmiKgOut} rows read plausibly only as pounds, and ${weightRatioFar} intake/patient weight ratios sit near the 2.20462 factor.`,
     },
     {
-      claim: 'Caveat: status values were typed by different automations and different humans over time',
+      claim:
+        'Caveat: status values were typed by different automations and different humans over time',
       verdict: 'confirmed',
       evidence: [`${P}.status`, 'cross.variation'],
       note: `${statusDistinct} raw spellings, and the vocabulary differs by source and by year.`,
     },
     {
-      claim: 'Caveat: BSNs were collected for a period, then the field was hidden from the form, and were never validated',
+      claim:
+        'Caveat: BSNs were collected for a period, then the field was hidden from the form, and were never validated',
       verdict: x.bsnYears.length < x.allSignupYears.length ? 'partly' : 'contradicted',
       evidence: [`${P}.bsn`],
       note: `Non-empty bsn values appear in signup years ${x.bsnYears.join(', ')} out of ${x.allSignupYears.join(', ')}, so the collection window is not visible as a clean cut; ${bsnFail} of ${bsnNine} nine-digit values fail the elfproef.`,
     },
     {
-      claim: 'Caveat (ops): "some people definitely signed up twice with different emails to retry the intake"',
+      claim:
+        'Caveat (ops): "some people definitely signed up twice with different emails to retry the intake"',
       verdict: cSpanningEmails > 0 ? 'confirmed' : 'contradicted',
       evidence: ['cross.duplicate-candidates'],
       note: `${cGroups} name-plus-dob groups exist, ${cSpanningEmails} of them span more than one folded email.`,
@@ -493,7 +555,7 @@ export function notWarnedItems(input: ClaimsInput): NotWarnedItem[] {
   const I = 'intakes.csv';
   const C = 'consents.jsonl';
   const x = extras(input);
-  const items: Array<{when: boolean; text: string; evidence: string[]}> = [
+  const items: { when: boolean; text: string; evidence: string[] }[] = [
     {
       when: num(input, `${P}.legacy_id`, 'duplicateGroups') > 0,
       text: `${num(input, `${P}.legacy_id`, 'duplicateGroups')} legacy_id values are carried by more than one patients.csv row, so the id the other two files reference is not unique.`,
@@ -501,7 +563,7 @@ export function notWarnedItems(input: ClaimsInput): NotWarnedItem[] {
     },
     {
       when: num(input, `${P}.email`, 'foldedDuplicateGroups') > 0,
-      text: `${num(input, `${P}.email`, 'foldedDuplicateGroups')} email addresses appear on more than one row once case is folded, and ${(jsonOf(input, `${P}.email`)['localPartsOnSeveralDomains'] as unknown[]).length} local-parts appear on more than one domain.`,
+      text: `${num(input, `${P}.email`, 'foldedDuplicateGroups')} email addresses appear on more than one row once case is folded, and ${(jsonOf(input, `${P}.email`).localPartsOnSeveralDomains as unknown[]).length} local-parts appear on more than one domain.`,
       evidence: [`${P}.email`],
     },
     {
@@ -510,22 +572,28 @@ export function notWarnedItems(input: ClaimsInput): NotWarnedItem[] {
       evidence: [`${P}.email`],
     },
     {
-      when: (jsonOf(input, `${P}.dob`)['mixedShapes'] as unknown[]).length > 0,
+      when: (jsonOf(input, `${P}.dob`).mixedShapes as unknown[]).length > 0,
       text: `At least one dob shape carries both an unambiguous day-first and an unambiguous month-first value, so the ordering cannot be decided per shape, only per row.`,
       evidence: [`${P}.dob`],
     },
     {
-      when: num(input, `${P}.dob`, 'ageAtSignupUnder18') > 0 || num(input, `${P}.dob`, 'ageAtSignupOver100') > 0,
+      when:
+        num(input, `${P}.dob`, 'ageAtSignupUnder18') > 0 ||
+        num(input, `${P}.dob`, 'ageAtSignupOver100') > 0,
       text: `${num(input, `${P}.dob`, 'ageAtSignupUnder18')} rows give an age at signup below 18 and ${num(input, `${P}.dob`, 'ageAtSignupOver100')} above 100.`,
       evidence: [`${P}.dob`],
     },
     {
-      when: num(input, `${P}.dob`, 'dobIdenticalToSignupDateRaw') > 0 || num(input, `${P}.dob`, 'dobCandidateEqualsSignupCandidate') > 0,
+      when:
+        num(input, `${P}.dob`, 'dobIdenticalToSignupDateRaw') > 0 ||
+        num(input, `${P}.dob`, 'dobCandidateEqualsSignupCandidate') > 0,
       text: `${num(input, `${P}.dob`, 'dobCandidateEqualsSignupCandidate')} rows have a dob that reads as the same calendar date as their signup_date.`,
       evidence: [`${P}.dob`],
     },
     {
-      when: num(input, `${P}.signup_date`, 'futureUnderEveryOrdering') > 0 || num(input, `${I}.submitted_at`, 'futureUnderEveryOrdering') > 0,
+      when:
+        num(input, `${P}.signup_date`, 'futureUnderEveryOrdering') > 0 ||
+        num(input, `${I}.submitted_at`, 'futureUnderEveryOrdering') > 0,
       text: `${num(input, `${P}.signup_date`, 'futureUnderEveryOrdering')} signup dates and ${num(input, `${I}.submitted_at`, 'futureUnderEveryOrdering')} intake dates lie after the reference date ${input.asOf} under every plausible ordering.`,
       evidence: [`${P}.signup_date`, `${I}.submitted_at`, 'cross.date-range'],
     },
@@ -545,8 +613,8 @@ export function notWarnedItems(input: ClaimsInput): NotWarnedItem[] {
       evidence: [`${P}.phone`, 'cross.duplicate-candidates'],
     },
     {
-      when: (jsonOf(input, `${P}.phone`)['nonDutchPrefixValues'] as unknown[]).length > 0,
-      text: `${(jsonOf(input, `${P}.phone`)['nonDutchPrefixValues'] as unknown[]).length} distinct phone values do not start with a Dutch prefix.`,
+      when: (jsonOf(input, `${P}.phone`).nonDutchPrefixValues as unknown[]).length > 0,
+      text: `${(jsonOf(input, `${P}.phone`).nonDutchPrefixValues as unknown[]).length} distinct phone values do not start with a Dutch prefix.`,
       evidence: [`${P}.phone`],
     },
     {
@@ -563,7 +631,9 @@ export function notWarnedItems(input: ClaimsInput): NotWarnedItem[] {
       evidence: [`${P}.city`],
     },
     {
-      when: num(input, `${P}.height_cm`, 'empty') > 0 || bandRows(input, `${P}.height_cm`, 'bands', '100 .. 140') > 0,
+      when:
+        num(input, `${P}.height_cm`, 'empty') > 0 ||
+        bandRows(input, `${P}.height_cm`, 'bands', '100 .. 140') > 0,
       text: `height_cm has ${num(input, `${P}.height_cm`, 'empty')} empty values and ${bandRows(input, `${P}.height_cm`, 'bands', '100 .. 140')} values between 100 and 140, which the notes do not mention at all.`,
       evidence: [`${P}.height_cm`],
     },
@@ -594,9 +664,10 @@ export function notWarnedItems(input: ClaimsInput): NotWarnedItem[] {
     },
     {
       when:
-        (jsonOf(input, `${C}.sequences`)['patientsWhoseLastStateDiffersByOrdering'] as unknown[]).length > 0 ||
+        (jsonOf(input, `${C}.sequences`).patientsWhoseLastStateDiffersByOrdering as unknown[])
+          .length > 0 ||
         num(input, `${C}.sequences`, 'patientsWithFileOrderDifferentFromAtOrder') > 0,
-      text: `${(jsonOf(input, `${C}.sequences`)['patientsWhoseLastStateDiffersByOrdering'] as unknown[]).length} patients get a different derived consent state depending on whether the log is read in timestamp order or in file order, and ${num(input, `${C}.sequences`, 'patientsWithFileOrderDifferentFromAtOrder')} patients have events written out of timestamp order.`,
+      text: `${(jsonOf(input, `${C}.sequences`).patientsWhoseLastStateDiffersByOrdering as unknown[]).length} patients get a different derived consent state depending on whether the log is read in timestamp order or in file order, and ${num(input, `${C}.sequences`, 'patientsWithFileOrderDifferentFromAtOrder')} patients have events written out of timestamp order.`,
       evidence: [`${C}.sequences`],
     },
     {
@@ -615,13 +686,13 @@ export function notWarnedItems(input: ClaimsInput): NotWarnedItem[] {
       evidence: [`${C}.at`],
     },
     {
-      when: (jsonOf(input, `${I}.alcohol_units_week`)['nonNumericValues'] as unknown[]).length > 0,
-      text: `alcohol_units_week mixes numbers with ${(jsonOf(input, `${I}.alcohol_units_week`)['nonNumericValues'] as unknown[]).length} non-numeric spelling on ${valueCount(input, `${I}.alcohol_units_week`, 'nonNumericValues', 'n.v.t.')} rows, next to ${num(input, `${I}.alcohol_units_week`, 'empty')} empty values, so "no alcohol" and "not answered" are not distinguishable by type alone.`,
+      when: (jsonOf(input, `${I}.alcohol_units_week`).nonNumericValues as unknown[]).length > 0,
+      text: `alcohol_units_week mixes numbers with ${(jsonOf(input, `${I}.alcohol_units_week`).nonNumericValues as unknown[]).length} non-numeric spelling on ${valueCount(input, `${I}.alcohol_units_week`, 'nonNumericValues', 'n.v.t.')} rows, next to ${num(input, `${I}.alcohol_units_week`, 'empty')} empty values, so "no alcohol" and "not answered" are not distinguishable by type alone.`,
       evidence: [`${I}.alcohol_units_week`],
     },
     {
       when: num(input, `${I}.legacy_patient_id`, 'orphanRows') > 0,
-      text: `${num(input, `${I}.legacy_patient_id`, 'orphanRows')} intake rows reference a patient id that patients.csv does not contain (${num(input, `${I}.legacy_patient_id`, 'orphanDistinctIds')} distinct ids, of which ${(jsonOf(input, `${I}.legacy_patient_id`)['orphanIdsInConsents'] as unknown[]).length} also appear in consents.jsonl), and the notes mention only that the automation could fire early, not that the rows would stay unresolved in the export.`,
+      text: `${num(input, `${I}.legacy_patient_id`, 'orphanRows')} intake rows reference a patient id that patients.csv does not contain (${num(input, `${I}.legacy_patient_id`, 'orphanDistinctIds')} distinct ids, of which ${(jsonOf(input, `${I}.legacy_patient_id`).orphanIdsInConsents as unknown[]).length} also appear in consents.jsonl), and the notes mention only that the automation could fire early, not that the rows would stay unresolved in the export.`,
       evidence: [`${I}.legacy_patient_id`],
     },
     {
@@ -640,7 +711,10 @@ export function notWarnedItems(input: ClaimsInput): NotWarnedItem[] {
       evidence: [`${I}.submitted_at`],
     },
     {
-      when: bandRows(input, `${I}.weight`, 'ratioBands', '< 0.4') + bandRows(input, `${I}.weight`, 'ratioBands', '0.4 .. 0.5') > 0,
+      when:
+        bandRows(input, `${I}.weight`, 'ratioBands', '< 0.4') +
+          bandRows(input, `${I}.weight`, 'ratioBands', '0.4 .. 0.5') >
+        0,
       text: `${bandRows(input, `${I}.weight`, 'ratioBands', '0.4 .. 0.5')} intake weights are between 0.4 and 0.5 times the patient-row weight and ${bandRows(input, `${I}.weight`, 'ratioBands', '< 0.4')} are below 0.4 times it, so the disagreement between the two columns is not only the self-reporting the notes describe.`,
       evidence: [`${I}.weight`, `${P}.weight`],
     },
@@ -650,12 +724,16 @@ export function notWarnedItems(input: ClaimsInput): NotWarnedItem[] {
       evidence: [`${P}.weight`, `${P}.weight_unit`],
     },
     {
-      when: bandRows(input, `${P}.weight`, 'bands', '< 35') > 0 || bandRows(input, `${P}.weight`, 'bands', '>= 300') > 0,
+      when:
+        bandRows(input, `${P}.weight`, 'bands', '< 35') > 0 ||
+        bandRows(input, `${P}.weight`, 'bands', '>= 300') > 0,
       text: `${bandRows(input, `${P}.weight`, 'bands', '< 35')} patient weights are below 35 and ${bandRows(input, `${P}.weight`, 'bands', '>= 300')} are 300 or more, neither of which the kg-or-lbs story explains.`,
       evidence: [`${P}.weight`],
     },
     {
-      when: num(input, `${P}.email`, 'edgeWhitespaceRows') > 0 || num(input, `${P}.email`, 'rowsWithUppercase') > 0,
+      when:
+        num(input, `${P}.email`, 'edgeWhitespaceRows') > 0 ||
+        num(input, `${P}.email`, 'rowsWithUppercase') > 0,
       text: `${num(input, `${P}.email`, 'edgeWhitespaceRows')} email values carry leading or trailing whitespace, ${num(input, `${P}.email`, 'rowsWithInternalWhitespace')} carry whitespace inside the address and ${num(input, `${P}.email`, 'rowsWithUppercase')} contain uppercase, so the column the notes call a login is not comparable as exported.`,
       evidence: [`${P}.email`],
     },
@@ -665,17 +743,20 @@ export function notWarnedItems(input: ClaimsInput): NotWarnedItem[] {
       evidence: [`${I}.questionnaire_version`],
     },
     {
-      when: num(input, `${P}.status`, 'edgeWhitespaceRows') > 0 || num(input, `${I}.outcome`, 'edgeWhitespaceRows') > 0,
+      when:
+        num(input, `${P}.status`, 'edgeWhitespaceRows') > 0 ||
+        num(input, `${I}.outcome`, 'edgeWhitespaceRows') > 0,
       text: `${num(input, `${P}.status`, 'edgeWhitespaceRows')} status values and ${num(input, `${I}.outcome`, 'edgeWhitespaceRows')} outcome values carry trailing whitespace, so a plain string comparison splits states that read identically.`,
       evidence: [`${P}.status`, `${I}.outcome`],
     },
     {
-      when: bandRows(input, `${I}.height`, 'ratioBands', '< 0.4') + bandRows(input, `${I}.height`, 'ratioBands', '>= 2.4') > 0,
+      when:
+        bandRows(input, `${I}.height`, 'ratioBands', '< 0.4') +
+          bandRows(input, `${I}.height`, 'ratioBands', '>= 2.4') >
+        0,
       text: `Intake heights disagree with the patient row by more than a factor of two on ${bandRows(input, `${I}.height`, 'ratioBands', '< 0.4') + bandRows(input, `${I}.height`, 'ratioBands', '>= 2.4')} rows.`,
       evidence: [`${I}.height`],
     },
   ];
-  return items
-    .filter((i) => i.when)
-    .map((i) => ({text: i.text, evidence: i.evidence}));
+  return items.filter((i) => i.when).map((i) => ({ text: i.text, evidence: i.evidence }));
 }

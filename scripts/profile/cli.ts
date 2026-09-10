@@ -6,8 +6,8 @@
  * themselves, and one of them (`profile.ts`) used `URL.pathname`, which breaks on a checkout
  * path containing a space or a non-ASCII character. `fileURLToPath` is the correct decoding.
  */
-import {dirname, join} from 'node:path';
-import {fileURLToPath} from 'node:url';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 export const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 export const EXPORT_DIR = join(ROOT, 'legacy_export');
@@ -37,8 +37,14 @@ export function asOfFromArgv(argv: readonly string[] = process.argv.slice(2)): s
     if (a === '--as-of') value = argv[i + 1];
     else if (a.startsWith('--as-of=')) value = a.slice('--as-of='.length);
   }
-  if (value === undefined || !/^\d{4}-\d{2}-\d{2}$/u.test(value) || Number.isNaN(Date.parse(`${value}T00:00:00Z`))) {
-    throw new Error('usage: --as-of YYYY-MM-DD (the reference date for every "future" count; required)');
+  if (
+    value === undefined ||
+    !/^\d{4}-\d{2}-\d{2}$/u.test(value) ||
+    Number.isNaN(Date.parse(`${value}T00:00:00Z`))
+  ) {
+    throw new Error(
+      'usage: --as-of YYYY-MM-DD (the reference date for every "future" count; required)',
+    );
   }
   const [y, m, d] = value.split('-').map(Number) as [number, number, number];
   const back = new Date(Date.UTC(y, m - 1, d));

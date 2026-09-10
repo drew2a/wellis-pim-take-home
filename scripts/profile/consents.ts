@@ -5,8 +5,8 @@
  * (CLAUDE.md §6), so this module reports the event inventory *and* what two different
  * orderings of the same events would derive, without choosing between them.
  */
-import {code, table, type Section, type Table} from './report.js';
-import {Counter, Grouper, fold, readFileInfo, shape, type FileInfo} from './util.js';
+import { code, table, type Section, type Table } from './report.js';
+import { Counter, Grouper, fold, readFileInfo, shape, type FileInfo } from './util.js';
 
 const FILE = 'consents.jsonl';
 
@@ -59,11 +59,11 @@ export function loadConsents(path: string): Consents {
     const obj = parsed as Record<string, unknown>;
     events.push({
       line,
-      patientId: asString(obj['patient_legacy_id']),
-      type: asString(obj['type']),
-      action: asString(obj['action']),
-      at: asString(obj['at']),
-      version: asString(obj['version']),
+      patientId: asString(obj.patient_legacy_id),
+      type: asString(obj.type),
+      action: asString(obj.action),
+      at: asString(obj.at),
+      version: asString(obj.version),
       keys: Object.keys(obj).sort(),
       raw,
     });
@@ -137,7 +137,7 @@ export function consentsSections(c: Consents, ctx: ConsentsContext): Section[] {
       blankLines: c.blankLines,
       invalidLines: c.invalidLines,
       events: ev.length,
-      keySets: keySets.entries().map((e) => ({keys: e.value.split(', '), lines: e.count})),
+      keySets: keySets.entries().map((e) => ({ keys: e.value.split(', '), lines: e.count })),
       duplicateLineGroups: duplicateLines.length,
       duplicateLineRows: duplicateLines.reduce((t, e) => t + e.count, 0),
     },
@@ -153,9 +153,18 @@ export function consentsSections(c: Consents, ctx: ConsentsContext): Section[] {
         `\`data_processing\` exists for type and only \`granted\` / \`revoked\` for action.`,
     ],
     tables: [
-      valueTable('type', ev.map((e) => e.type)),
-      valueTable('action', ev.map((e) => e.action)),
-      valueTable('version', ev.map((e) => e.version)),
+      valueTable(
+        'type',
+        ev.map((e) => e.type),
+      ),
+      valueTable(
+        'action',
+        ev.map((e) => e.action),
+      ),
+      valueTable(
+        'version',
+        ev.map((e) => e.version),
+      ),
     ],
     json: {
       types: countOf(ev.map((e) => e.type)),
@@ -181,7 +190,9 @@ export function consentsSections(c: Consents, ctx: ConsentsContext): Section[] {
     if (list === undefined) byPatient.set(e.patientId, [e]);
     else list.push(e);
   }
-  const onlyBefore2023 = [...byPatient.entries()].filter(([, list]) => list.every((e) => e.at.slice(0, 10) < '2023-01-01'));
+  const onlyBefore2023 = [...byPatient.entries()].filter(([, list]) =>
+    list.every((e) => e.at.slice(0, 10) < '2023-01-01'),
+  );
   sections.push({
     key: `${FILE}.at`,
     title: `${FILE}.at`,
@@ -192,7 +203,12 @@ export function consentsSections(c: Consents, ctx: ConsentsContext): Section[] {
         `carry no time at all.`,
       `Range as strings: ${sortedAt[0] ?? '-'} to ${sortedAt[sortedAt.length - 1] ?? '-'}. ${future.length} events ` +
         `are dated after the reference date ${ctx.asOf}` +
-        (future.length > 0 ? ` (${futureByAction.entries().map((e) => `${e.value} ${e.count}`).join(', ')})` : '') +
+        (future.length > 0
+          ? ` (${futureByAction
+              .entries()
+              .map((e) => `${e.value} ${e.count}`)
+              .join(', ')})`
+          : '') +
         `. ${before2023.length} events are dated before 2023-01-01, and ` +
         `${onlyBefore2023.length} patients have no event dated 2023 or later.`,
     ],
@@ -200,18 +216,24 @@ export function consentsSections(c: Consents, ctx: ConsentsContext): Section[] {
       table(
         'Complete shape inventory',
         ['shape', 'count', 'examples'],
-        atShapes.entries().map((e) => [code(e.key), String(e.count), e.examples.map((x) => code(x)).join(' ')]),
+        atShapes
+          .entries()
+          .map((e) => [code(e.key), String(e.count), e.examples.map((x) => code(x)).join(' ')]),
       ),
     ],
     json: {
-      shapes: atShapes.entries().map((e) => ({shape: e.key, count: e.count, examples: e.examples})),
+      shapes: atShapes
+        .entries()
+        .map((e) => ({ shape: e.key, count: e.count, examples: e.examples })),
       withTimezoneSuffix: withTz.length,
       withSeconds: withSeconds.length,
       dateOnly: dateOnly.length,
       earliest: sortedAt[0] ?? null,
       latest: sortedAt[sortedAt.length - 1] ?? null,
       eventsAfterAsOf: future.length,
-      eventsAfterAsOfByAction: Object.fromEntries(futureByAction.entries().map((e) => [e.value, e.count])),
+      eventsAfterAsOfByAction: Object.fromEntries(
+        futureByAction.entries().map((e) => [e.value, e.count]),
+      ),
       eventsBefore2023: before2023.length,
       patientsWithNoEventFrom2023: onlyBefore2023.length,
     },
@@ -219,7 +241,9 @@ export function consentsSections(c: Consents, ctx: ConsentsContext): Section[] {
 
   // ---- patient_legacy_id --------------------------------------------------------
   const resolved = ev.filter((e) => ctx.patientLegacyIds.has(e.patientId));
-  const orphanIds = [...new Set(ev.filter((e) => !ctx.patientLegacyIds.has(e.patientId)).map((e) => e.patientId))].sort();
+  const orphanIds = [
+    ...new Set(ev.filter((e) => !ctx.patientLegacyIds.has(e.patientId)).map((e) => e.patientId)),
+  ].sort();
   const patientsWithoutEvents = [...ctx.patientLegacyIds].filter((id) => !byPatient.has(id));
   const eventsPerPatient = new Counter();
   for (const [, list] of byPatient) eventsPerPatient.add(String(list.length));
@@ -244,7 +268,9 @@ export function consentsSections(c: Consents, ctx: ConsentsContext): Section[] {
       table(
         `Unresolved patient ids${orphanIds.length > 20 ? ` (first 20 of ${orphanIds.length})` : ''}`,
         ['patient_legacy_id', 'events'],
-        orphanIds.slice(0, 20).map((id) => [code(id), String(ev.filter((e) => e.patientId === id).length)]),
+        orphanIds
+          .slice(0, 20)
+          .map((id) => [code(id), String(ev.filter((e) => e.patientId === id).length)]),
       ),
     ],
     json: {
@@ -253,7 +279,9 @@ export function consentsSections(c: Consents, ctx: ConsentsContext): Section[] {
       unresolvedIds: orphanIds,
       distinctPatientIds: byPatient.size,
       patientsWithoutEvents: patientsWithoutEvents.length,
-      eventsPerPatient: eventsPerPatient.entries().map((e) => ({events: Number(e.value), patientIds: e.count})),
+      eventsPerPatient: eventsPerPatient
+        .entries()
+        .map((e) => ({ events: Number(e.value), patientIds: e.count })),
     },
   });
 
@@ -268,7 +296,9 @@ export function consentsSections(c: Consents, ctx: ConsentsContext): Section[] {
   for (const [id, list] of byPatient) {
     const fileOrder = [...list].sort((a, b) => a.line - b.line);
     // Tie-break: equal `at` keeps file order, so the ordering is total and reproducible.
-    const atOrder = [...list].sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : a.line - b.line));
+    const atOrder = [...list].sort((a, b) =>
+      a.at < b.at ? -1 : a.at > b.at ? 1 : a.line - b.line,
+    );
     if (fileOrder.some((e, i) => e.line !== (atOrder[i] as ConsentEvent).line)) outOfFileOrder++;
     const actions = atOrder.map((e) => e.action);
     if (actions.some((a, i) => i > 0 && a === actions[i - 1])) repeatedIdentical++;
@@ -305,7 +335,10 @@ export function consentsSections(c: Consents, ctx: ConsentsContext): Section[] {
         `${repeatedIdentical} patients have the same action twice in a row, ${revokedFirst} patients start with ` +
         `\`revoked\` and so have no prior grant in this log, ${moreThanTwo} patients have more than two events.`,
       `Derived last state under \`at\` order: ` +
-        `${lastStateAt.entries().map((e) => `${e.value === '' ? '(empty)' : e.value} ${e.count}`).join(', ')}; ` +
+        `${lastStateAt
+          .entries()
+          .map((e) => `${e.value === '' ? '(empty)' : e.value} ${e.count}`)
+          .join(', ')}; ` +
         `plus ${noEvents} patients.csv ids with no event. Deriving from file order instead changes the last ` +
         `state for ${differing.length} patients.`,
     ],
@@ -320,7 +353,11 @@ export function consentsSections(c: Consents, ctx: ConsentsContext): Section[] {
         ['last state', 'by at order', 'by file order'],
         [...new Set([...lastStateAt.keys(), ...lastStateFile.keys()])]
           .sort()
-          .map((k) => [k === '' ? '(empty)' : code(k), String(lastStateAt.get(k)), String(lastStateFile.get(k))])
+          .map((k) => [
+            k === '' ? '(empty)' : code(k),
+            String(lastStateAt.get(k)),
+            String(lastStateFile.get(k)),
+          ])
           .concat([['no events in the log', String(noEvents), String(noEvents)]]),
       ),
       table(
@@ -333,13 +370,15 @@ export function consentsSections(c: Consents, ctx: ConsentsContext): Section[] {
       ),
     ],
     json: {
-      patternCounts: pattern.entries().map((e) => ({pattern: e.value, patients: e.count})),
+      patternCounts: pattern.entries().map((e) => ({ pattern: e.value, patients: e.count })),
       patientsWithFileOrderDifferentFromAtOrder: outOfFileOrder,
       patientsWithRepeatedIdenticalAction: repeatedIdentical,
       patientsStartingWithRevoked: revokedFirst,
       patientsWithMoreThanTwoEvents: moreThanTwo,
       lastStateByAtOrder: Object.fromEntries(lastStateAt.entries().map((e) => [e.value, e.count])),
-      lastStateByFileOrder: Object.fromEntries(lastStateFile.entries().map((e) => [e.value, e.count])),
+      lastStateByFileOrder: Object.fromEntries(
+        lastStateFile.entries().map((e) => [e.value, e.count]),
+      ),
       patientsWithNoEvents: noEvents,
       patientsWhoseLastStateDiffersByOrdering: differing.map(([id, s]) => ({
         patientId: id,

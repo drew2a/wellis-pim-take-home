@@ -11,17 +11,33 @@
  * It decides nothing. Where the data admits two readings (a date ordering, a weight unit,
  * a consent order) both readings are counted and both numbers are printed.
  */
-import {mkdirSync, writeFileSync} from 'node:fs';
-import {dirname, join} from 'node:path';
-import {claimRows, notWarnedItems, type ClaimsInput} from './claims.js';
-import {EXPORT_DIR, PROFILE_JSON, PROFILE_MD, abs, asOfFromArgv, reproduceCommand} from './cli.js';
-import {consentsSections, loadConsents} from './consents.js';
-import {crossSections} from './cross.js';
-import {delimiterLabel, loadCsv} from './csv.js';
-import {intakesSections, loadIntakes} from './intakes.js';
-import {loadPatients, patientsSections} from './patients.js';
-import {Report, VISIBLE_SPACE, code, plain, renderSection, renderTable, table, type Section} from './report.js';
-import {eolLabel, Counter, type FileInfo} from './util.js';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { claimRows, notWarnedItems, type ClaimsInput } from './claims.js';
+import {
+  EXPORT_DIR,
+  PROFILE_JSON,
+  PROFILE_MD,
+  abs,
+  asOfFromArgv,
+  reproduceCommand,
+} from './cli.js';
+import { consentsSections, loadConsents } from './consents.js';
+import { crossSections } from './cross.js';
+import { delimiterLabel, loadCsv } from './csv.js';
+import { intakesSections, loadIntakes } from './intakes.js';
+import { loadPatients, patientsSections } from './patients.js';
+import {
+  Report,
+  VISIBLE_SPACE,
+  code,
+  plain,
+  renderSection,
+  renderTable,
+  table,
+  type Section,
+} from './report.js';
+import { eolLabel, Counter, type FileInfo } from './util.js';
 
 const OUT_MD = abs(PROFILE_MD);
 const OUT_JSON = abs(PROFILE_JSON);
@@ -30,11 +46,11 @@ function encodingLabel(info: FileInfo): string {
   return `${info.utf8Valid ? 'valid UTF-8' : 'NOT valid UTF-8'}, ${info.nonAsciiBytes} non-ASCII bytes`;
 }
 
-function duplicateLineCount(lines: readonly string[]): {groups: number; rows: number} {
+function duplicateLineCount(lines: readonly string[]): { groups: number; rows: number } {
   const c = new Counter();
   for (const l of lines) c.add(l);
   const dups = c.entries().filter((e) => e.count > 1);
-  return {groups: dups.length, rows: dups.reduce((t, e) => t + e.count, 0)};
+  return { groups: dups.length, rows: dups.reduce((t, e) => t + e.count, 0) };
 }
 
 function main(): void {
@@ -47,22 +63,42 @@ function main(): void {
 
   const report = new Report();
   const sections: Section[] = [
-    ...patientsSections(patients, {asOf}),
-    ...intakesSections(intakes, {asOf, patients, consentPatientIds: consents.patientIds}),
-    ...consentsSections(consents, {asOf, patientLegacyIds: new Set(patients.legacyId)}),
-    ...crossSections({patients, intakes, consents, asOf}),
+    ...patientsSections(patients, { asOf }),
+    ...intakesSections(intakes, { asOf, patients, consentPatientIds: consents.patientIds }),
+    ...consentsSections(consents, { asOf, patientLegacyIds: new Set(patients.legacyId) }),
+    ...crossSections({ patients, intakes, consents, asOf }),
   ];
   for (const s of sections) report.add(s);
 
-  const claimsInput: ClaimsInput = {sections, patients, intakes, consents, asOf};
+  const claimsInput: ClaimsInput = { sections, patients, intakes, consents, asOf };
   const claims = claimRows(claimsInput);
   const notWarned = notWarnedItems(claimsInput);
 
   // ---- markdown -----------------------------------------------------------------
-  const files: Array<{info: FileInfo; delimiter: string; header: readonly string[]; dataRows: number}> = [
-    {info: patientsCsv.info, delimiter: delimiterLabel(patientsCsv.delimiter), header: patientsCsv.header, dataRows: patientsCsv.rows.length},
-    {info: intakesCsv.info, delimiter: delimiterLabel(intakesCsv.delimiter), header: intakesCsv.header, dataRows: intakesCsv.rows.length},
-    {info: consents.info, delimiter: 'not applicable (JSON Lines)', header: ['patient_legacy_id', 'type', 'action', 'at', 'version'], dataRows: consents.events.length},
+  const files: {
+    info: FileInfo;
+    delimiter: string;
+    header: readonly string[];
+    dataRows: number;
+  }[] = [
+    {
+      info: patientsCsv.info,
+      delimiter: delimiterLabel(patientsCsv.delimiter),
+      header: patientsCsv.header,
+      dataRows: patientsCsv.rows.length,
+    },
+    {
+      info: intakesCsv.info,
+      delimiter: delimiterLabel(intakesCsv.delimiter),
+      header: intakesCsv.header,
+      dataRows: intakesCsv.rows.length,
+    },
+    {
+      info: consents.info,
+      delimiter: 'not applicable (JSON Lines)',
+      header: ['patient_legacy_id', 'type', 'action', 'at', 'version'],
+      dataRows: consents.events.length,
+    },
   ];
 
   const md: string[] = [
@@ -83,9 +119,22 @@ function main(): void {
     ...renderTable(
       table(
         '',
-        ['file', 'bytes', 'encoding', 'BOM', 'line endings', 'delimiter', 'header fields', 'data rows', 'blank lines', 'duplicate full rows'],
+        [
+          'file',
+          'bytes',
+          'encoding',
+          'BOM',
+          'line endings',
+          'delimiter',
+          'header fields',
+          'data rows',
+          'blank lines',
+          'duplicate full rows',
+        ],
         files.map((f) => {
-          const dup = duplicateLineCount(f.info.name.endsWith('.jsonl') ? f.info.lines : f.info.lines.slice(1));
+          const dup = duplicateLineCount(
+            f.info.name.endsWith('.jsonl') ? f.info.lines : f.info.lines.slice(1),
+          );
           return [
             code(f.info.name),
             String(f.info.bytes),
@@ -139,10 +188,12 @@ function main(): void {
     '## Inventories',
     '',
   );
-  for (const s of sections.filter((x) => x.group === 'inventory')) md.push(...renderSection(report, s, '###'));
+  for (const s of sections.filter((x) => x.group === 'inventory'))
+    md.push(...renderSection(report, s, '###'));
 
   md.push('## Cross-file', '');
-  for (const s of sections.filter((x) => x.group === 'cross')) md.push(...renderSection(report, s, '###'));
+  for (const s of sections.filter((x) => x.group === 'cross'))
+    md.push(...renderSection(report, s, '###'));
 
   md.push('## Verification of EXPORT-NOTES.md claims', '');
   md.push(
@@ -165,12 +216,13 @@ function main(): void {
   for (const item of notWarned) md.push(`- ${plain(item.text)} (${report.pnList(item.evidence)})`);
   md.push('');
 
-  mkdirSync(dirname(OUT_MD), {recursive: true});
+  mkdirSync(dirname(OUT_MD), { recursive: true });
   writeFileSync(OUT_MD, md.join('\n'), 'utf8');
 
   // ---- json ---------------------------------------------------------------------
   const columns: Record<string, unknown> = {};
-  for (const s of sections) if (s.group === 'inventory' && s.key.includes('.')) columns[s.key] = s.json;
+  for (const s of sections)
+    if (s.group === 'inventory' && s.key.includes('.')) columns[s.key] = s.json;
   const json = {
     generatedBy: reproduceCommand('profile', asOf),
     reproduce: reproduceCommand('profile', asOf),
@@ -181,17 +233,21 @@ function main(): void {
       bom: f.info.hasBom,
       utf8Valid: f.info.utf8Valid,
       nonAsciiBytes: f.info.nonAsciiBytes,
-      lineEndings: {crlf: f.info.crlf, bareLf: f.info.loneLf, bareCr: f.info.loneCr},
+      lineEndings: { crlf: f.info.crlf, bareLf: f.info.loneLf, bareCr: f.info.loneCr },
       endsWithNewline: f.info.endsWithNewline,
       physicalLines: f.info.physicalLines,
       blankLines: f.info.blankLines,
       delimiter: f.delimiter,
       header: f.header,
       dataRows: f.dataRows,
-      duplicateFullRows: duplicateLineCount(f.info.name.endsWith('.jsonl') ? f.info.lines : f.info.lines.slice(1)),
+      duplicateFullRows: duplicateLineCount(
+        f.info.name.endsWith('.jsonl') ? f.info.lines : f.info.lines.slice(1),
+      ),
     })),
     columns,
-    crossFile: Object.fromEntries(sections.filter((s) => s.group === 'cross').map((s) => [s.key, s.json])),
+    crossFile: Object.fromEntries(
+      sections.filter((s) => s.group === 'cross').map((s) => [s.key, s.json]),
+    ),
     // Index only: the inventories themselves live once, under `columns` and `crossFile`.
     sections: sections.map((s) => ({
       pn: report.pn(s.key),
