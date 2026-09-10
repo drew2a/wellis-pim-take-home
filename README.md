@@ -41,7 +41,7 @@ npm run typecheck           # tsc --noEmit
 npm run lint                # ESLint, typescript-eslint strict
 npm run format:check        # Prettier (npm run format rewrites)
 npm test                    # unit tests, no database
-npm run test:integration    # against the compose database; skipped with a message if DATABASE_URL is unset
+npm run test:integration    # against the compose database; fails if DATABASE_URL is unset
 ```
 
 CI (`.github/workflows/ci.yml`) runs the same commands against a Postgres service container.
