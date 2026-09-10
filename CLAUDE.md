@@ -53,6 +53,21 @@ decision and the deliberate deviations.
 - Comments explain **why**, not what. Prefer clarifying the code over explaining it.
 - Domain vocabulary is fixed — see §6. No synonyms.
 
+### Where we validate and how we fail
+
+- **Validate once, at the boundary.** Every input from outside the process — HTTP body,
+  query and route params, CSV cell, JSONL line, environment variable — passes through a
+  Zod schema at its point of entry (ADR-0003). After that, code trusts the types. The same
+  value is not re-checked in every layer.
+- **Inside the server, fail loudly.** The mapper, the eligibility engine, the state machine
+  and the repositories **MUST** throw on anything invalid or unexpected. No default values,
+  no swallowed errors, no "skip this row and continue". A silent fallback is a silent
+  data change, which §5 forbids.
+- **The client is defensive about the network, not about the domain.** Every response
+  state (loading, error, empty, stale) is handled and rendered. The client carries no
+  business rules: client-side form validation is a convenience; the server re-validates
+  and is the only authority on eligibility, transitions and merges (R-T4, R-B16).
+
 ### TODO comments
 
 - Format: `// TODO(drew2a): <what>` — all caps, owner in parentheses.
@@ -63,6 +78,9 @@ decision and the deliberate deviations.
 
 - Test where correctness matters, not for coverage (R-T7, R-T8): eligibility engine, state
   machine, gnarliest import logic.
+- **Test-first** for the three cores above and for the repositories and API route handlers,
+  because they are the only writers to the database: failing test, then the implementation.
+  Elsewhere, tests where a bug would be expensive; no tests for configuration or layout.
 - Every eligibility rule **MUST** have boundary tests. Every illegal state transition
   **MUST** have a test proving it is rejected.
 - Tests are the executable form of "what correct means". When a test encodes a decision
