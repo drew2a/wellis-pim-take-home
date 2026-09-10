@@ -12,7 +12,6 @@
     "noFallthroughCasesInSwitch": true,
     "verbatimModuleSyntax": true,
     "esModuleInterop": true,
-    "isolatedModules": true,
     "allowJs": false,
     "incremental": true,
     "skipLibCheck": true,
