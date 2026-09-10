@@ -1,5 +1,3 @@
-.next/
-node_modules/
 drizzle/meta/
 package-lock.json
 legacy_export/
