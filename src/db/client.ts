@@ -21,8 +21,9 @@ function createDb() {
     // The health probe must answer 503 within a Vercel function's budget when the database host
     // drops packets; the default of 30 s is longer than that budget and than any uptime monitor.
     connect_timeout: 5,
-    // Supabase only accepts TLS; the compose database has no certificate.
-    ssl: process.env.NODE_ENV === 'production' ? 'require' : false,
+    // TLS is a property of the database, not of the process: production URLs carry
+    // `?sslmode=require`, which postgres-js reads from the connection string; the compose URL
+    // carries nothing because that database has no certificate.
   });
   return drizzle(sql, { schema });
 }

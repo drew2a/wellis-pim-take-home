@@ -24,4 +24,9 @@ describe('parseEnv', () => {
     const url = 'postgresql://wellis:wellis@localhost:5432/wellis';
     expect(parseEnv({ DATABASE_URL: url }).DATABASE_URL).toBe(url);
   });
+
+  it('accepts a URL that carries sslmode=require, how production URLs request TLS', () => {
+    const url = 'postgresql://user:pw@db.example.supabase.co:6543/postgres?sslmode=require';
+    expect(parseEnv({ DATABASE_URL: url }).DATABASE_URL).toBe(url);
+  });
 });
