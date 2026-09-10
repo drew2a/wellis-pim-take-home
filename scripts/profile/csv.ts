@@ -5,8 +5,8 @@
  * than fatal, and trimming is off so leading and trailing whitespace survives into the
  * inventories.
  */
-import {parse} from 'csv-parse/sync';
-import {Counter, readFileInfo, type FileInfo} from './util.js';
+import { parse } from 'csv-parse/sync';
+import { Counter, readFileInfo, type FileInfo } from './util.js';
 
 export interface Csv {
   readonly info: FileInfo;
@@ -23,7 +23,7 @@ export interface Csv {
 }
 
 function detectDelimiter(headerLine: string): string {
-  const candidates: Array<[string, number]> = [
+  const candidates: [string, number][] = [
     [',', (headerLine.match(/,/gu) ?? []).length],
     [';', (headerLine.match(/;/gu) ?? []).length],
     ['\t', (headerLine.match(/\t/gu) ?? []).length],
@@ -48,12 +48,12 @@ export function loadCsv(path: string): Csv {
   let relaxedQuotes = false;
   let records: string[][];
   try {
-    records = parse(info.text, options) as string[][];
+    records = parse(info.text, options);
   } catch {
     // Only reached if the export contains quoting the strict reader rejects; the fallback
     // is recorded in the profile rather than hidden.
     relaxedQuotes = true;
-    records = parse(info.text, {...options, relax_quotes: true}) as string[][];
+    records = parse(info.text, { ...options, relax_quotes: true });
   }
 
   const header = records[0] ?? [];
@@ -67,7 +67,16 @@ export function loadCsv(path: string): Csv {
     for (const f of r) if (/[\r\n]/u.test(f)) fieldsWithNewline++;
   });
 
-  return {info, header, rows, delimiter, fieldCounts, relaxedQuotes, raggedRows, fieldsWithNewline};
+  return {
+    info,
+    header,
+    rows,
+    delimiter,
+    fieldCounts,
+    relaxedQuotes,
+    raggedRows,
+    fieldsWithNewline,
+  };
 }
 
 /** Column values in row order; a row missing the field yields `''`. */

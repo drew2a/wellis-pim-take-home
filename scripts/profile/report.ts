@@ -6,8 +6,16 @@
  * which sections are added, never typed, so a new inventory cannot desynchronise the
  * cross-references.
  */
-import {PROFILE_JSON} from './cli.js';
-import {Counter, Grouper, KEY_SEP, collapsedShape, fold, hasEdgeWhitespace, shape} from './util.js';
+import { PROFILE_JSON } from './cli.js';
+import {
+  Counter,
+  Grouper,
+  KEY_SEP,
+  collapsedShape,
+  fold,
+  hasEdgeWhitespace,
+  shape,
+} from './util.js';
 
 /** Above this many distinct raw values a column is inventoried by shape, not by value. */
 export const VALUE_TABLE_LIMIT = 60;
@@ -27,8 +35,12 @@ export interface Section {
   readonly json: Record<string, unknown>;
 }
 
-export function table(caption: string, header: readonly string[], rows: readonly (readonly string[])[]): Table {
-  return {caption, header, rows};
+export function table(
+  caption: string,
+  header: readonly string[],
+  rows: readonly (readonly string[])[],
+): Table {
+  return { caption, header, rows };
 }
 
 /** The glyph that stands for one leading or trailing space in a code span (U+2423). */
@@ -64,7 +76,8 @@ export class Report {
   private readonly sections: Section[] = [];
 
   add(section: Section): Section {
-    if (this.sections.some((s) => s.key === section.key)) throw new Error(`duplicate section key ${section.key}`);
+    if (this.sections.some((s) => s.key === section.key))
+      throw new Error(`duplicate section key ${section.key}`);
     this.sections.push(section);
     return section;
   }
@@ -141,7 +154,9 @@ function shapeTableOf(values: readonly string[], mode: 'exact' | 'collapsed'): T
   return table(
     mode === 'exact' ? 'Complete shape inventory' : 'Complete collapsed-shape inventory',
     ['shape', 'count', 'examples'],
-    g.entries().map((e) => [code(e.key), String(e.count), e.examples.map((x) => code(x)).join(' ')]),
+    g
+      .entries()
+      .map((e) => [code(e.key), String(e.count), e.examples.map((x) => code(x)).join(' ')]),
   );
 }
 
@@ -173,7 +188,7 @@ function maskTable(values: readonly string[]): Table {
  * see that each row of the file lands in exactly one inventory row.
  */
 export function columnSection(input: ColumnInput): ColumnSection {
-  const {values} = input;
+  const { values } = input;
   const distinct = new Set(values);
   const distinctFolded = new Set(values.map((v) => fold(v)));
   const empty = values.filter((v) => v === '').length;
@@ -201,19 +216,19 @@ export function columnSection(input: ColumnInput): ColumnSection {
     `${edgeWs.length} rows (${edgeWsValues.size} distinct values) carry leading or trailing whitespace.`;
   notes.push(head);
 
-  const inventory: Array<{raw: string; count: number}> = [];
+  const inventory: { raw: string; count: number }[] = [];
   const cnt = new Counter();
   for (const v of values) cnt.add(v);
-  for (const e of cnt.entries()) inventory.push({raw: e.value, count: e.count});
+  for (const e of cnt.entries()) inventory.push({ raw: e.value, count: e.count });
 
-  if (distinct.size <= VALUE_TABLE_LIMIT) json['values'] = inventory;
+  if (distinct.size <= VALUE_TABLE_LIMIT) json.values = inventory;
 
   if (distinct.size <= VALUE_TABLE_LIMIT && input.forceShapeTable !== true) {
     tables.push(valueTable(values));
   } else {
     const g = new Grouper();
     for (const v of values) g.add(shape(v), v);
-    json['shapes'] = g.entries().map((e) => ({shape: e.key, count: e.count, examples: e.examples}));
+    json.shapes = g.entries().map((e) => ({ shape: e.key, count: e.count, examples: e.examples }));
     if (input.skipShapeTable === true) {
       notes.push(
         `Shapes are too diverse for a table here (${exactShapes.size} distinct exact shapes, ` +
@@ -233,7 +248,9 @@ export function columnSection(input: ColumnInput): ColumnSection {
     } else {
       const g2 = new Grouper();
       for (const v of values) g2.add(`${v.length} | ${charClasses(v)}`, v);
-      json['lengthClassInventory'] = g2.entries().map((e) => ({key: e.key, count: e.count, examples: e.examples}));
+      json.lengthClassInventory = g2
+        .entries()
+        .map((e) => ({ key: e.key, count: e.count, examples: e.examples }));
       notes.push(
         `Both the exact (${exactShapes.size}) and the collapsed (${collapsed.size}) shape inventories are past ` +
           `the ${VALUE_TABLE_LIMIT}-row table limit, so the table below inventories length and character ` +
@@ -266,14 +283,14 @@ export function crossSection(
   tables: readonly Table[],
   json: Record<string, unknown>,
 ): Section {
-  return {key, title, group: 'cross', notes, tables, json};
+  return { key, title, group: 'cross', notes, tables, json };
 }
 
 /** Cross-tabulation renderer: rows x columns of counts, complete over observed keys. */
 export function crossTab(
   caption: string,
   rowLabel: string,
-  pairs: ReadonlyArray<readonly [string, string]>,
+  pairs: readonly (readonly [string, string])[],
 ): Table {
   const rowKeys = [...new Set(pairs.map((p) => p[0]))].sort();
   const colKeys = [...new Set(pairs.map((p) => p[1]))].sort();
@@ -286,8 +303,14 @@ export function crossTab(
   ]);
   rows.push([
     '**total**',
-    ...colKeys.map((c) => String(rowKeys.reduce((t, r) => t + counts.get(`${r}${KEY_SEP}${c}`), 0))),
+    ...colKeys.map((c) =>
+      String(rowKeys.reduce((t, r) => t + counts.get(`${r}${KEY_SEP}${c}`), 0)),
+    ),
     String(pairs.length),
   ]);
-  return table(caption, [rowLabel, ...colKeys.map((c) => (c === '' ? '(empty)' : plain(c))), 'total'], rows);
+  return table(
+    caption,
+    [rowLabel, ...colKeys.map((c) => (c === '' ? '(empty)' : plain(c))), 'total'],
+    rows,
+  );
 }

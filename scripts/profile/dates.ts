@@ -17,7 +17,7 @@ export interface DateParts {
 
 export function splitDateParts(raw: string): DateParts {
   const groups = raw.trim().match(/\d+/gu) ?? [];
-  return {nums: groups.map((g) => Number(g)), widths: groups.map((g) => g.length)};
+  return { nums: groups.map((g) => Number(g)), widths: groups.map((g) => g.length) };
 }
 
 /** Position of the year among the first three numeric runs, under the rules below. */
@@ -42,7 +42,10 @@ export function classifyOrder(raw: string): OrderClass {
   if (p.nums.length < 3) return 'not-three-parts';
   const yp = yearPosition(p);
   if (yp === 'unknown') return 'invalid';
-  const pair = yp === 'first' ? [p.nums[1] as number, p.nums[2] as number] : [p.nums[0] as number, p.nums[1] as number];
+  const pair =
+    yp === 'first'
+      ? [p.nums[1] as number, p.nums[2] as number]
+      : [p.nums[0] as number, p.nums[1] as number];
   const [a, b] = pair as [number, number];
   if (a === 0 || b === 0 || a > 31 || b > 31) return 'invalid';
   if (a > 12 && b > 12) return 'invalid';

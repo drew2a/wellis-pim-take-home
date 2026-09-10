@@ -7,14 +7,21 @@
  * the result written down (CLAUDE.md §5). This file is that test. It still decides nothing;
  * the decisions are in docs/adr/.
  */
-import {writeFileSync} from 'node:fs';
-import {join} from 'node:path';
-import {EXPORT_DIR, HYPOTHESES_MD, abs, asOfFromArgv, reproduceCommand} from './cli.js';
-import {BMI_WINDOW, HEIGHT_BAND_EDGES, POUNDS_RATIO_EDGES, WEIGHT_BAND_EDGES, bmi, bmiInWindow} from './common.js';
-import {column, loadCsv} from './csv.js';
-import {classifyOrder} from './dates.js';
-import {code, renderTable, table} from './report.js';
-import {Counter, band, bandLabels, digitsOnly, fold, parseNumber, shape} from './util.js';
+import { writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { EXPORT_DIR, HYPOTHESES_MD, abs, asOfFromArgv, reproduceCommand } from './cli.js';
+import {
+  BMI_WINDOW,
+  HEIGHT_BAND_EDGES,
+  POUNDS_RATIO_EDGES,
+  WEIGHT_BAND_EDGES,
+  bmi,
+  bmiInWindow,
+} from './common.js';
+import { column, loadCsv } from './csv.js';
+import { classifyOrder } from './dates.js';
+import { code, renderTable, table } from './report.js';
+import { Counter, band, bandLabels, digitsOnly, fold, parseNumber, shape } from './util.js';
 
 const asOf = asOfFromArgv();
 const patients = loadCsv(join(EXPORT_DIR, 'patients.csv'));
@@ -66,17 +73,23 @@ interface Ymd {
 function readDateByShape(raw: string): Ymd | null {
   let m = /^(\d{4})-(\d{2})-(\d{2})$/u.exec(raw);
   let ymd: Ymd | null = null;
-  if (m) ymd = {y: Number(m[1]), m: Number(m[2]), d: Number(m[3])};
-  if ((m = /^(\d{2})-(\d{2})-(\d{4})$/u.exec(raw))) ymd = {y: Number(m[3]), m: Number(m[2]), d: Number(m[1])};
-  if ((m = /^(\d{2})\/(\d{2})\/(\d{4})$/u.exec(raw))) ymd = {y: Number(m[3]), m: Number(m[1]), d: Number(m[2])};
+  if (m) ymd = { y: Number(m[1]), m: Number(m[2]), d: Number(m[3]) };
+  if ((m = /^(\d{2})-(\d{2})-(\d{4})$/u.exec(raw)))
+    ymd = { y: Number(m[3]), m: Number(m[2]), d: Number(m[1]) };
+  if ((m = /^(\d{2})\/(\d{2})\/(\d{4})$/u.exec(raw)))
+    ymd = { y: Number(m[3]), m: Number(m[1]), d: Number(m[2]) };
   if (!ymd) return null;
   const t = Date.UTC(ymd.y, ymd.m - 1, ymd.d);
   const back = new Date(t);
-  const valid = back.getUTCFullYear() === ymd.y && back.getUTCMonth() === ymd.m - 1 && back.getUTCDate() === ymd.d;
+  const valid =
+    back.getUTCFullYear() === ymd.y &&
+    back.getUTCMonth() === ymd.m - 1 &&
+    back.getUTCDate() === ymd.d;
   return valid ? ymd : null;
 }
 
-const iso = (x: Ymd): string => `${x.y}-${String(x.m).padStart(2, '0')}-${String(x.d).padStart(2, '0')}`;
+const iso = (x: Ymd): string =>
+  `${x.y}-${String(x.m).padStart(2, '0')}-${String(x.d).padStart(2, '0')}`;
 const days = (x: Ymd): number => Date.UTC(x.y, x.m - 1, x.d) / 86_400_000;
 
 /** The rule's ordering for a shape, or null when the shape is not one of the three. */
@@ -88,7 +101,12 @@ function ruleOrder(raw: string): 'day-first' | 'month-first' | null {
   return null;
 }
 
-function counterexamples(values: readonly string[]): {tested: number; unambiguous: number; contradictions: string[]; unreadable: string[]} {
+function counterexamples(values: readonly string[]): {
+  tested: number;
+  unambiguous: number;
+  contradictions: string[];
+  unreadable: string[];
+} {
   let unambiguous = 0;
   const contradictions: string[] = [];
   const unreadable: string[] = [];
@@ -104,7 +122,7 @@ function counterexamples(values: readonly string[]): {tested: number; unambiguou
       if (cls !== order) contradictions.push(v);
     }
   }
-  return {tested: values.length, unambiguous, contradictions, unreadable};
+  return { tested: values.length, unambiguous, contradictions, unreadable };
 }
 
 // ---------------------------------------------------------------------------------------
@@ -117,8 +135,16 @@ const h = (s: string): void => {
 const p = (s: string): void => {
   out.push(s, '');
 };
-function md(headers: readonly string[], rows: ReadonlyArray<ReadonlyArray<string | number>>): void {
-  out.push(...renderTable(table('', headers, rows.map((r) => r.map(String)))));
+function md(headers: readonly string[], rows: readonly (readonly (string | number)[])[]): void {
+  out.push(
+    ...renderTable(
+      table(
+        '',
+        headers,
+        rows.map((r) => r.map(String)),
+      ),
+    ),
+  );
 }
 /** A number when the value parses as one (integer or decimal), else null. */
 const num = (raw: string): number | null => {
@@ -126,7 +152,7 @@ const num = (raw: string): number | null => {
   return x.ok ? x.value : null;
 };
 /** Counter rows in a fixed order (zero-filled), or sorted by key. */
-function rowsOf(c: Counter, order?: readonly string[]): Array<[string, number]> {
+function rowsOf(c: Counter, order?: readonly string[]): [string, number][] {
   return (order ?? c.keys()).map((k) => [k, c.get(k)]);
 }
 
@@ -143,9 +169,13 @@ out.push(
 
 // H-1
 h('## H-1 Dates: read the ordering from the shape');
-p('Rule under test: `9999-99-99` is year-month-day, `99-99-9999` is day-month-year, `99/99/9999` is month-day-year.');
-p('A counterexample is a value whose parts prove the opposite ordering (a part above 12 in the wrong position).');
-const dateCols: Array<[string, readonly string[]]> = [
+p(
+  'Rule under test: `9999-99-99` is year-month-day, `99-99-9999` is day-month-year, `99/99/9999` is month-day-year.',
+);
+p(
+  'A counterexample is a value whose parts prove the opposite ordering (a part above 12 in the wrong position).',
+);
+const dateCols: [string, readonly string[]][] = [
   ['patients.csv.dob', P.dob],
   ['patients.csv.signup_date', P.signup],
   ['intakes.csv.submitted_at', I.submitted],
@@ -161,7 +191,7 @@ md(
 // Age at signup under the rule
 const AGE_BANDS = ['< 0', '0 .. 10', '10 .. 16', '16 .. 18', '18 .. 100', '> 100'];
 const ageBands = new Counter();
-const under18: Array<[string, string, string, string]> = [];
+const under18: [string, string, string, string][] = [];
 let ageComparable = 0;
 P.dob.forEach((raw, i) => {
   const dob = readDateByShape(raw);
@@ -169,7 +199,18 @@ P.dob.forEach((raw, i) => {
   if (!dob || !su) return;
   ageComparable++;
   const age = (days(su) - days(dob)) / 365.2425;
-  const b = age < 0 ? '< 0' : age < 10 ? '0 .. 10' : age < 16 ? '10 .. 16' : age < 18 ? '16 .. 18' : age <= 100 ? '18 .. 100' : '> 100';
+  const b =
+    age < 0
+      ? '< 0'
+      : age < 10
+        ? '0 .. 10'
+        : age < 16
+          ? '10 .. 16'
+          : age < 18
+            ? '16 .. 18'
+            : age <= 100
+              ? '18 .. 100'
+              : '> 100';
   ageBands.add(b);
   if (age < 18 || age > 100) under18.push([P.id[i] ?? '', raw, P.signup[i] ?? '', age.toFixed(1)]);
 });
@@ -199,10 +240,14 @@ I.submitted.forEach((raw, i) => {
   gapComparable++;
   const gap = days(sub) - days(su);
   if (gap < 0) negative++;
-  gapBands.add(gap < 0 ? '< 0' : gap === 0 ? '0' : gap <= 30 ? '1 .. 30' : gap <= 365 ? '31 .. 365' : '> 365');
+  gapBands.add(
+    gap < 0 ? '< 0' : gap === 0 ? '0' : gap <= 30 ? '1 .. 30' : gap <= 365 ? '31 .. 365' : '> 365',
+  );
 });
 h('### Intake submitted before the patient row existed, under the rule');
-p(`${gapComparable} intakes have a resolvable patient and both dates readable; ${negative} are dated before the patient's signup_date.`);
+p(
+  `${gapComparable} intakes have a resolvable patient and both dates readable; ${negative} are dated before the patient's signup_date.`,
+);
 md(['submitted_at minus signup_date (days)', 'intakes'], rowsOf(gapBands, GAP_BANDS));
 
 // Future under the rule
@@ -214,7 +259,10 @@ for (const [name, vals] of dateCols) {
     if (d && iso(d) > asOf) future.add(name);
   }
 }
-md(['column', `rows dated after ${asOf}`], dateCols.map(([name]) => [name, future.get(name)]));
+md(
+  ['column', `rows dated after ${asOf}`],
+  dateCols.map(([name]) => [name, future.get(name)]),
+);
 
 // Cut-over: non-ISO shapes by year of the value itself (year is unambiguous in every shape)
 h('### When the non-ISO shapes stop');
@@ -245,15 +293,20 @@ for (const [name, vals] of dateCols) {
 
 // H-2
 h("## H-2 Weight: what the unit column means, checked against the same patient's intakes");
-p('Rule under test: `lbs` rows are pounds, `kg` rows are kilograms, and rows with an empty unit are pounds too.');
+p(
+  'Rule under test: `lbs` rows are pounds, `kg` rows are kilograms, and rows with an empty unit are pounds too.',
+);
 p(
   'Test: for every patient with at least one intake, divide each intake weight by the patient-row weight. Intakes are always kilogram-scale (P-20: max 167.1), so a pounds row should give a ratio near 1 / 2.20462 = 0.454.',
 );
-const RATIO_NOTE: Record<string, string> = {'0.42 .. 0.49': ' (pounds)', '0.9 .. 1.1': ' (same unit)'};
+const RATIO_NOTE: Record<string, string> = {
+  '0.42 .. 0.49': ' (pounds)',
+  '0.9 .. 1.1': ' (same unit)',
+};
 const ratioLabels = bandLabels(POUNDS_RATIO_EDGES);
 const ratios = new Map<string, Counter>();
 const noIntake = new Counter();
-const oddRows: Array<[string, string, string, string, string]> = [];
+const oddRows: [string, string, string, string, string][] = [];
 const weightMin = WEIGHT_BAND_EDGES[0] as number;
 const weightMax = WEIGHT_BAND_EDGES[WEIGHT_BAND_EDGES.length - 1] as number;
 P.weight.forEach((raw, i) => {
@@ -271,14 +324,21 @@ P.weight.forEach((raw, i) => {
   ratios.set(unit, t);
   const hv = num(P.height[i] ?? '');
   const bmiKg = hv === null || hv <= 0 ? Number.NaN : bmi(w, hv);
-  if (w < weightMin || w >= weightMax || (unit === 'kg' && !Number.isNaN(bmiKg) && !bmiInWindow(bmiKg))) {
+  if (
+    w < weightMin ||
+    w >= weightMax ||
+    (unit === 'kg' && !Number.isNaN(bmiKg) && !bmiInWindow(bmiKg))
+  ) {
     oddRows.push([P.id[i] ?? '', raw, unit, P.height[i] ?? '', rs.join(', ')]);
   }
 });
 for (const unit of ['kg', 'lbs', '']) {
   const t = ratios.get(unit) ?? new Counter();
   p(`**weight_unit ${code(unit)}** (rows without any intake: ${noIntake.get(unit)})`);
-  md(['intake weight / patient weight', 'intakes'], ratioLabels.map((l) => [`${l}${RATIO_NOTE[l] ?? ''}`, t.get(l)]));
+  md(
+    ['intake weight / patient weight', 'intakes'],
+    ratioLabels.map((l) => [`${l}${RATIO_NOTE[l] ?? ''}`, t.get(l)]),
+  );
 }
 h('### Rows that no unit explains');
 p(
@@ -320,11 +380,19 @@ I.height.forEach((raw, i) => {
   comparableHeights++;
   if (raw === P.height[pi]) identicalHeights++;
 });
-p(`Across all resolvable intakes, ${identicalHeights} of ${comparableHeights} intake heights are byte-identical to the patient row's height_cm.`);
+p(
+  `Across all resolvable intakes, ${identicalHeights} of ${comparableHeights} intake heights are byte-identical to the patient row's height_cm.`,
+);
 
 // H-4 vocabularies by source / version / year
 h('## H-4 Vocabularies: which spelling comes from where');
-const cross = (rowsA: readonly string[], rowsB: readonly string[], labelA: string, labelB: string, keyA: (s: string) => string = fold): void => {
+const cross = (
+  rowsA: readonly string[],
+  rowsB: readonly string[],
+  labelA: string,
+  labelB: string,
+  keyA: (s: string) => string = fold,
+): void => {
   const t = new Counter();
   const as = new Set<string>();
   const bs = new Set<string>();
@@ -339,7 +407,13 @@ const cross = (rowsA: readonly string[], rowsB: readonly string[], labelA: strin
   p(`**${labelA} (folded) x ${labelB}**`);
   md(
     [`${labelA} \\ ${labelB}`, ...bl.map(code), 'total'],
-    [...as].sort().map((a) => [code(a), ...bl.map((b) => t.get(`${a}|${b}`)), bl.reduce((acc, b) => acc + t.get(`${a}|${b}`), 0)]),
+    [...as]
+      .sort()
+      .map((a) => [
+        code(a),
+        ...bl.map((b) => t.get(`${a}|${b}`)),
+        bl.reduce((acc, b) => acc + t.get(`${a}|${b}`), 0),
+      ]),
   );
 };
 cross(P.status, P.source, 'patients.status', 'source');
@@ -349,12 +423,20 @@ const yearOf = (raw: string): string => {
 };
 cross(P.status, P.signup.map(yearOf), 'patients.status', 'signup year');
 cross(I.outcome, I.version, 'intakes.outcome', 'questionnaire_version');
-cross(I.version, I.submitted.map(yearOf), 'intakes.questionnaire_version', 'submitted year', (s) => s);
+cross(
+  I.version,
+  I.submitted.map(yearOf),
+  'intakes.questionnaire_version',
+  'submitted year',
+  (s) => s,
+);
 cross(I.alcohol, I.version, 'intakes.alcohol_units_week', 'questionnaire_version', (s) => s);
 
 // H-5 duplicate candidates under the date rule
 h('## H-5 Duplicate-patient candidates under the date rule');
-p('Groups of patient rows with the same folded full_name and the same date of birth once each dob is read by shape (H-1).');
+p(
+  'Groups of patient rows with the same folded full_name and the same date of birth once each dob is read by shape (H-1).',
+);
 const groups = new Map<string, number[]>();
 P.name.forEach((n, i) => {
   const d = readDateByShape(P.dob[i] ?? '');
@@ -371,16 +453,31 @@ for (const g of dupGroups) {
   const phones = new Set(g.map((i) => digitsOnly(P.phone[i] ?? '')).filter((x) => x !== ''));
   const bsns = new Set(g.map((i) => P.bsn[i] ?? '').filter((x) => x !== ''));
   signal.add(emails.size === 1 ? 'same folded email' : 'different emails');
-  if (phones.size === 1 && g.every((i) => digitsOnly(P.phone[i] ?? '') !== '')) signal.add('same phone (all rows)');
+  if (phones.size === 1 && g.every((i) => digitsOnly(P.phone[i] ?? '') !== ''))
+    signal.add('same phone (all rows)');
   if (bsns.size === 1 && g.every((i) => (P.bsn[i] ?? '') !== '')) signal.add('same bsn (all rows)');
-  if (g.every((i) => (intakesByPatient.get(P.id[i] ?? '') ?? []).length > 0)) signal.add('every row has intakes');
+  if (g.every((i) => (intakesByPatient.get(P.id[i] ?? '') ?? []).length > 0))
+    signal.add('every row has intakes');
 }
-p(`${dupGroups.length} groups over ${dupGroups.reduce((a, g) => a + g.length, 0)} rows (largest group ${Math.max(0, ...dupGroups.map((g) => g.length))}).`);
+p(
+  `${dupGroups.length} groups over ${dupGroups.reduce((a, g) => a + g.length, 0)} rows (largest group ${Math.max(0, ...dupGroups.map((g) => g.length))}).`,
+);
 md(['signal within the group', 'groups'], rowsOf(signal));
 h('### The groups whose rows have different emails');
 const diffEmail = dupGroups.filter((g) => new Set(g.map((i) => fold(P.email[i] ?? ''))).size > 1);
 md(
-  ['group', 'legacy_id', 'full_name', 'email', 'dob', 'phone', 'bsn', 'status', 'signup_date', 'intakes'],
+  [
+    'group',
+    'legacy_id',
+    'full_name',
+    'email',
+    'dob',
+    'phone',
+    'bsn',
+    'status',
+    'signup_date',
+    'intakes',
+  ],
   diffEmail.flatMap((g, gi) =>
     g.map((i) => [
       gi + 1,
@@ -407,7 +504,8 @@ function groupBy(keys: readonly string[]): number[][] {
   });
   return [...m.values()].filter((g) => g.length > 1);
 }
-const namesDiffer = (g: readonly number[]): boolean => new Set(g.map((i) => fold(P.name[i] ?? ''))).size > 1;
+const namesDiffer = (g: readonly number[]): boolean =>
+  new Set(g.map((i) => fold(P.name[i] ?? ''))).size > 1;
 const bsnGroups = groupBy(P.bsn);
 const phoneGroups = groupBy(P.phone.map(digitsOnly));
 const bsnDiffName = bsnGroups.filter(namesDiffer);
@@ -420,7 +518,17 @@ md(
 );
 md(
   ['bsn', 'legacy_id', 'full_name', 'dob', 'email'],
-  bsnDiffName.slice(0, 6).flatMap((g) => g.map((i) => [code(P.bsn[i] ?? ''), code(P.id[i] ?? ''), code(P.name[i] ?? ''), code(P.dob[i] ?? ''), code(P.email[i] ?? '')])),
+  bsnDiffName
+    .slice(0, 6)
+    .flatMap((g) =>
+      g.map((i) => [
+        code(P.bsn[i] ?? ''),
+        code(P.id[i] ?? ''),
+        code(P.name[i] ?? ''),
+        code(P.dob[i] ?? ''),
+        code(P.email[i] ?? ''),
+      ]),
+    ),
 );
 p(`(first 6 of ${bsnDiffName.length} bsn groups with differing names)`);
 
