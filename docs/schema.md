@@ -1,17 +1,23 @@
 # Schema
 
 The tables of [ADR-0004](adr/0004-part-a-schema-and-idempotency.md), grouped as that ADR groups
-them, with the two amendments of [ADR-0007](adr/0007-amendments-to-adr-0004-append-only-evidence-and-consent-timestamps.md):
-the append-only lock is a trigger on every evidence table, and consent timestamps are instants.
-Constraints live in the database (ADR-0003); the diagram below is rendered from the Drizzle
-schema, so what it shows is what `npm run db:migrate` creates. Vocabulary is `CLAUDE.md` §6.
+them, with the amendments of
+[ADR-0007](adr/0007-amendments-to-adr-0004-append-only-evidence-and-consent-timestamps.md) (the
+append-only lock is a trigger on every evidence table; consent timestamps are instants) and
+[ADR-0008](adr/0008-re-runs-under-immutability-patient-membership-and-provenance.md) (idempotency
+keys on `consent_events` and `audit_entries`, `to_value` in the normalisation key, provenance
+columns, three cross-column `CHECK`s). Constraints live in the database (ADR-0003); the diagram
+below is rendered from the Drizzle schema, so what it shows is what `npm run db:migrate` creates.
+Vocabulary is `CLAUDE.md` §6.
 
 ## What changes, and what never does
 
 **Import bookkeeping** — `import_runs`. One row per run of `npm run import`, inserted when the
-run starts; `finished_at` and `report_path` are filled when it ends. Every row the importer
-writes elsewhere points back here. Rows are never deleted: "import run N" in a review item must
-stay resolvable.
+run starts; `finished_at` and `report_path` are filled when it ends. Raw, evidence and decision
+rows point back here through `import_run_id` (`created_by_run` on `review_items`); canonical rows
+through `created_by_run`, null for the new flow; derived rows carry `computed_at` and
+`derivation_version` instead, and `patient_legacy_ids` is a mapping and carries neither
+(ADR-0008). Rows are never deleted: "import run N" in a review item must stay resolvable.
 
 **Raw** — `legacy_patients_raw`, `legacy_intakes_raw`, `legacy_consent_events_raw`. One row per
 source row or line, every column as exported, untrimmed. Written by the importer only, insert
@@ -23,13 +29,18 @@ DELETE and TRUNCATE. Whatever happens downstream, "what did the export say" is a
 application acts on. The importer rewrites these from raw on every run, except fields a human has
 touched (an `audit_entries` row with a human actor lists the field). Humans change them through
 the API, and every such change writes an audit entry. A merge repoints `patient_legacy_ids` and
-sets `merged_into` on the losing patient; nothing else moves. `consent_states` is recomputed by
-one pure function from `consent_events` and never edited by hand.
+sets `merged_into` on the losing patient; nothing else moves. A patient's records are those of
+that patient and of every patient merged into it, transitively through `merged_into`, answered by
+one repository function and never by a join on a copied `patient_id` alone (ADR-0008).
+`consent_states` is recomputed by one pure function from the union of those `consent_events` and
+never edited by hand.
 
 **Evidence** — `consent_events`, `normalisation_records`, `audit_entries`. What happened, who
 said so, and what we did to a value and why. Insert only, enforced by the same trigger as the raw
 tables. A wrong row is corrected by a new row and an audit entry naming the actor and the
-reason, never by editing the old one.
+reason, never by editing the old one. A re-run therefore inserts with `ON CONFLICT DO NOTHING`
+against a key: `source_line` for legacy consent events, `dedupe_key` for importer-written audit
+entries (null for human entries), and the six-column key of `normalisation_records` (ADR-0008).
 
 **Decisions** — `review_items`, `eligibility_evaluations`. Decisions we could not make safely and
 handed to a human, and decisions the engine made. A review item is created once per
@@ -159,6 +170,7 @@ erDiagram
     text reviewer_note "null"
     intake_state state "enum"
     text ruleset_version "null"
+    integer created_by_run FK "null"
   }
   consent_states["consent_states — canonical"] {
     uuid patient_id PK,FK
@@ -204,6 +216,7 @@ erDiagram
     text reason
     uuid review_item_id FK "null"
     jsonb changes "null"
+    text dedupe_key UK "null"
   }
   %% decisions
   review_items["review_items — decisions"] {
@@ -244,6 +257,7 @@ erDiagram
   import_runs |o--o{ patients : created_by_run
   patients ||--o{ patient_legacy_ids : patient_id
   patients |o--o{ intakes : patient_id
+  import_runs |o--o{ intakes : created_by_run
   patients ||--o{ consent_states : patient_id
   consent_events |o--o{ consent_states : derived_from_event_id
   patients |o--o{ consent_events : patient_id

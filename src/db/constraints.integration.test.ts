@@ -69,17 +69,40 @@ describe('database constraints (ADR-0004)', () => {
       );
     });
 
-    it('accepts a closed item with a resolution_note', async () => {
+    it('accepts a closed item with a resolution_note, resolved_by and resolved_at', async () => {
       await database.db.insert(schema.reviewItems).values({
         ...rows.reviewItemRow('closed-with-note'),
         status: 'dismissed',
         resolutionNote: 'placeholder row, nothing to fix',
+        resolvedBy: 'reviewer@example.com',
+        resolvedAt: new Date('2026-09-11T10:00:00Z'),
       });
+    });
+
+    // ADR-0008 item 6: a closed decision without actor and time is an audit gap (R-B20).
+    it.each(['resolvedBy', 'resolvedAt'] as const)(
+      'rejects a closed item without %s',
+      async (missing) => {
+        const closed = {
+          ...rows.reviewItemRow(`closed-without-${missing}`),
+          status: 'resolved' as const,
+          resolutionNote: 'note present',
+          resolvedBy: 'reviewer@example.com',
+          resolvedAt: new Date('2026-09-11T10:00:00Z'),
+          [missing]: null,
+        };
+
+        await expectDatabaseError(database.db.insert(schema.reviewItems).values(closed), CHECK);
+      },
+    );
+
+    it('accepts an open item without resolver, time or note', async () => {
+      await database.db.insert(schema.reviewItems).values(rows.reviewItemRow('still-open'));
     });
   });
 
   describe('normalisation_records', () => {
-    it('rejects a duplicate (entity_type, entity_id, field, rule_code, from_value)', async () => {
+    it('rejects a duplicate (entity_type, entity_id, field, rule_code, from_value, to_value)', async () => {
       await database.db.insert(schema.normalisationRecords).values(rows.normalisationRecordRow());
 
       await expectDatabaseError(
@@ -92,6 +115,66 @@ describe('database constraints (ADR-0004)', () => {
       await database.db
         .insert(schema.normalisationRecords)
         .values({ ...rows.normalisationRecordRow(), fromValue: 'active  ' });
+    });
+
+    // ADR-0008 item 3: a later importer version mapping the same raw value elsewhere is a new
+    // fact about a new run; both rows stand.
+    it('accepts the same rule on the same raw value when to_value differs', async () => {
+      await database.db
+        .insert(schema.normalisationRecords)
+        .values({ ...rows.normalisationRecordRow(), toValue: 'paused', importerVersion: 'v2' });
+    });
+
+    it('treats two null to_values as equal (NULLS NOT DISTINCT), so a blanking rule dedupes too', async () => {
+      const blanked = { ...rows.normalisationRecordRow(), field: 'weight_kg', toValue: null };
+      await database.db.insert(schema.normalisationRecords).values(blanked);
+
+      await expectDatabaseError(
+        database.db.insert(schema.normalisationRecords).values(blanked),
+        UNIQUE,
+      );
+    });
+  });
+
+  // ADR-0008 item 1: the trigger forbids delete-and-rewrite, so a re-run needs a conflict target.
+  describe('consent_events', () => {
+    it('rejects a second legacy event with the same source_line', async () => {
+      await database.db
+        .insert(schema.consentEvents)
+        .values({ ...rows.consentEventRow(), sourceLine: 7 });
+
+      await expectDatabaseError(
+        database.db
+          .insert(schema.consentEvents)
+          .values({ ...rows.consentEventRow(), sourceLine: 7 }),
+        UNIQUE,
+      );
+    });
+
+    it('accepts any number of new-flow events, which have no source_line', async () => {
+      await database.db
+        .insert(schema.consentEvents)
+        .values([rows.consentEventRow(), rows.consentEventRow()]);
+    });
+  });
+
+  describe('audit_entries', () => {
+    it('rejects a second importer entry with the same dedupe_key', async () => {
+      const key = 'intake:INT-000001:null:legacy_approved:legacy outcome';
+      await database.db
+        .insert(schema.auditEntries)
+        .values({ ...rows.auditEntryRow(), dedupeKey: key });
+
+      await expectDatabaseError(
+        database.db.insert(schema.auditEntries).values({ ...rows.auditEntryRow(), dedupeKey: key }),
+        UNIQUE,
+      );
+    });
+
+    it('accepts any number of human entries, which have no dedupe_key', async () => {
+      await database.db
+        .insert(schema.auditEntries)
+        .values([rows.auditEntryRow(), rows.auditEntryRow()]);
     });
   });
 
@@ -139,6 +222,14 @@ describe('database constraints (ADR-0004)', () => {
       await insertPatient({ bsn: null, bsnCheck: 'absent' });
     });
 
+    // ADR-0008 item 6: an absent number cannot have been checked valid or invalid.
+    it.each(['valid', 'invalid'] as const)(
+      'rejects a null bsn with bsn_check %s',
+      async (bsnCheck) => {
+        await expectDatabaseError(insertPatient({ bsn: null, bsnCheck }), CHECK);
+      },
+    );
+
     it('phone CHECK accepts +316 followed by eight digits and rejects the national form', async () => {
       await insertPatient({ phone: '+31612345678' });
 
@@ -165,6 +256,13 @@ describe('database constraints (ADR-0004)', () => {
       await insertPatient({ mergedInto: survivor });
       await expectDatabaseError(insertPatient({ mergedInto: NOWHERE }), FOREIGN_KEY);
     });
+
+    // ADR-0008 item 6: a self-merge would loop survivor resolution forever.
+    it('rejects merged_into pointing at the row itself', async () => {
+      const id = '11111111-1111-4111-8111-111111111111';
+
+      await expectDatabaseError(insertPatient({ id, mergedInto: id }), CHECK);
+    });
   });
 
   describe('intakes', () => {
@@ -177,6 +275,27 @@ describe('database constraints (ADR-0004)', () => {
         database.db
           .insert(schema.intakes)
           .values({ ...rows.intakeRow('dangling'), patientId: NOWHERE }),
+        FOREIGN_KEY,
+      );
+    });
+
+    // ADR-0008 item 4: canonical rows carry the run that created them.
+    it('created_by_run references import_runs and accepts null for the new flow', async () => {
+      const [run] = await database.db
+        .insert(schema.importRuns)
+        .values(rows.importRunRow())
+        .returning({ id: schema.importRuns.id });
+
+      await database.db
+        .insert(schema.intakes)
+        .values({ ...rows.intakeRow('imported'), createdByRun: (run as { id: number }).id });
+      await database.db
+        .insert(schema.intakes)
+        .values({ ...rows.intakeRow('new-flow'), createdByRun: null });
+      await expectDatabaseError(
+        database.db
+          .insert(schema.intakes)
+          .values({ ...rows.intakeRow('bad-run'), createdByRun: 999999 }),
         FOREIGN_KEY,
       );
     });

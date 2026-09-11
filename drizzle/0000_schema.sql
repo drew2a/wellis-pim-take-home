@@ -20,7 +20,9 @@ CREATE TABLE "audit_entries" (
 	"to_state" text,
 	"reason" text NOT NULL,
 	"review_item_id" uuid,
-	"changes" jsonb
+	"changes" jsonb,
+	"dedupe_key" text,
+	CONSTRAINT "audit_entries_dedupe_key_unique" UNIQUE("dedupe_key")
 );
 --> statement-breakpoint
 CREATE TABLE "consent_events" (
@@ -91,6 +93,7 @@ CREATE TABLE "intakes" (
 	"reviewer_note" text,
 	"state" "intake_state" NOT NULL,
 	"ruleset_version" text,
+	"created_by_run" integer,
 	CONSTRAINT "intakes_intake_id_unique" UNIQUE("intake_id"),
 	CONSTRAINT "intakes_weight_kg_positive" CHECK ("intakes"."weight_kg" > 0),
 	CONSTRAINT "intakes_height_cm_positive" CHECK ("intakes"."height_cm" > 0)
@@ -159,7 +162,7 @@ CREATE TABLE "normalisation_records" (
 	"rule_code" text NOT NULL,
 	"evidence" jsonb NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	CONSTRAINT "normalisation_records_dedupe" UNIQUE("entity_type","entity_id","field","rule_code","from_value")
+	CONSTRAINT "normalisation_records_dedupe" UNIQUE NULLS NOT DISTINCT("entity_type","entity_id","field","rule_code","from_value","to_value")
 );
 --> statement-breakpoint
 CREATE TABLE "patient_legacy_ids" (
@@ -185,9 +188,11 @@ CREATE TABLE "patients" (
 	"merged_into" uuid,
 	"created_by_run" integer,
 	CONSTRAINT "patients_bsn_nine_digits" CHECK ("patients"."bsn" ~ '^[0-9]{9}$'),
+	CONSTRAINT "patients_bsn_check_absent_when_null" CHECK ("patients"."bsn" is not null or "patients"."bsn_check" = 'absent'),
 	CONSTRAINT "patients_phone_dutch_mobile" CHECK ("patients"."phone" ~ '^\+316[0-9]{8}$'),
 	CONSTRAINT "patients_weight_kg_positive" CHECK ("patients"."weight_kg" > 0),
-	CONSTRAINT "patients_height_cm_positive" CHECK ("patients"."height_cm" > 0)
+	CONSTRAINT "patients_height_cm_positive" CHECK ("patients"."height_cm" > 0),
+	CONSTRAINT "patients_merged_into_not_self" CHECK ("patients"."merged_into" <> "patients"."id")
 );
 --> statement-breakpoint
 CREATE TABLE "review_items" (
@@ -210,7 +215,8 @@ CREATE TABLE "review_items" (
 	"resolution_note" text,
 	"resolution" jsonb,
 	CONSTRAINT "review_items_dedupe_key_unique" UNIQUE("dedupe_key"),
-	CONSTRAINT "review_items_resolution_note_on_close" CHECK ("review_items"."status" = 'open' or "review_items"."resolution_note" is not null)
+	CONSTRAINT "review_items_resolution_note_on_close" CHECK ("review_items"."status" = 'open' or "review_items"."resolution_note" is not null),
+	CONSTRAINT "review_items_resolver_on_close" CHECK ("review_items"."status" = 'open' or ("review_items"."resolved_by" is not null and "review_items"."resolved_at" is not null))
 );
 --> statement-breakpoint
 ALTER TABLE "audit_entries" ADD CONSTRAINT "audit_entries_review_item_id_review_items_id_fk" FOREIGN KEY ("review_item_id") REFERENCES "public"."review_items"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
@@ -221,6 +227,7 @@ ALTER TABLE "consent_states" ADD CONSTRAINT "consent_states_derived_from_event_i
 ALTER TABLE "eligibility_evaluations" ADD CONSTRAINT "eligibility_evaluations_intake_id_intakes_id_fk" FOREIGN KEY ("intake_id") REFERENCES "public"."intakes"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "eligibility_evaluations" ADD CONSTRAINT "eligibility_evaluations_import_run_id_import_runs_id_fk" FOREIGN KEY ("import_run_id") REFERENCES "public"."import_runs"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "intakes" ADD CONSTRAINT "intakes_patient_id_patients_id_fk" FOREIGN KEY ("patient_id") REFERENCES "public"."patients"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "intakes" ADD CONSTRAINT "intakes_created_by_run_import_runs_id_fk" FOREIGN KEY ("created_by_run") REFERENCES "public"."import_runs"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "legacy_consent_events_raw" ADD CONSTRAINT "legacy_consent_events_raw_import_run_id_import_runs_id_fk" FOREIGN KEY ("import_run_id") REFERENCES "public"."import_runs"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "legacy_intakes_raw" ADD CONSTRAINT "legacy_intakes_raw_import_run_id_import_runs_id_fk" FOREIGN KEY ("import_run_id") REFERENCES "public"."import_runs"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "legacy_patients_raw" ADD CONSTRAINT "legacy_patients_raw_import_run_id_import_runs_id_fk" FOREIGN KEY ("import_run_id") REFERENCES "public"."import_runs"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
@@ -230,4 +237,5 @@ ALTER TABLE "patients" ADD CONSTRAINT "patients_merged_into_patients_id_fk" FORE
 ALTER TABLE "patients" ADD CONSTRAINT "patients_created_by_run_import_runs_id_fk" FOREIGN KEY ("created_by_run") REFERENCES "public"."import_runs"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "review_items" ADD CONSTRAINT "review_items_patient_id_patients_id_fk" FOREIGN KEY ("patient_id") REFERENCES "public"."patients"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "review_items" ADD CONSTRAINT "review_items_intake_id_intakes_id_fk" FOREIGN KEY ("intake_id") REFERENCES "public"."intakes"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "review_items" ADD CONSTRAINT "review_items_created_by_run_import_runs_id_fk" FOREIGN KEY ("created_by_run") REFERENCES "public"."import_runs"("id") ON DELETE no action ON UPDATE no action;
+ALTER TABLE "review_items" ADD CONSTRAINT "review_items_created_by_run_import_runs_id_fk" FOREIGN KEY ("created_by_run") REFERENCES "public"."import_runs"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+CREATE UNIQUE INDEX "consent_events_source_line_unique" ON "consent_events" USING btree ("source_line") WHERE "consent_events"."source_line" is not null;

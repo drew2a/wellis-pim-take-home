@@ -1,5 +1,6 @@
 // Target schema of ADR-0004 (tables, enums, constraints), amended by ADR-0007 (append-only
-// evidence tables, consent timestamps). Constraints live here and in the generated SQL under
+// evidence tables, consent timestamps) and ADR-0008 (idempotency keys under immutability,
+// provenance columns, cross-column CHECKs). Constraints live here and in the generated SQL under
 // drizzle/, not only in application code (ADR-0003). Vocabulary is CLAUDE.md §6.
 import { sql } from 'drizzle-orm';
 import {
@@ -16,6 +17,7 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
 
@@ -194,14 +196,23 @@ export const patients = pgTable(
   },
   (table) => [
     check('patients_bsn_nine_digits', sql`${table.bsn} ~ '^[0-9]{9}$'`),
+    // An absent number cannot have been checked valid or invalid (ADR-0008).
+    check(
+      'patients_bsn_check_absent_when_null',
+      sql`${table.bsn} is not null or ${table.bsnCheck} = 'absent'`,
+    ),
     check('patients_phone_dutch_mobile', sql`${table.phone} ~ '^\\+316[0-9]{8}$'`),
     check('patients_weight_kg_positive', sql`${table.weightKg} > 0`),
     check('patients_height_cm_positive', sql`${table.heightCm} > 0`),
+    // A self-merge would loop survivor resolution forever (ADR-0008).
+    check('patients_merged_into_not_self', sql`${table.mergedInto} <> ${table.id}`),
   ],
 );
 
-// Every legacy id resolves to exactly one patient, also after a merge; intakes and consent
-// events join through this table, never through a copied patient_id alone (ADR-0004).
+// Every legacy id resolves to exactly one patient, also after a merge: the importer resolves
+// legacy_patient_id through this table at load and a merge repoints the losing id here. It is a
+// mapping, not the membership mechanism: "this patient's records" are answered by one repository
+// function walking merged_into, never by a join on a copied patient_id alone (ADR-0008).
 export const patientLegacyIds = pgTable('patient_legacy_ids', {
   legacyId: text('legacy_id').primaryKey(),
   patientId: uuid('patient_id')
@@ -234,6 +245,8 @@ export const intakes = pgTable(
     state: intakeStateEnum('state').notNull(),
     // Null for legacy intakes; Part B fills it from the ruleset that evaluated the intake.
     rulesetVersion: text('ruleset_version'),
+    // Null for intakes submitted through the new flow (ADR-0008).
+    createdByRun: importRunRef('created_by_run'),
   },
   (table) => [
     check('intakes_weight_kg_positive', sql`${table.weightKg} > 0`),
@@ -242,21 +255,31 @@ export const intakes = pgTable(
 );
 
 // Evidence: never updated (ADR-0004), enforced by trigger (ADR-0007).
-export const consentEvents = pgTable('consent_events', {
-  id: uuidPrimaryKey(),
-  // Resolved through patient_legacy_ids at load; null when the legacy id has no patient.
-  patientId: uuid('patient_id').references(() => patients.id),
-  legacyPatientId: text('legacy_patient_id'),
-  type: text('type').notNull(),
-  action: consentActionEnum('action').notNull(),
-  // An instant (ADR-0007): legacy wall-clock values are converted via Europe/Amsterdam at
-  // import with a TIMESTAMP_ZONE_ASSUMED normalisation record; new-flow events carry a zone.
-  at: timestamptz('at').notNull(),
-  version: text('version'),
-  // Line in consents.jsonl; null for events raised by the new flow.
-  sourceLine: integer('source_line'),
-  importRunId: importRunRef('import_run_id'),
-});
+export const consentEvents = pgTable(
+  'consent_events',
+  {
+    id: uuidPrimaryKey(),
+    // Resolved through patient_legacy_ids at load; null when the legacy id has no patient.
+    patientId: uuid('patient_id').references(() => patients.id),
+    legacyPatientId: text('legacy_patient_id'),
+    type: text('type').notNull(),
+    action: consentActionEnum('action').notNull(),
+    // An instant (ADR-0007): legacy wall-clock values are converted via Europe/Amsterdam at
+    // import with a TIMESTAMP_ZONE_ASSUMED normalisation record; new-flow events carry a zone.
+    at: timestamptz('at').notNull(),
+    version: text('version'),
+    // Line in consents.jsonl; null for events raised by the new flow.
+    sourceLine: integer('source_line'),
+    importRunId: importRunRef('import_run_id'),
+  },
+  (table) => [
+    // The trigger forbids delete-and-rewrite, so the re-run's ON CONFLICT DO NOTHING needs this
+    // target; new-flow events have no line and are never re-imported (ADR-0008).
+    uniqueIndex('consent_events_source_line_unique')
+      .on(table.sourceLine)
+      .where(sql`${table.sourceLine} is not null`),
+  ],
+);
 
 // Derived, recomputed by one pure function on import and on every new event (ADR-0005).
 export const consentStates = pgTable(
@@ -304,8 +327,7 @@ export const normalisationRecords = pgTable(
     entityType: text('entity_type').notNull(),
     entityId: text('entity_id').notNull(),
     field: text('field').notNull(),
-    // Raw values are text and never null (an empty cell is ''), which the unique key below
-    // relies on: a NULL in a unique key would let a re-run duplicate the record.
+    // Raw values are text and never null (an empty cell is '').
     fromValue: text('from_value').notNull(),
     // Null when the rule blanks the value (implausible weight, impossible date).
     toValue: text('to_value'),
@@ -315,13 +337,19 @@ export const normalisationRecords = pgTable(
     createdAt: timestamptz('created_at').notNull().defaultNow(),
   },
   (table) => [
-    unique('normalisation_records_dedupe').on(
-      table.entityType,
-      table.entityId,
-      table.field,
-      table.ruleCode,
-      table.fromValue,
-    ),
+    // to_value is in the key (ADR-0008): a later importer version mapping the same raw value
+    // elsewhere is a new fact, and the old row cannot be edited. NULLS NOT DISTINCT so that a
+    // rule that blanks a value dedupes on re-run like any other.
+    unique('normalisation_records_dedupe')
+      .on(
+        table.entityType,
+        table.entityId,
+        table.field,
+        table.ruleCode,
+        table.fromValue,
+        table.toValue,
+      )
+      .nullsNotDistinct(),
   ],
 );
 
@@ -359,6 +387,11 @@ export const reviewItems = pgTable(
       'review_items_resolution_note_on_close',
       sql`${table.status} = 'open' or ${table.resolutionNote} is not null`,
     ),
+    // A closed decision without actor and time is an audit gap (R-B20, ADR-0008).
+    check(
+      'review_items_resolver_on_close',
+      sql`${table.status} = 'open' or (${table.resolvedBy} is not null and ${table.resolvedAt} is not null)`,
+    ),
   ],
 );
 
@@ -377,6 +410,10 @@ export const auditEntries = pgTable('audit_entries', {
   // `{field, from, to, source_legacy_id}` per changed value: human edits, and the field-level
   // provenance of the importer's tier-1 merges (ADR-0006).
   changes: jsonb('changes').$type<AuditChange[]>(),
+  // Importer-written entries: deterministic from (entity_type, entity_id, from_state, to_state,
+  // reason), the re-run's ON CONFLICT target under the append-only trigger. Null for human
+  // entries, each of which is a new event (ADR-0008).
+  dedupeKey: text('dedupe_key').unique(),
 });
 
 export interface AuditChange {

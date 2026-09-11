@@ -1,5 +1,5 @@
 {
-  "id": "2d5e85d1-37fc-425b-b34f-4d1d7e444df8",
+  "id": "6c1140e6-97e0-4d9c-be27-dd23864f4862",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -69,6 +69,12 @@
           "type": "jsonb",
           "primaryKey": false,
           "notNull": false
+        },
+        "dedupe_key": {
+          "name": "dedupe_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {},
@@ -88,7 +94,15 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "audit_entries_dedupe_key_unique": {
+          "name": "audit_entries_dedupe_key_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "dedupe_key"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -154,7 +168,24 @@
           "notNull": false
         }
       },
-      "indexes": {},
+      "indexes": {
+        "consent_events_source_line_unique": {
+          "name": "consent_events_source_line_unique",
+          "columns": [
+            {
+              "expression": "source_line",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"consent_events\".\"source_line\" is not null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
         "consent_events_patient_id_patients_id_fk": {
           "name": "consent_events_patient_id_patients_id_fk",
@@ -586,6 +617,12 @@
           "type": "text",
           "primaryKey": false,
           "notNull": false
+        },
+        "created_by_run": {
+          "name": "created_by_run",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {},
@@ -596,6 +633,19 @@
           "tableTo": "patients",
           "columnsFrom": [
             "patient_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "intakes_created_by_run_import_runs_id_fk": {
+          "name": "intakes_created_by_run_import_runs_id_fk",
+          "tableFrom": "intakes",
+          "tableTo": "import_runs",
+          "columnsFrom": [
+            "created_by_run"
           ],
           "columnsTo": [
             "id"
@@ -1053,13 +1103,14 @@
       "uniqueConstraints": {
         "normalisation_records_dedupe": {
           "name": "normalisation_records_dedupe",
-          "nullsNotDistinct": false,
+          "nullsNotDistinct": true,
           "columns": [
             "entity_type",
             "entity_id",
             "field",
             "rule_code",
-            "from_value"
+            "from_value",
+            "to_value"
           ]
         }
       },
@@ -1248,6 +1299,10 @@
           "name": "patients_bsn_nine_digits",
           "value": "\"patients\".\"bsn\" ~ '^[0-9]{9}$'"
         },
+        "patients_bsn_check_absent_when_null": {
+          "name": "patients_bsn_check_absent_when_null",
+          "value": "\"patients\".\"bsn\" is not null or \"patients\".\"bsn_check\" = 'absent'"
+        },
         "patients_phone_dutch_mobile": {
           "name": "patients_phone_dutch_mobile",
           "value": "\"patients\".\"phone\" ~ '^\\+316[0-9]{8}$'"
@@ -1259,6 +1314,10 @@
         "patients_height_cm_positive": {
           "name": "patients_height_cm_positive",
           "value": "\"patients\".\"height_cm\" > 0"
+        },
+        "patients_merged_into_not_self": {
+          "name": "patients_merged_into_not_self",
+          "value": "\"patients\".\"merged_into\" <> \"patients\".\"id\""
         }
       },
       "isRLSEnabled": false
@@ -1439,6 +1498,10 @@
         "review_items_resolution_note_on_close": {
           "name": "review_items_resolution_note_on_close",
           "value": "\"review_items\".\"status\" = 'open' or \"review_items\".\"resolution_note\" is not null"
+        },
+        "review_items_resolver_on_close": {
+          "name": "review_items_resolver_on_close",
+          "value": "\"review_items\".\"status\" = 'open' or (\"review_items\".\"resolved_by\" is not null and \"review_items\".\"resolved_at\" is not null)"
         }
       },
       "isRLSEnabled": false
