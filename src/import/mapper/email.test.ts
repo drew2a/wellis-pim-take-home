@@ -35,6 +35,22 @@ describe('mapEmail', () => {
     expect(result.flags).toEqual([]);
   });
 
+  // ADR-0009 item 1: empty raw is empty, but a whitespace-only value is not empty raw, so the
+  // null it becomes needs a record chain that ends at null and a flag so a human sees it.
+  it('chains the trim into EMAIL_PLACEHOLDER_TO_NULL for a whitespace-only value', () => {
+    const result = mapEmail('   ');
+    expect(result.value).toBeNull();
+    expect(result.records.map((r) => [r.ruleCode, r.from, r.to])).toEqual([
+      ['WHITESPACE_TRIM', '   ', ''],
+      ['EMAIL_PLACEHOLDER_TO_NULL', '', null],
+    ]);
+    expect(result.flags).toEqual([{ kind: 'email_placeholder', field: 'email', raw: '   ' }]);
+  });
+
+  it('keeps an empty raw value null with no record (ADR-0009 item 1, empty is empty)', () => {
+    expect(mapEmail('')).toEqual({ value: null, records: [], flags: [] });
+  });
+
   it.each(['n.v.t.', 'x', '-', 'none', 'info@', '@gmail.com'])(
     'blanks the placeholder %s with no proposal',
     (raw) => {

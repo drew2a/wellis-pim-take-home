@@ -12,7 +12,12 @@ export function mapEmail(raw: string): Mapped<string | null> {
   const records: RecordDraft[] = [...trimmed.records];
   let value = trimmed.value;
   if (value === '') {
-    return mapped(null, records);
+    // An empty raw value is null with no record (ADR-0009 item 1). A value that is only
+    // whitespace is not empty raw: the chain has to end at null and a human has to be told,
+    // otherwise a stored null has no record naming it and no review item either.
+    if (raw === '') return mapped(null, records);
+    records.push({ field: 'email', from: '', to: null, ruleCode: 'EMAIL_PLACEHOLDER_TO_NULL' });
+    return mapped(null, records, [{ kind: 'email_placeholder', field: 'email', raw }]);
   }
   const lower = value.toLowerCase();
   if (lower !== value) {
