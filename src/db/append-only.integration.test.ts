@@ -67,7 +67,9 @@ describe('evidence tables are append-only (R-B21, ADR-0007)', () => {
   });
 
   afterAll(async () => {
-    await database.drop();
+    // Still runs when beforeAll failed before assigning `database`; a TypeError here would bury
+    // the real failure under a second one.
+    await (database as TestDatabase | undefined)?.drop();
   });
 
   describe.each(EVIDENCE_TABLES.map((t) => [getTableName(t.table), t] as const))(

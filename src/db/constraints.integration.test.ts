@@ -22,7 +22,9 @@ describe('database constraints (ADR-0004)', () => {
   });
 
   afterAll(async () => {
-    await database.drop();
+    // Still runs when beforeAll failed before assigning `database`; a TypeError here would bury
+    // the real failure under a second one.
+    await (database as TestDatabase | undefined)?.drop();
   });
 
   async function insertPatient(
