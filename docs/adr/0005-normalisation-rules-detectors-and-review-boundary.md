@@ -50,7 +50,7 @@ not a rule engine"); option 3 fails R-A9 and would produce thousands of identica
 | patients.legacy_id | text, unique, opaque | none | none |
 | patients.full_name | text as typed | `WHITESPACE_TRIM` 72 | none |
 | patients.email | trimmed, lowercased | `WHITESPACE_TRIM` 30, `EMAIL_LOWERCASE` 28 | row: 11 placeholders (null, no fix); row: 10 internal space (null, **proposed fix** remove space) |
-| patients.dob | date | `DATE_ORDER_FROM_SEPARATOR` 638 (ISO = Y-M-D, dash = D-M-Y, slash = M-D-Y) | vocabulary: confirm the convention (H-1 evidence); row: 6 impossible dates (null); row: 6 where the alternative reading flips minor/adult at an intake |
+| patients.dob | date | `DATE_ORDER_FROM_SEPARATOR` 638 (ISO = Y-M-D, dash = D-M-Y, slash = M-D-Y) | vocabulary: confirm the convention (H-1 evidence); row: 5 impossible dates (null, ADR-0009 item 1); row: 6 where the alternative reading flips minor/adult at an intake |
 | patients.sex | enum | `VOCAB_SEX` 1976 | vocabulary per unseen value |
 | patients.bsn | text, `bsn_check` | none | row: 17 elfproef failures; vocabulary: bsn retention (keep / mask / drop), console masks by default |
 | patients.phone | E.164 | `PHONE_E164_NL_MOBILE` 1259 | row per unmatched future form (proposed fix when obvious) |
