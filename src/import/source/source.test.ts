@@ -4,6 +4,7 @@ import { parseCsv, serialiseCsvRecord } from './csv';
 import { EXPORT_FILES, readExportFiles } from './files';
 import { sha256Hex } from './hash';
 import { parseConsentsJsonl } from './jsonl';
+import { INTAKES_HEADER, PATIENTS_HEADER } from './layout';
 
 const utf8 = (s: string): Uint8Array => Buffer.from(s, 'utf8');
 const text = (b: Uint8Array): string => Buffer.from(b).toString('utf8');
@@ -83,43 +84,8 @@ describe('legacy_export/ round-trips byte for byte', () => {
   });
 
   it.each([
-    [
-      'patients.csv',
-      [
-        'legacy_id',
-        'full_name',
-        'email',
-        'dob',
-        'sex',
-        'bsn',
-        'phone',
-        'city',
-        'weight',
-        'weight_unit',
-        'height_cm',
-        'status',
-        'signup_date',
-        'source',
-      ],
-      2466,
-    ],
-    [
-      'intakes.csv',
-      [
-        'intake_id',
-        'legacy_patient_id',
-        'submitted_at',
-        'questionnaire_version',
-        'weight',
-        'height',
-        'meds_current',
-        'conditions',
-        'alcohol_units_week',
-        'outcome',
-        'reviewer_note',
-      ],
-      2917,
-    ],
+    ['patients.csv', PATIENTS_HEADER, 2466],
+    ['intakes.csv', INTAKES_HEADER, 2917],
   ] as const)('%s: every record equals its source line', (name, header, count) => {
     const file = files[name];
     const lines = text(file.bytes).split('\r\n');
