@@ -1,6 +1,7 @@
 # ADR-0007: Amendments to ADR-0004: append-only evidence by trigger, consent timestamps as instants
 
 - **Status:** accepted
+- **Amended by:** [ADR-0008](0008-re-runs-under-immutability-patient-membership-and-provenance.md) (the alias-table join is replaced by membership through `merged_into`; `MIGRATION_URL` is the same role through the session pooler, not a second URL in ADR-0007's sense)
 - **Date:** 2026-09-10
 - **Deciders:** Andrei Andreev
 - **Requirements:** R-A7, R-A8, R-A15, R-B20, R-B21 · **Amends:** ADR-0004 (the audit_entries
