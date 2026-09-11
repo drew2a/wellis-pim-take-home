@@ -42,15 +42,17 @@ function slugFromTestPath(): string {
 }
 
 /**
- * Isolation strategy for integration tests (ADR-0003): a database per test file.
+ * Isolation strategy for integration tests: a database per test file.
  *
- * A whole database rather than a schema because drizzle-kit pins enum DDL to `public`
- * (`CREATE TYPE "public"."sex"`), so a schema swap would need the migration SQL rewritten. A
- * fresh database runs the committed files verbatim, as production does. A rolled-back
- * transaction per test was rejected because constraint tests abort the transaction on every
+ * ADR-0003 prescribes "a schema or a transaction" per file; this is a deliberate deviation.
+ * A schema does not work because drizzle-kit pins enum DDL to `public`
+ * (`CREATE TYPE "public"."sex"`), so a schema swap would need the migration SQL rewritten,
+ * while a fresh database runs the committed files verbatim, as production does. A rolled-back
+ * transaction per test does not work because constraint tests abort the transaction on every
  * expected failure, and because the migration and trigger behaviour under test is DDL.
  *
- * Needs CREATEDB on the DATABASE_URL role; the compose and CI users are superusers.
+ * Needs CREATEDB on the DATABASE_URL role (README, Checks); the compose and CI users are
+ * superusers.
  */
 export async function createTestDatabase(): Promise<TestDatabase> {
   const name = `wellis_test_${slugFromTestPath()}`;

@@ -15,6 +15,7 @@ export default defineConfig({
   test: {
     include: ['src/**/*.integration.test.ts'],
     // Files may run in parallel: each creates and migrates its own database through
-    // src/test/database.ts (ADR-0003 isolation, database per file), so no two files share tables.
+    // src/test/database.ts (a database per file, see the rationale there), so no two files
+    // share tables.
   },
 });

@@ -41,7 +41,10 @@ npm run db:up               # the integration tests need the compose database
 npm run check               # typecheck, lint, format check, unit tests, integration tests
 ```
 
-The integration tests fail if `DATABASE_URL` is unset. The
+The integration tests fail if `DATABASE_URL` is unset. Each test file creates, migrates and
+drops its own database named `wellis_test_<file>`, so the `DATABASE_URL` role needs `CREATEDB`
+(the compose and CI users are superusers), and the host must be local unless
+`ALLOW_REMOTE_TEST_DATABASE=1` is set. The
 individual steps are `typecheck`, `lint`, `format:check` (`format` rewrites), `test` and
 `test:integration` in `package.json`. CI (`.github/workflows/ci.yml`) runs `npm run check`
 against a Postgres service container, then `npm run build`.
