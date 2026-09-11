@@ -233,6 +233,8 @@ describe('database constraints (ADR-0004)', () => {
       ['review_items', 'status'],
       ['review_items', 'type'],
       ['intakes', 'state'],
+      // Leading column of the (entity_type, entity_id) index the audit timeline reads.
+      ['audit_entries', 'entity_type'],
     ])('exist on the filter column %s.%s', async (table, column) => {
       const indexes = await database.sql<{ indexname: string }[]>`
         select i.indexrelid::regclass::text as indexname

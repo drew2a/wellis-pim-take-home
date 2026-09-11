@@ -1,6 +1,6 @@
 {
-  "id": "251486a3-15b2-4c2d-8588-bf78fe2f0ba9",
-  "prevId": "87340089-105f-45b8-92ec-2ca8e83227e8",
+  "id": "270c1071-35e5-48d8-8515-a5b7d07f6709",
+  "prevId": "1bdab550-1fe1-4f49-a0ec-5ee9245b0942",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -83,6 +83,27 @@
           "columns": [
             {
               "expression": "review_item_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        },
+        "audit_entries_entity_idx": {
+          "name": "audit_entries_entity_idx",
+          "columns": [
+            {
+              "expression": "entity_type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "entity_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"

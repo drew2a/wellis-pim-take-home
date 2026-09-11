@@ -239,6 +239,7 @@ ALTER TABLE "review_items" ADD CONSTRAINT "review_items_patient_id_patients_id_f
 ALTER TABLE "review_items" ADD CONSTRAINT "review_items_intake_id_intakes_id_fk" FOREIGN KEY ("intake_id") REFERENCES "public"."intakes"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "review_items" ADD CONSTRAINT "review_items_created_by_run_import_runs_id_fk" FOREIGN KEY ("created_by_run") REFERENCES "public"."import_runs"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "audit_entries_review_item_id_idx" ON "audit_entries" USING btree ("review_item_id");--> statement-breakpoint
+CREATE INDEX "audit_entries_entity_idx" ON "audit_entries" USING btree ("entity_type","entity_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "consent_events_source_line_unique" ON "consent_events" USING btree ("source_line") WHERE "consent_events"."source_line" is not null;--> statement-breakpoint
 CREATE INDEX "consent_events_patient_id_idx" ON "consent_events" USING btree ("patient_id");--> statement-breakpoint
 CREATE INDEX "consent_events_import_run_id_idx" ON "consent_events" USING btree ("import_run_id");--> statement-breakpoint

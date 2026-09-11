@@ -463,7 +463,11 @@ export const auditEntries = pgTable(
     // entries, each of which is a new event (ADR-0008).
     dedupeKey: text('dedupe_key').unique(),
   },
-  (table) => [index('audit_entries_review_item_id_idx').on(table.reviewItemId)],
+  (table) => [
+    index('audit_entries_review_item_id_idx').on(table.reviewItemId),
+    // The patient detail view reads the audit timeline by entity, and this table only grows.
+    index('audit_entries_entity_idx').on(table.entityType, table.entityId),
+  ],
 );
 
 export interface AuditChange {
