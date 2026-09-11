@@ -41,6 +41,11 @@ describe('parseEnv', () => {
     expect(parseEnv({ DATABASE_URL: url, MIGRATION_URL: migration }).MIGRATION_URL).toBe(migration);
   });
 
+  it('treats an empty MIGRATION_URL as unset, as `MIGRATION_URL=` in .env or an unbound CI secret', () => {
+    const url = 'postgres://wellis:wellis@localhost:5432/wellis';
+    expect(parseEnv({ DATABASE_URL: url, MIGRATION_URL: '' }).MIGRATION_URL).toBeUndefined();
+  });
+
   it('rejects a MIGRATION_URL that is not a postgres URL', () => {
     const url = 'postgres://wellis:wellis@localhost:5432/wellis';
     expect(() => parseEnv({ DATABASE_URL: url, MIGRATION_URL: 'https://example.com' })).toThrow(
