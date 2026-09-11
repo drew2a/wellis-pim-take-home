@@ -70,6 +70,7 @@ erDiagram
     timestamptz finished_at "null"
     text importer_version
     boolean dry_run
+    date as_of
     text patients_sha256
     integer patients_bytes
     text intakes_sha256

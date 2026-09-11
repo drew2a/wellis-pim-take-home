@@ -97,6 +97,10 @@ export const importRuns = pgTable('import_runs', {
   finishedAt: timestamptz('finished_at'),
   importerVersion: text('importer_version').notNull(),
   dryRun: boolean('dry_run').notNull(),
+  // The reference date for every "future" judgement of the run (impossible dates, future-dated
+  // consent events): the --as-of argument, never the wall clock, so a run is reproducible from
+  // its row (ADR-0009).
+  asOf: date('as_of', { mode: 'string' }).notNull(),
   // The export is exactly three files (ASSIGNMENT.md §2); columns beat a jsonb map here.
   patientsSha256: text('patients_sha256').notNull(),
   patientsBytes: integer('patients_bytes').notNull(),
