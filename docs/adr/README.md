@@ -26,9 +26,10 @@ what may be edited and when.
 ### Lifecycle
 
 - While **`proposed`**, an ADR is a draft and **MAY** be edited freely.
-- Once **`accepted`**, its content is immutable except the status line and trivial fixes
-  (typos, broken links). Arithmetic corrections to evidence counts that do not alter the
-  decision are trivial fixes too, recorded in the commit message that makes them.
+- Once **`accepted`**, its content is immutable except the status line, an **Amended by**
+  pointer to a later ADR (a navigation line next to the status, not content) and trivial
+  fixes (typos, broken links). Arithmetic corrections to evidence counts that do not alter
+  the decision are trivial fixes too, recorded in the commit message that makes them.
 - Any change of substance is a **new ADR** that states `supersedes ADR-NNNN`; the old one
   gets status `superseded by ADR-MMMM`. **Both files stay** — nothing is deleted.
 - The agent never self-accepts. The human flips `proposed` → `accepted` themselves, in a
