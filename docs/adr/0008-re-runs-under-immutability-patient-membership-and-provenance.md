@@ -1,6 +1,6 @@
 # ADR-0008: Amendments to ADR-0004, 0006 and 0007: re-runs under immutability, patient membership, provenance
 
-- **Status:** proposed
+- **Status:** accepted
 - **Date:** 2026-09-11
 - **Deciders:** Andrei Andreev
 - **Requirements:** R-A7, R-A15, R-A16, R-A17, R-B20, R-B21, R-C4 · **Amends:** ADR-0004
