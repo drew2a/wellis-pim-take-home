@@ -126,6 +126,31 @@ corrected, deferred or declined each one.
   ESLint and Prettier not configured (ADR-0003 places tooling in the scaffold branch, which is
   next; deferred, not dismissed).
 
+## Importer load (2026-09-11, `feature/importer-load`)
+
+Plan, accept, execute: the agent read ADR-0004 to ADR-0008 and proposed the build, the
+`src/import/` layout (pure per-column mapper files, a review layer that turns the mapper's flags
+into items, one orchestrator), one branch instead of two along the patients / intakes seam, and the
+tests to write first. It listed eight decisions no accepted ADR settled; I accepted them with two
+refinements (entity types for new-flow normalisation records; one exported actor set) and had them
+drafted as ADR-0009, proposed, second commit after `rules/v1.json`.
+
+What the tests found while the branch was built:
+
+- **Impossible dobs are 5, not 6.** ADR-0005 counted "5 future, 1 above 100"; the one above 100 is
+  a 1958 birth date whose signup date is in 2062. The signup is what is impossible and already has
+  its own item, so the mapper keeps the dob. Recorded in ADR-0009 item 1 and in the count test.
+- **The alternative dob reading must include ISO values read as Y-D-M**, as the profile does
+  (P-4: 987 ambiguous values). Without it the minor/adult flip check found 2 of the 6 patients.
+- **A changed source row must be mapped from the stored raw row**, not from the incoming file.
+  The first version mapped from the file; the end-to-end test caught the canonical city following
+  the new export while the raw row, correctly, kept the old one.
+
+Two conventions surfaced in code and went into the proposed ADR-0009 rather than into comments: a
+human transition makes `state` human-owned (otherwise a re-run returns a reopened legacy intake to
+its legacy state), and an unseen outcome spelling sits in `legacy_pending` until its item is
+resolved.
+
 ## What I would do differently
 
 _To be filled at the end._
