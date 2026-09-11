@@ -105,8 +105,8 @@ CREATE TABLE "legacy_consent_events_raw" (
 	"action" text NOT NULL,
 	"at" text NOT NULL,
 	"version" text NOT NULL,
-	"source_file" text NOT NULL,
 	"line_no" integer PRIMARY KEY NOT NULL,
+	"source_file" text NOT NULL,
 	"row_hash" text NOT NULL,
 	"import_run_id" integer NOT NULL
 );
@@ -123,8 +123,8 @@ CREATE TABLE "legacy_intakes_raw" (
 	"alcohol_units_week" text NOT NULL,
 	"outcome" text NOT NULL,
 	"reviewer_note" text NOT NULL,
-	"source_file" text NOT NULL,
 	"line_no" integer NOT NULL,
+	"source_file" text NOT NULL,
 	"row_hash" text NOT NULL,
 	"import_run_id" integer NOT NULL
 );
@@ -144,8 +144,8 @@ CREATE TABLE "legacy_patients_raw" (
 	"status" text NOT NULL,
 	"signup_date" text NOT NULL,
 	"source" text NOT NULL,
-	"source_file" text NOT NULL,
 	"line_no" integer NOT NULL,
+	"source_file" text NOT NULL,
 	"row_hash" text NOT NULL,
 	"import_run_id" integer NOT NULL
 );

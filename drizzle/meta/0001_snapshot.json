@@ -1,6 +1,6 @@
 {
-  "id": "2ad3e280-dd94-4c97-b396-4de8993b64fd",
-  "prevId": "6c1140e6-97e0-4d9c-be27-dd23864f4862",
+  "id": "9ee87b89-b5d5-4f70-b360-c40dece88df2",
+  "prevId": "4382d4e6-b7d5-49ec-afcd-7c09c833098c",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -711,16 +711,16 @@
           "primaryKey": false,
           "notNull": true
         },
-        "source_file": {
-          "name": "source_file",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
         "line_no": {
           "name": "line_no",
           "type": "integer",
           "primaryKey": true,
+          "notNull": true
+        },
+        "source_file": {
+          "name": "source_file",
+          "type": "text",
+          "primaryKey": false,
           "notNull": true
         },
         "row_hash": {
@@ -828,15 +828,15 @@
           "primaryKey": false,
           "notNull": true
         },
-        "source_file": {
-          "name": "source_file",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
         "line_no": {
           "name": "line_no",
           "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source_file": {
+          "name": "source_file",
+          "type": "text",
           "primaryKey": false,
           "notNull": true
         },
@@ -963,15 +963,15 @@
           "primaryKey": false,
           "notNull": true
         },
-        "source_file": {
-          "name": "source_file",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
         "line_no": {
           "name": "line_no",
           "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source_file": {
+          "name": "source_file",
+          "type": "text",
           "primaryKey": false,
           "notNull": true
         },

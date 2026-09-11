@@ -114,9 +114,10 @@ const importRunRef = (name: string) => integer(name).references(() => importRuns
 // untrimmed (R-A8). Column order follows the header in docs/profile/data-profile.md.
 // ---------------------------------------------------------------------------------------------
 
+// line_no is declared per table, not here: it is a plain column on the CSV tables and the
+// primary key on the consent table, and a spread that one table then overrides is easy to misread.
 const rawBookkeeping = {
   sourceFile: text('source_file').notNull(),
-  lineNo: integer('line_no').notNull(),
   rowHash: text('row_hash').notNull(),
   importRunId: importRunRef('import_run_id').notNull(),
 };
@@ -136,6 +137,7 @@ export const legacyPatientsRaw = pgTable('legacy_patients_raw', {
   status: text('status').notNull(),
   signupDate: text('signup_date').notNull(),
   source: text('source').notNull(),
+  lineNo: integer('line_no').notNull(),
   ...rawBookkeeping,
 });
 
@@ -151,6 +153,7 @@ export const legacyIntakesRaw = pgTable('legacy_intakes_raw', {
   alcoholUnitsWeek: text('alcohol_units_week').notNull(),
   outcome: text('outcome').notNull(),
   reviewerNote: text('reviewer_note').notNull(),
+  lineNo: integer('line_no').notNull(),
   ...rawBookkeeping,
 });
 
@@ -162,8 +165,8 @@ export const legacyConsentEventsRaw = pgTable('legacy_consent_events_raw', {
   action: text('action').notNull(),
   at: text('at').notNull(),
   version: text('version').notNull(),
-  ...rawBookkeeping,
   lineNo: integer('line_no').primaryKey(),
+  ...rawBookkeeping,
 });
 
 // ---------------------------------------------------------------------------------------------

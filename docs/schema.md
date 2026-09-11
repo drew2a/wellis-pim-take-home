@@ -94,8 +94,8 @@ erDiagram
     text status
     text signup_date
     text source
-    text source_file
     integer line_no
+    text source_file
     text row_hash
     integer import_run_id FK
   }
@@ -111,8 +111,8 @@ erDiagram
     text alcohol_units_week
     text outcome
     text reviewer_note
-    text source_file
     integer line_no
+    text source_file
     text row_hash
     integer import_run_id FK
   }
@@ -122,8 +122,8 @@ erDiagram
     text action
     text at
     text version
-    text source_file
     integer line_no PK
+    text source_file
     text row_hash
     integer import_run_id FK
   }
