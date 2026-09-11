@@ -1,6 +1,8 @@
 import { drizzle, type PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import { migrate } from 'drizzle-orm/postgres-js/migrator';
+import { basename } from 'node:path';
 import postgres from 'postgres';
+import { expect } from 'vitest';
 
 import * as schema from '@/db/schema';
 import { loadEnv } from '@/env';
@@ -21,6 +23,25 @@ export interface TestDatabase {
 const SLUG = /^[a-z][a-z0-9_]{0,40}$/;
 
 /**
+ * The database is named after the test file, not a hand-typed slug: files run in parallel, and
+ * two files sharing a slug would FORCE-drop each other's live database mid-run. Vitest sets the
+ * path per file, so `beforeAll` in `src/db/constraints.integration.test.ts` gets `constraints`.
+ */
+function slugFromTestPath(): string {
+  const path = expect.getState().testPath;
+  if (path === undefined) {
+    throw new Error('createTestDatabase must be called from inside a Vitest test file');
+  }
+  const slug = basename(path)
+    .replace(/\.integration\.test\.ts$/, '')
+    .replaceAll(/[^a-z0-9_]/g, '_');
+  if (!SLUG.test(slug)) {
+    throw new Error(`test database slug must match ${SLUG.source}, got "${slug}" from ${path}`);
+  }
+  return slug;
+}
+
+/**
  * Isolation strategy for integration tests (ADR-0003): a database per test file.
  *
  * A whole database rather than a schema because drizzle-kit pins enum DDL to `public`
@@ -31,11 +52,8 @@ const SLUG = /^[a-z][a-z0-9_]{0,40}$/;
  *
  * Needs CREATEDB on the DATABASE_URL role; the compose and CI users are superusers.
  */
-export async function createTestDatabase(slug: string): Promise<TestDatabase> {
-  if (!SLUG.test(slug)) {
-    throw new Error(`test database slug must match ${SLUG.source}, got "${slug}"`);
-  }
-  const name = `wellis_test_${slug}`;
+export async function createTestDatabase(): Promise<TestDatabase> {
+  const name = `wellis_test_${slugFromTestPath()}`;
   const env = loadEnv();
   const maintenanceUrl = env.DATABASE_URL;
   assertTestDatabaseHost(maintenanceUrl, env.ALLOW_REMOTE_TEST_DATABASE === '1');

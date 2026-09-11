@@ -31,7 +31,7 @@ describe('migrations under drizzle/ (ADR-0004)', () => {
   let database: TestDatabase;
 
   beforeAll(async () => {
-    database = await createTestDatabase('migrations');
+    database = await createTestDatabase();
   });
 
   afterAll(async () => {

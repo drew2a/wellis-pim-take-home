@@ -57,7 +57,7 @@ describe('evidence tables are append-only (R-B21, ADR-0007)', () => {
   let importRunId: number;
 
   beforeAll(async () => {
-    database = await createTestDatabase('append_only');
+    database = await createTestDatabase();
     await database.migrate();
     const [run] = await database.db
       .insert(schema.importRuns)

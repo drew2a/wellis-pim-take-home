@@ -17,7 +17,7 @@ describe('database constraints (ADR-0004)', () => {
   let database: TestDatabase;
 
   beforeAll(async () => {
-    database = await createTestDatabase('constraints');
+    database = await createTestDatabase();
     await database.migrate();
   });
 
