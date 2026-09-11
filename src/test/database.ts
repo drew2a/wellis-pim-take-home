@@ -36,7 +36,9 @@ export async function createTestDatabase(slug: string): Promise<TestDatabase> {
     throw new Error(`test database slug must match ${SLUG.source}, got "${slug}"`);
   }
   const name = `wellis_test_${slug}`;
-  const maintenanceUrl = loadEnv().DATABASE_URL;
+  const env = loadEnv();
+  const maintenanceUrl = env.DATABASE_URL;
+  assertTestDatabaseHost(maintenanceUrl, env.ALLOW_REMOTE_TEST_DATABASE === '1');
 
   await withMaintenanceConnection(maintenanceUrl, async (admin) => {
     // A previous run that crashed before `drop()` leaves its database behind; FORCE also
@@ -61,6 +63,23 @@ export async function createTestDatabase(slug: string): Promise<TestDatabase> {
       );
     },
   };
+}
+
+const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
+
+/**
+ * `DROP DATABASE ... WITH (FORCE)` on a host that is not this machine is a production incident
+ * waiting for a .env left pointing at Supabase. Exported for its unit test.
+ */
+export function assertTestDatabaseHost(url: string, allowRemote: boolean): void {
+  const { hostname } = new URL(url);
+  if (allowRemote || LOCAL_HOSTS.has(hostname)) {
+    return;
+  }
+  throw new Error(
+    `refusing to create test databases on "${hostname}": DATABASE_URL must point at a local ` +
+      'Postgres, or set ALLOW_REMOTE_TEST_DATABASE=1 to override',
+  );
 }
 
 async function withMaintenanceConnection(
