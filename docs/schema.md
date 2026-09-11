@@ -250,25 +250,25 @@ erDiagram
     integer import_run_id FK "null"
   }
   %% foreign keys
-  import_runs ||--o{ legacy_patients_raw : import_run_id
-  import_runs ||--o{ legacy_intakes_raw : import_run_id
-  import_runs ||--o{ legacy_consent_events_raw : import_run_id
-  patients |o--o{ patients : merged_into
-  import_runs |o--o{ patients : created_by_run
-  patients ||--o{ patient_legacy_ids : patient_id
-  patients |o--o{ intakes : patient_id
-  import_runs |o--o{ intakes : created_by_run
-  patients ||--o{ consent_states : patient_id
-  consent_events |o--o{ consent_states : derived_from_event_id
-  patients |o--o{ consent_events : patient_id
-  import_runs |o--o{ consent_events : import_run_id
-  import_runs |o--o{ normalisation_records : import_run_id
-  review_items |o--o{ audit_entries : review_item_id
-  patients |o--o{ review_items : patient_id
-  intakes |o--o{ review_items : intake_id
-  import_runs |o--o{ review_items : created_by_run
-  intakes ||--o{ eligibility_evaluations : intake_id
-  import_runs |o--o{ eligibility_evaluations : import_run_id
+  import_runs ||--o{ legacy_patients_raw : "import_run_id"
+  import_runs ||--o{ legacy_intakes_raw : "import_run_id"
+  import_runs ||--o{ legacy_consent_events_raw : "import_run_id"
+  patients |o--o{ patients : "merged_into"
+  import_runs |o--o{ patients : "created_by_run"
+  patients ||--o{ patient_legacy_ids : "patient_id"
+  patients |o--o{ intakes : "patient_id"
+  import_runs |o--o{ intakes : "created_by_run"
+  patients ||--o{ consent_states : "patient_id"
+  consent_events |o--o{ consent_states : "derived_from_event_id"
+  patients |o--o{ consent_events : "patient_id"
+  import_runs |o--o{ consent_events : "import_run_id"
+  import_runs |o--o{ normalisation_records : "import_run_id"
+  review_items |o--o{ audit_entries : "review_item_id"
+  patients |o--o{ review_items : "patient_id"
+  intakes |o--o{ review_items : "intake_id"
+  import_runs |o--o{ review_items : "created_by_run"
+  intakes ||--o{ eligibility_evaluations : "intake_id"
+  import_runs |o--o{ eligibility_evaluations : "import_run_id"
 ```
 
 | enum | values |

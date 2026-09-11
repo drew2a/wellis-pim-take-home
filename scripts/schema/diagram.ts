@@ -8,7 +8,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 
 import { getTableName, is } from 'drizzle-orm';
-import { getTableConfig, PgEnumColumn, PgTable } from 'drizzle-orm/pg-core';
+import { getTableConfig, isPgEnum, PgEnumColumn, PgTable } from 'drizzle-orm/pg-core';
 
 import { APPEND_ONLY_TABLE_NAMES } from '../../src/db/append-only';
 import * as schema from '../../src/db/schema';
@@ -110,10 +110,10 @@ function renderRelationships(tables: Map<string, PgTable>): string[] {
       const table = tables.get(name) as PgTable;
       for (const fk of getTableConfig(table).foreignKeys) {
         const { columns, foreignTable } = fk.reference();
-        const column = columns[0] as (typeof columns)[number];
-        // Parent side: exactly one when the FK column is NOT NULL, zero or one when nullable.
-        const parent = column.notNull ? '||' : '|o';
-        lines.push(`  ${getTableName(foreignTable)} ${parent}--o{ ${name} : ${column.name}`);
+        // Parent side: exactly one when every FK column is NOT NULL, zero or one otherwise.
+        const parent = columns.every((column) => column.notNull) ? '||' : '|o';
+        const label = columns.map((column) => column.name).join(', ');
+        lines.push(`  ${getTableName(foreignTable)} ${parent}--o{ ${name} : "${label}"`);
       }
     }
   }
@@ -123,9 +123,11 @@ function renderRelationships(tables: Map<string, PgTable>): string[] {
 function renderEnums(): string[] {
   const lines = ['| enum | values |', '| --- | --- |'];
   const enums = Object.values(schema)
-    .filter((value) => typeof value === 'function' && 'enumName' in value)
-    .map((value) => value as { enumName: string; enumValues: string[] })
+    .filter((value) => isPgEnum(value))
     .sort((a, b) => a.enumName.localeCompare(b.enumName));
+  if (enums.length === 0) {
+    throw new Error('no pgEnum exports found in src/db/schema.ts');
+  }
   for (const e of enums) {
     lines.push(`| \`${e.enumName}\` | ${e.enumValues.map((v) => `\`${v}\``).join(', ')} |`);
   }
