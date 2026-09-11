@@ -18,12 +18,12 @@ export function formatSummary(s: ImportSummary): string {
   out.push('files');
   for (const f of s.files) out.push(line(`${f.name} (${f.size} bytes)`, f.sha256));
   out.push('');
-  out.push('raw rows (inserted / unchanged / changed since an earlier run)');
+  out.push('raw rows (inserted / unchanged / changed since an earlier run / repeated keys)');
   for (const [table, c] of sortedEntries(
     Object.fromEntries(Object.entries(s.raw).map(([k, v]) => [k, v.inserted])),
   )) {
     const r = s.raw[table as keyof typeof s.raw];
-    out.push(line(table, `${c} / ${r.unchanged} / ${r.changed}`));
+    out.push(line(table, `${c} / ${r.unchanged} / ${r.changed} / ${r.duplicates}`));
   }
   out.push('');
   out.push('rules applied (rows over the whole export)');

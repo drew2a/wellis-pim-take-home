@@ -18,6 +18,12 @@ const patients = parseCsv(files['patients.csv'].bytes, PATIENTS_HEADER);
 const intakes = parseCsv(files['intakes.csv'].bytes, INTAKES_HEADER);
 const consents = parseConsentsJsonl(files['consents.jsonl'].bytes);
 
+/** The same source row under a different legacy id and line, so a duplicate key can be built. */
+function withLegacyId(record: CsvRecord, legacyId: string, lineNo: number): CsvRecord {
+  const fields = record.fields.map((f, i) => (i === 0 ? legacyId : f));
+  return { lineNo, raw: Buffer.from(serialiseCsvRecord(fields), 'utf8'), fields };
+}
+
 describe('raw load', () => {
   let database: TestDatabase;
   let firstRun: number;
@@ -95,6 +101,31 @@ describe('raw load', () => {
       select string_agg(distinct import_run_id::text, ',') as runs from legacy_patients_raw
     `;
     expect(row?.runs).toBe(String(firstRun));
+  });
+
+  // The canonical layer is built from `stored` (ADR-0004), so a key the export repeats must
+  // collapse here: before this, the raw table silently kept the first row while the canonical
+  // layer mapped both and died on the patient_legacy_ids primary key.
+  it('keeps the first of two source rows sharing a natural key and reports the repeat', async () => {
+    const dupRun = await startRun(database.db, { files, asOf: '2026-09-08', dryRun: false });
+    const first = withLegacyId(patients[10] as CsvRecord, 'recDuplicateKey', 2);
+    const second = withLegacyId(patients[11] as CsvRecord, 'recDuplicateKey', 3);
+
+    const result = await loadRawPatients(database.db, dupRun, [first, second]);
+
+    expect(result.inserted).toBe(1);
+    expect(result.duplicateKeys).toEqual(['recDuplicateKey']);
+    expect(result.changed).toEqual([]);
+    // One row to map, carrying the first occurrence's values.
+    expect(result.stored).toHaveLength(1);
+    expect(result.stored[0]?.fields.legacy_id).toBe('recDuplicateKey');
+    expect(result.stored[0]?.fields.full_name).toBe(first.fields[1]);
+    expect(result.stored[0]?.lineNo).toBe(2);
+    const rows = await database.db
+      .select()
+      .from(legacyPatientsRaw)
+      .where(sql`${legacyPatientsRaw.legacyId} = 'recDuplicateKey'`);
+    expect(rows).toHaveLength(1);
   });
 
   it('reports a changed source row with both versions and leaves the stored row alone', async () => {

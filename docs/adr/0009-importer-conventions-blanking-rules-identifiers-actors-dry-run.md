@@ -4,8 +4,8 @@
 - **Date:** 2026-09-11
 - **Deciders:** Andrei Andreev
 - **Requirements:** R-A7, R-A9, R-A10, R-A14, R-A15, R-A17, R-A22, R-B20 · **Amends:** ADR-0004
-  (`import_runs` columns), ADR-0005 (rule codes for values the mapper blanks), ADR-0007 (which
-  instant an ambiguous consent wall time becomes)
+  (`import_runs` columns, and which rows the canonical layer is built from), ADR-0005 (rule codes
+  for values the mapper blanks), ADR-0007 (which instant an ambiguous consent wall time becomes)
 
 ## Context and problem statement
 
@@ -44,6 +44,7 @@ are the importer's contract with the branches that follow, so they are recorded 
 | 6 | Dry run | The whole import runs in one transaction. With `--dry-run` that transaction is rolled back after the counts are printed; the `import_runs` row (`dry_run = true`, `report_path` null) is written in its own committed transaction beforehand and its `finished_at` set afterwards, so the run is on record and the data tables are untouched. A run that throws leaves nothing but its `import_runs` row with `finished_at` null. |
 | 7 | Ambiguous and non-existent consent wall times | Conversion via `Europe/Amsterdam` (ADR-0007). A wall time in the autumn fall-back hour has two instants; the importer takes the **earlier** one (summer offset, the first occurrence) and records `ambiguous: true` in the record's evidence. A wall time in the spring gap has none; the importer takes the instant one hour later (the offset in force before the transition) and records `nonexistent: true`. Both counts are printed by the CLI; the hour histogram predicts zero for both. |
 | 8 | Unseen consent `action` or `type` | `consent_events.action` is an enum without `unknown` and the event cannot be stored without one. The raw row is stored (it always is), no canonical event is written, and one vocabulary item per unseen value is raised with the affected line numbers in its payload; the consent-state derivation of the detectors branch treats the patient's events as incomplete until the item is resolved. An unseen `type` is stored as exported (text column) with the same one item; the state is per type and a new type is not folded into `data_processing`. Likewise an intake whose `outcome` spelling is unseen maps to `unknown` and sits in `legacy_pending`, the one non-terminal legacy state, until its vocabulary item is resolved; its audit entry names the raw outcome. Zero rows in this export. |
+| 9 | A natural key the export repeats | The raw table holds one row per natural key, so the **first occurrence wins** and the later ones are reported, never stored: repeating a key is a fact about the export, not a second patient. The raw load returns the repeats as `duplicateKeys` and the CLI prints the count per table. The canonical layer is built from the rows the raw load returned, so a repeat cannot become a second `patients` row. **Open, and the reason this item exists:** whether a repeat also raises a `review_items` row. It should — a repeated `legacy_id` carrying different values is two competing versions of one person, which is an `identity_conflict` a human has to resolve, and a count in the report is not a decision anyone acts on. That item is **not built** on this branch, because the item type, its payload and its dedupe key are an auto-fix-versus-review decision (`CLAUDE.md` §1) and this ADR is still `proposed`. Zero rows in this export (`legacy_id` and `intake_id` are both distinct over the whole file), so nothing is unreported today. |
 
 ### Consequences
 
@@ -55,6 +56,8 @@ are the importer's contract with the branches that follow, so they are recorded 
 - Bad: between this branch and the detectors branch, 22 nulled weights and heights have no review
   item. Accepted for the duration of one branch; item 2 records the debt and the detectors
   branch's R-A16 test asserts the items exist.
+- Bad: a repeated natural key is a report count and not yet a review item (item 9). Accepted
+  only because the export has none; the branch that settles item 9 owes the item and the test.
 - Bad: two `entity_id` conventions in one database. Accepted: they live in different tables with
   different questions ("what did the export say" versus "what happened to this patient"), and
   `entity_type` names which one applies on every row.
@@ -67,6 +70,8 @@ are the importer's contract with the branches that follow, so they are recorded 
   with one of the codes in item 1; `IMPLAUSIBLE_TO_NULL` counts are 5, 5, 6, 6 by table and field.
 - `SYSTEM_ACTORS` is the only actor list the importer and the resolution path import.
 - Integration test: a dry run leaves one more `import_runs` row and no other count changed.
+- Integration test: two source rows sharing a `legacy_id` store one raw row, report the repeat,
+  and produce one canonical patient rather than a primary-key violation (item 9).
 - The CLI prints the fall-back and spring-gap counts; both are 0 for this export.
 
 ## More information

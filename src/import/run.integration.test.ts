@@ -75,9 +75,9 @@ describe('npm run import', () => {
 
   it('loads the export with the counts of ADR-0004 and the rules of ADR-0005', async () => {
     expect(first.raw).toEqual({
-      legacy_patients_raw: { inserted: 2466, unchanged: 0, changed: 0 },
-      legacy_intakes_raw: { inserted: 2917, unchanged: 0, changed: 0 },
-      legacy_consent_events_raw: { inserted: 2643, unchanged: 0, changed: 0 },
+      legacy_patients_raw: { inserted: 2466, unchanged: 0, changed: 0, duplicates: 0 },
+      legacy_intakes_raw: { inserted: 2917, unchanged: 0, changed: 0, duplicates: 0 },
+      legacy_consent_events_raw: { inserted: 2643, unchanged: 0, changed: 0, duplicates: 0 },
     });
     expect(first.canonical).toEqual({
       patients: { inserted: 2466, updated: 0 },
@@ -178,7 +178,12 @@ describe('npm run import', () => {
 
     const changed = await runImport(database.db, { ...options, exportDir: dir });
 
-    expect(changed.raw.legacy_patients_raw).toEqual({ inserted: 0, unchanged: 2465, changed: 1 });
+    expect(changed.raw.legacy_patients_raw).toEqual({
+      inserted: 0,
+      unchanged: 2465,
+      changed: 1,
+      duplicates: 0,
+    });
     expect(changed.reviewItemsInserted).toBe(1);
     const after = await counts();
     expect(after.review_items).toBe(before.review_items + 1);

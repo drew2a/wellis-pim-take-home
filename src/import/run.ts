@@ -40,8 +40,8 @@ import {
 import { finishRun, startRun } from './runs';
 import { parseCsv } from './source/csv';
 import { readExportFiles, type ExportFile } from './source/files';
-import { parseConsentsJsonl, type ConsentLine } from './source/jsonl';
-import { INTAKES_HEADER, PATIENTS_HEADER, byHeader } from './source/layout';
+import { parseConsentsJsonl } from './source/jsonl';
+import { INTAKES_HEADER, PATIENTS_HEADER } from './source/layout';
 import { IMPORTER_VERSION } from './version';
 
 export interface ImportOptions {
@@ -66,7 +66,13 @@ export interface ImportSummary {
   readonly raw: Readonly<
     Record<
       RawTable,
-      { readonly inserted: number; readonly unchanged: number; readonly changed: number }
+      {
+        readonly inserted: number;
+        readonly unchanged: number;
+        readonly changed: number;
+        /** Natural keys the export repeats; the raw table holds the first occurrence only. */
+        readonly duplicates: number;
+      }
     >
   >;
   /** Rows per rule code over the whole export, the same on every run (the ADR-0005 table). */
@@ -141,32 +147,15 @@ export async function runImport(db: Queryable, options: ImportOptions): Promise<
       const rawIntakes = await loadRawIntakes(tx, runId, intakeRecords);
       const rawConsents = await loadRawConsentEvents(tx, runId, consentRecords);
 
-      // Canonical rows are rewritten from the raw layer (ADR-0004): a row whose source changed
-      // is mapped from its stored version, and the incoming version lives in a review item.
-      const stored = (changed: readonly ChangedRawRow[]): Map<string, ChangedRawRow> =>
-        new Map(changed.map((c) => [c.key, c]));
-      const changedPatients = stored(rawPatients.changed);
-      const changedIntakes = stored(rawIntakes.changed);
-      const changedConsents = stored(rawConsents.changed);
+      // Canonical rows are rewritten from the raw layer (ADR-0004), so the mapper reads the rows
+      // the raw load returned, never the parsed file: a row whose source changed is mapped from
+      // its stored version (the incoming version lives in a review item), and a natural key the
+      // export repeats reaches the canonical layer once, because the raw table holds it once.
       const context = { asOf: options.asOf, rules: options.rules };
       const data: Mapped = {
-        patients: patientRecords.map((r) => {
-          const fields = byHeader(PATIENTS_HEADER, r.fields);
-          const c = changedPatients.get(fields.legacy_id);
-          return mapPatient(c === undefined ? fields : c.storedFields, context);
-        }),
-        intakes: intakeRecords.map((r) => {
-          const fields = byHeader(INTAKES_HEADER, r.fields);
-          const c = changedIntakes.get(fields.intake_id);
-          return mapIntake(c === undefined ? fields : c.storedFields, context);
-        }),
-        consents: consentRecords.map((r) => {
-          const c = changedConsents.get(String(r.lineNo));
-          return mapConsentEvent(
-            r.lineNo,
-            c === undefined ? r.fields : (c.storedFields as ConsentLine),
-          );
-        }),
+        patients: rawPatients.stored.map((r) => mapPatient(r.fields, context)),
+        intakes: rawIntakes.stored.map((r) => mapIntake(r.fields, context)),
+        consents: rawConsents.stored.map((r) => mapConsentEvent(r.lineNo, r.fields)),
       };
       const allRecords = [
         ...data.patients.flatMap((p) => p.records),
@@ -205,10 +194,12 @@ export async function runImport(db: Queryable, options: ImportOptions): Promise<
         inserted: number;
         unchanged: number;
         changed: readonly unknown[];
+        duplicateKeys: readonly string[];
       }) => ({
         inserted: r.inserted,
         unchanged: r.unchanged,
         changed: r.changed.length,
+        duplicates: r.duplicateKeys.length,
       });
       const result: ImportSummary = {
         runId,
