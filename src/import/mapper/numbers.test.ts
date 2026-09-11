@@ -45,10 +45,19 @@ describe('mapPatientWeight', () => {
     });
   });
 
-  it('blanks an unseen unit with VOCAB_UNKNOWN on weight_unit', () => {
+  // ADR-0009 item 1: the record that explains the stored null names the column that is nulled,
+  // so weight_kg needs its own record; weight_unit has no canonical column of its own.
+  it('blanks an unseen unit with VOCAB_UNKNOWN on both weight_kg and weight_unit', () => {
     const result = mapPatientWeight('12.0', 'st', WEIGHT);
     expect(result.value).toBeNull();
     expect(result.records).toEqual([
+      {
+        field: 'weight_kg',
+        from: '12.0',
+        to: null,
+        ruleCode: 'VOCAB_UNKNOWN',
+        detail: { weight_unit: 'st' },
+      },
       { field: 'weight_unit', from: 'st', to: null, ruleCode: 'VOCAB_UNKNOWN' },
     ]);
     expect(result.flags).toEqual([{ kind: 'vocabulary_unseen', field: 'weight_unit', raw: 'st' }]);

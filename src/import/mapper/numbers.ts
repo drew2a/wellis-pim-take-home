@@ -75,6 +75,16 @@ export function mapPatientWeight(
     ]);
   }
   if (rawUnit !== 'kg' && rawUnit !== 'lbs') {
+    // Two records, because two things happen: weight_kg is blanked (ADR-0009 item 1 wants the
+    // record on the column that ends up null) and the unit spelling is unseen. weight_unit has
+    // no canonical column, so its record alone would leave the dropped weight unexplained.
+    records.push({
+      field: 'weight_kg',
+      from: rawWeight,
+      to: null,
+      ruleCode: 'VOCAB_UNKNOWN',
+      detail: { weight_unit: rawUnit },
+    });
     records.push({ field: 'weight_unit', from: rawUnit, to: null, ruleCode: 'VOCAB_UNKNOWN' });
     return mapped(null, records, [
       { kind: 'vocabulary_unseen', field: 'weight_unit', raw: rawUnit },
