@@ -1,5 +1,5 @@
 {
-  "id": "4382d4e6-b7d5-49ec-afcd-7c09c833098c",
+  "id": "87340089-105f-45b8-92ec-2ca8e83227e8",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -77,7 +77,23 @@
           "notNull": false
         }
       },
-      "indexes": {},
+      "indexes": {
+        "audit_entries_review_item_id_idx": {
+          "name": "audit_entries_review_item_id_idx",
+          "columns": [
+            {
+              "expression": "review_item_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
         "audit_entries_review_item_id_review_items_id_fk": {
           "name": "audit_entries_review_item_id_review_items_id_fk",
@@ -184,6 +200,36 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "consent_events_patient_id_idx": {
+          "name": "consent_events_patient_id_idx",
+          "columns": [
+            {
+              "expression": "patient_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "consent_events_import_run_id_idx": {
+          "name": "consent_events_import_run_id_idx",
+          "columns": [
+            {
+              "expression": "import_run_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -263,7 +309,23 @@
           "default": "now()"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "consent_states_derived_from_event_id_idx": {
+          "name": "consent_states_derived_from_event_id_idx",
+          "columns": [
+            {
+              "expression": "derived_from_event_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
         "consent_states_patient_id_patients_id_fk": {
           "name": "consent_states_patient_id_patients_id_fk",
@@ -362,7 +424,38 @@
           "notNull": false
         }
       },
-      "indexes": {},
+      "indexes": {
+        "eligibility_evaluations_intake_id_idx": {
+          "name": "eligibility_evaluations_intake_id_idx",
+          "columns": [
+            {
+              "expression": "intake_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "eligibility_evaluations_import_run_id_idx": {
+          "name": "eligibility_evaluations_import_run_id_idx",
+          "columns": [
+            {
+              "expression": "import_run_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
         "eligibility_evaluations_intake_id_intakes_id_fk": {
           "name": "eligibility_evaluations_intake_id_intakes_id_fk",
@@ -625,7 +718,53 @@
           "notNull": false
         }
       },
-      "indexes": {},
+      "indexes": {
+        "intakes_patient_id_idx": {
+          "name": "intakes_patient_id_idx",
+          "columns": [
+            {
+              "expression": "patient_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "intakes_created_by_run_idx": {
+          "name": "intakes_created_by_run_idx",
+          "columns": [
+            {
+              "expression": "created_by_run",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "intakes_state_idx": {
+          "name": "intakes_state_idx",
+          "columns": [
+            {
+              "expression": "state",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
         "intakes_patient_id_patients_id_fk": {
           "name": "intakes_patient_id_patients_id_fk",
@@ -736,7 +875,23 @@
           "notNull": true
         }
       },
-      "indexes": {},
+      "indexes": {
+        "legacy_consent_events_raw_import_run_id_idx": {
+          "name": "legacy_consent_events_raw_import_run_id_idx",
+          "columns": [
+            {
+              "expression": "import_run_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
         "legacy_consent_events_raw_import_run_id_import_runs_id_fk": {
           "name": "legacy_consent_events_raw_import_run_id_import_runs_id_fk",
@@ -853,7 +1008,23 @@
           "notNull": true
         }
       },
-      "indexes": {},
+      "indexes": {
+        "legacy_intakes_raw_import_run_id_idx": {
+          "name": "legacy_intakes_raw_import_run_id_idx",
+          "columns": [
+            {
+              "expression": "import_run_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
         "legacy_intakes_raw_import_run_id_import_runs_id_fk": {
           "name": "legacy_intakes_raw_import_run_id_import_runs_id_fk",
@@ -988,7 +1159,23 @@
           "notNull": true
         }
       },
-      "indexes": {},
+      "indexes": {
+        "legacy_patients_raw_import_run_id_idx": {
+          "name": "legacy_patients_raw_import_run_id_idx",
+          "columns": [
+            {
+              "expression": "import_run_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
         "legacy_patients_raw_import_run_id_import_runs_id_fk": {
           "name": "legacy_patients_raw_import_run_id_import_runs_id_fk",
@@ -1083,7 +1270,23 @@
           "default": "now()"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "normalisation_records_import_run_id_idx": {
+          "name": "normalisation_records_import_run_id_idx",
+          "columns": [
+            {
+              "expression": "import_run_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
         "normalisation_records_import_run_id_import_runs_id_fk": {
           "name": "normalisation_records_import_run_id_import_runs_id_fk",
@@ -1135,7 +1338,23 @@
           "notNull": true
         }
       },
-      "indexes": {},
+      "indexes": {
+        "patient_legacy_ids_patient_id_idx": {
+          "name": "patient_legacy_ids_patient_id_idx",
+          "columns": [
+            {
+              "expression": "patient_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
         "patient_legacy_ids_patient_id_patients_id_fk": {
           "name": "patient_legacy_ids_patient_id_patients_id_fk",
@@ -1262,7 +1481,38 @@
           "notNull": false
         }
       },
-      "indexes": {},
+      "indexes": {
+        "patients_merged_into_idx": {
+          "name": "patients_merged_into_idx",
+          "columns": [
+            {
+              "expression": "merged_into",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "patients_created_by_run_idx": {
+          "name": "patients_created_by_run_idx",
+          "columns": [
+            {
+              "expression": "created_by_run",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
         "patients_merged_into_patients_id_fk": {
           "name": "patients_merged_into_patients_id_fk",
@@ -1441,7 +1691,83 @@
           "notNull": false
         }
       },
-      "indexes": {},
+      "indexes": {
+        "review_items_patient_id_idx": {
+          "name": "review_items_patient_id_idx",
+          "columns": [
+            {
+              "expression": "patient_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "review_items_intake_id_idx": {
+          "name": "review_items_intake_id_idx",
+          "columns": [
+            {
+              "expression": "intake_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "review_items_created_by_run_idx": {
+          "name": "review_items_created_by_run_idx",
+          "columns": [
+            {
+              "expression": "created_by_run",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "review_items_status_idx": {
+          "name": "review_items_status_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "review_items_type_idx": {
+          "name": "review_items_type_idx",
+          "columns": [
+            {
+              "expression": "type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
         "review_items_patient_id_patients_id_fk": {
           "name": "review_items_patient_id_patients_id_fk",

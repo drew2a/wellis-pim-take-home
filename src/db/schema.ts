@@ -8,6 +8,7 @@ import {
   boolean,
   check,
   date,
+  index,
   integer,
   jsonb,
   numeric,
@@ -122,52 +123,64 @@ const rawBookkeeping = {
   importRunId: importRunRef('import_run_id').notNull(),
 };
 
-export const legacyPatientsRaw = pgTable('legacy_patients_raw', {
-  legacyId: text('legacy_id').primaryKey(),
-  fullName: text('full_name').notNull(),
-  email: text('email').notNull(),
-  dob: text('dob').notNull(),
-  sex: text('sex').notNull(),
-  bsn: text('bsn').notNull(),
-  phone: text('phone').notNull(),
-  city: text('city').notNull(),
-  weight: text('weight').notNull(),
-  weightUnit: text('weight_unit').notNull(),
-  heightCm: text('height_cm').notNull(),
-  status: text('status').notNull(),
-  signupDate: text('signup_date').notNull(),
-  source: text('source').notNull(),
-  lineNo: integer('line_no').notNull(),
-  ...rawBookkeeping,
-});
+export const legacyPatientsRaw = pgTable(
+  'legacy_patients_raw',
+  {
+    legacyId: text('legacy_id').primaryKey(),
+    fullName: text('full_name').notNull(),
+    email: text('email').notNull(),
+    dob: text('dob').notNull(),
+    sex: text('sex').notNull(),
+    bsn: text('bsn').notNull(),
+    phone: text('phone').notNull(),
+    city: text('city').notNull(),
+    weight: text('weight').notNull(),
+    weightUnit: text('weight_unit').notNull(),
+    heightCm: text('height_cm').notNull(),
+    status: text('status').notNull(),
+    signupDate: text('signup_date').notNull(),
+    source: text('source').notNull(),
+    lineNo: integer('line_no').notNull(),
+    ...rawBookkeeping,
+  },
+  (table) => [index('legacy_patients_raw_import_run_id_idx').on(table.importRunId)],
+);
 
-export const legacyIntakesRaw = pgTable('legacy_intakes_raw', {
-  intakeId: text('intake_id').primaryKey(),
-  legacyPatientId: text('legacy_patient_id').notNull(),
-  submittedAt: text('submitted_at').notNull(),
-  questionnaireVersion: text('questionnaire_version').notNull(),
-  weight: text('weight').notNull(),
-  height: text('height').notNull(),
-  medsCurrent: text('meds_current').notNull(),
-  conditions: text('conditions').notNull(),
-  alcoholUnitsWeek: text('alcohol_units_week').notNull(),
-  outcome: text('outcome').notNull(),
-  reviewerNote: text('reviewer_note').notNull(),
-  lineNo: integer('line_no').notNull(),
-  ...rawBookkeeping,
-});
+export const legacyIntakesRaw = pgTable(
+  'legacy_intakes_raw',
+  {
+    intakeId: text('intake_id').primaryKey(),
+    legacyPatientId: text('legacy_patient_id').notNull(),
+    submittedAt: text('submitted_at').notNull(),
+    questionnaireVersion: text('questionnaire_version').notNull(),
+    weight: text('weight').notNull(),
+    height: text('height').notNull(),
+    medsCurrent: text('meds_current').notNull(),
+    conditions: text('conditions').notNull(),
+    alcoholUnitsWeek: text('alcohol_units_week').notNull(),
+    outcome: text('outcome').notNull(),
+    reviewerNote: text('reviewer_note').notNull(),
+    lineNo: integer('line_no').notNull(),
+    ...rawBookkeeping,
+  },
+  (table) => [index('legacy_intakes_raw_import_run_id_idx').on(table.importRunId)],
+);
 
 // The file has no id, so the line number is the key (ADR-0004). Every line carries all five
 // keys as strings (data-profile P-29, P-30), hence NOT NULL throughout.
-export const legacyConsentEventsRaw = pgTable('legacy_consent_events_raw', {
-  patientLegacyId: text('patient_legacy_id').notNull(),
-  type: text('type').notNull(),
-  action: text('action').notNull(),
-  at: text('at').notNull(),
-  version: text('version').notNull(),
-  lineNo: integer('line_no').primaryKey(),
-  ...rawBookkeeping,
-});
+export const legacyConsentEventsRaw = pgTable(
+  'legacy_consent_events_raw',
+  {
+    patientLegacyId: text('patient_legacy_id').notNull(),
+    type: text('type').notNull(),
+    action: text('action').notNull(),
+    at: text('at').notNull(),
+    version: text('version').notNull(),
+    lineNo: integer('line_no').primaryKey(),
+    ...rawBookkeeping,
+  },
+  (table) => [index('legacy_consent_events_raw_import_run_id_idx').on(table.importRunId)],
+);
 
 // ---------------------------------------------------------------------------------------------
 // Canonical layer
@@ -209,6 +222,8 @@ export const patients = pgTable(
     check('patients_height_cm_positive', sql`${table.heightCm} > 0`),
     // A self-merge would loop survivor resolution forever (ADR-0008).
     check('patients_merged_into_not_self', sql`${table.mergedInto} <> ${table.id}`),
+    index('patients_merged_into_idx').on(table.mergedInto),
+    index('patients_created_by_run_idx').on(table.createdByRun),
   ],
 );
 
@@ -216,12 +231,16 @@ export const patients = pgTable(
 // legacy_patient_id through this table at load and a merge repoints the losing id here. It is a
 // mapping, not the membership mechanism: "this patient's records" are answered by one repository
 // function walking merged_into, never by a join on a copied patient_id alone (ADR-0008).
-export const patientLegacyIds = pgTable('patient_legacy_ids', {
-  legacyId: text('legacy_id').primaryKey(),
-  patientId: uuid('patient_id')
-    .notNull()
-    .references(() => patients.id),
-});
+export const patientLegacyIds = pgTable(
+  'patient_legacy_ids',
+  {
+    legacyId: text('legacy_id').primaryKey(),
+    patientId: uuid('patient_id')
+      .notNull()
+      .references(() => patients.id),
+  },
+  (table) => [index('patient_legacy_ids_patient_id_idx').on(table.patientId)],
+);
 
 export const intakes = pgTable(
   'intakes',
@@ -254,6 +273,10 @@ export const intakes = pgTable(
   (table) => [
     check('intakes_weight_kg_positive', sql`${table.weightKg} > 0`),
     check('intakes_height_cm_positive', sql`${table.heightCm} > 0`),
+    index('intakes_patient_id_idx').on(table.patientId),
+    index('intakes_created_by_run_idx').on(table.createdByRun),
+    // The console's work queue and status filter select on state (ADR-0004).
+    index('intakes_state_idx').on(table.state),
   ],
 );
 
@@ -281,6 +304,8 @@ export const consentEvents = pgTable(
     uniqueIndex('consent_events_source_line_unique')
       .on(table.sourceLine)
       .where(sql`${table.sourceLine} is not null`),
+    index('consent_events_patient_id_idx').on(table.patientId),
+    index('consent_events_import_run_id_idx').on(table.importRunId),
   ],
 );
 
@@ -298,23 +323,34 @@ export const consentStates = pgTable(
     derivationVersion: text('derivation_version').notNull(),
     computedAt: timestamptz('computed_at').notNull().defaultNow(),
   },
-  (table) => [primaryKey({ columns: [table.patientId, table.type] })],
+  (table) => [
+    // patient_id leads the primary key, so it needs no index of its own.
+    primaryKey({ columns: [table.patientId, table.type] }),
+    index('consent_states_derived_from_event_id_idx').on(table.derivedFromEventId),
+  ],
 );
 
-export const eligibilityEvaluations = pgTable('eligibility_evaluations', {
-  id: uuidPrimaryKey(),
-  intakeId: uuid('intake_id')
-    .notNull()
-    .references(() => intakes.id),
-  rulesetVersion: text('ruleset_version').notNull(),
-  // The engine's verdict in the vocabulary of the legacy outcome it is compared with.
-  outcome: outcomeEnum('outcome').notNull(),
-  reasons: jsonb('reasons').$type<string[]>().notNull(),
-  // True for legacy intakes evaluated at import, where nothing is applied (ADR-0005).
-  shadow: boolean('shadow').notNull(),
-  evaluatedAt: timestamptz('evaluated_at').notNull().defaultNow(),
-  importRunId: importRunRef('import_run_id'),
-});
+export const eligibilityEvaluations = pgTable(
+  'eligibility_evaluations',
+  {
+    id: uuidPrimaryKey(),
+    intakeId: uuid('intake_id')
+      .notNull()
+      .references(() => intakes.id),
+    rulesetVersion: text('ruleset_version').notNull(),
+    // The engine's verdict in the vocabulary of the legacy outcome it is compared with.
+    outcome: outcomeEnum('outcome').notNull(),
+    reasons: jsonb('reasons').$type<string[]>().notNull(),
+    // True for legacy intakes evaluated at import, where nothing is applied (ADR-0005).
+    shadow: boolean('shadow').notNull(),
+    evaluatedAt: timestamptz('evaluated_at').notNull().defaultNow(),
+    importRunId: importRunRef('import_run_id'),
+  },
+  (table) => [
+    index('eligibility_evaluations_intake_id_idx').on(table.intakeId),
+    index('eligibility_evaluations_import_run_id_idx').on(table.importRunId),
+  ],
+);
 
 // ---------------------------------------------------------------------------------------------
 // Records and decisions
@@ -353,6 +389,7 @@ export const normalisationRecords = pgTable(
         table.toValue,
       )
       .nullsNotDistinct(),
+    index('normalisation_records_import_run_id_idx').on(table.importRunId),
   ],
 );
 
@@ -395,29 +432,39 @@ export const reviewItems = pgTable(
       'review_items_resolver_on_close',
       sql`${table.status} = 'open' or (${table.resolvedBy} is not null and ${table.resolvedAt} is not null)`,
     ),
+    index('review_items_patient_id_idx').on(table.patientId),
+    index('review_items_intake_id_idx').on(table.intakeId),
+    index('review_items_created_by_run_idx').on(table.createdByRun),
+    // The console's queue is "open items", filtered by type (R-C2).
+    index('review_items_status_idx').on(table.status),
+    index('review_items_type_idx').on(table.type),
   ],
 );
 
 // Append-only (R-B21): UPDATE, DELETE and TRUNCATE are rejected by trigger (ADR-0007).
-export const auditEntries = pgTable('audit_entries', {
-  id: uuidPrimaryKey(),
-  // Human identity or named process such as `legacy import` (R-B20).
-  actor: text('actor').notNull(),
-  at: timestamptz('at').notNull().defaultNow(),
-  entityType: text('entity_type').notNull(),
-  entityId: text('entity_id').notNull(),
-  fromState: text('from_state'),
-  toState: text('to_state'),
-  reason: text('reason').notNull(),
-  reviewItemId: uuid('review_item_id').references(() => reviewItems.id),
-  // `{field, from, to, source_legacy_id}` per changed value: human edits, and the field-level
-  // provenance of the importer's tier-1 merges (ADR-0006).
-  changes: jsonb('changes').$type<AuditChange[]>(),
-  // Importer-written entries: deterministic from (entity_type, entity_id, from_state, to_state,
-  // reason), the re-run's ON CONFLICT target under the append-only trigger. Null for human
-  // entries, each of which is a new event (ADR-0008).
-  dedupeKey: text('dedupe_key').unique(),
-});
+export const auditEntries = pgTable(
+  'audit_entries',
+  {
+    id: uuidPrimaryKey(),
+    // Human identity or named process such as `legacy import` (R-B20).
+    actor: text('actor').notNull(),
+    at: timestamptz('at').notNull().defaultNow(),
+    entityType: text('entity_type').notNull(),
+    entityId: text('entity_id').notNull(),
+    fromState: text('from_state'),
+    toState: text('to_state'),
+    reason: text('reason').notNull(),
+    reviewItemId: uuid('review_item_id').references(() => reviewItems.id),
+    // `{field, from, to, source_legacy_id}` per changed value: human edits, and the field-level
+    // provenance of the importer's tier-1 merges (ADR-0006).
+    changes: jsonb('changes').$type<AuditChange[]>(),
+    // Importer-written entries: deterministic from (entity_type, entity_id, from_state, to_state,
+    // reason), the re-run's ON CONFLICT target under the append-only trigger. Null for human
+    // entries, each of which is a new event (ADR-0008).
+    dedupeKey: text('dedupe_key').unique(),
+  },
+  (table) => [index('audit_entries_review_item_id_idx').on(table.reviewItemId)],
+);
 
 export interface AuditChange {
   field: string;

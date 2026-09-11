@@ -238,4 +238,25 @@ ALTER TABLE "patients" ADD CONSTRAINT "patients_created_by_run_import_runs_id_fk
 ALTER TABLE "review_items" ADD CONSTRAINT "review_items_patient_id_patients_id_fk" FOREIGN KEY ("patient_id") REFERENCES "public"."patients"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "review_items" ADD CONSTRAINT "review_items_intake_id_intakes_id_fk" FOREIGN KEY ("intake_id") REFERENCES "public"."intakes"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "review_items" ADD CONSTRAINT "review_items_created_by_run_import_runs_id_fk" FOREIGN KEY ("created_by_run") REFERENCES "public"."import_runs"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-CREATE UNIQUE INDEX "consent_events_source_line_unique" ON "consent_events" USING btree ("source_line") WHERE "consent_events"."source_line" is not null;
+CREATE INDEX "audit_entries_review_item_id_idx" ON "audit_entries" USING btree ("review_item_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "consent_events_source_line_unique" ON "consent_events" USING btree ("source_line") WHERE "consent_events"."source_line" is not null;--> statement-breakpoint
+CREATE INDEX "consent_events_patient_id_idx" ON "consent_events" USING btree ("patient_id");--> statement-breakpoint
+CREATE INDEX "consent_events_import_run_id_idx" ON "consent_events" USING btree ("import_run_id");--> statement-breakpoint
+CREATE INDEX "consent_states_derived_from_event_id_idx" ON "consent_states" USING btree ("derived_from_event_id");--> statement-breakpoint
+CREATE INDEX "eligibility_evaluations_intake_id_idx" ON "eligibility_evaluations" USING btree ("intake_id");--> statement-breakpoint
+CREATE INDEX "eligibility_evaluations_import_run_id_idx" ON "eligibility_evaluations" USING btree ("import_run_id");--> statement-breakpoint
+CREATE INDEX "intakes_patient_id_idx" ON "intakes" USING btree ("patient_id");--> statement-breakpoint
+CREATE INDEX "intakes_created_by_run_idx" ON "intakes" USING btree ("created_by_run");--> statement-breakpoint
+CREATE INDEX "intakes_state_idx" ON "intakes" USING btree ("state");--> statement-breakpoint
+CREATE INDEX "legacy_consent_events_raw_import_run_id_idx" ON "legacy_consent_events_raw" USING btree ("import_run_id");--> statement-breakpoint
+CREATE INDEX "legacy_intakes_raw_import_run_id_idx" ON "legacy_intakes_raw" USING btree ("import_run_id");--> statement-breakpoint
+CREATE INDEX "legacy_patients_raw_import_run_id_idx" ON "legacy_patients_raw" USING btree ("import_run_id");--> statement-breakpoint
+CREATE INDEX "normalisation_records_import_run_id_idx" ON "normalisation_records" USING btree ("import_run_id");--> statement-breakpoint
+CREATE INDEX "patient_legacy_ids_patient_id_idx" ON "patient_legacy_ids" USING btree ("patient_id");--> statement-breakpoint
+CREATE INDEX "patients_merged_into_idx" ON "patients" USING btree ("merged_into");--> statement-breakpoint
+CREATE INDEX "patients_created_by_run_idx" ON "patients" USING btree ("created_by_run");--> statement-breakpoint
+CREATE INDEX "review_items_patient_id_idx" ON "review_items" USING btree ("patient_id");--> statement-breakpoint
+CREATE INDEX "review_items_intake_id_idx" ON "review_items" USING btree ("intake_id");--> statement-breakpoint
+CREATE INDEX "review_items_created_by_run_idx" ON "review_items" USING btree ("created_by_run");--> statement-breakpoint
+CREATE INDEX "review_items_status_idx" ON "review_items" USING btree ("status");--> statement-breakpoint
+CREATE INDEX "review_items_type_idx" ON "review_items" USING btree ("type");

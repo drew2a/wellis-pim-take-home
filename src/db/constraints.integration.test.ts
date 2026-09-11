@@ -211,6 +211,40 @@ describe('database constraints (ADR-0004)', () => {
     );
   });
 
+  describe('indexes', () => {
+    it('exist on every foreign-key column: Postgres indexes only the referenced side', async () => {
+      // Foreign-key columns without an index whose leading column they are.
+      const unindexed = await database.sql<{ table_name: string; column_name: string }[]>`
+        select c.conrelid::regclass::text as table_name, a.attname as column_name
+        from pg_constraint c
+        join pg_attribute a on a.attrelid = c.conrelid and a.attnum = c.conkey[1]
+        where c.contype = 'f'
+          and not exists (
+            select 1 from pg_index i
+            where i.indrelid = c.conrelid and i.indkey[0] = c.conkey[1]
+          )
+        order by 1, 2
+      `;
+
+      expect(unindexed).toEqual([]);
+    });
+
+    it.each([
+      ['review_items', 'status'],
+      ['review_items', 'type'],
+      ['intakes', 'state'],
+    ])('exist on the filter column %s.%s', async (table, column) => {
+      const indexes = await database.sql<{ indexname: string }[]>`
+        select i.indexrelid::regclass::text as indexname
+        from pg_index i
+        join pg_attribute a on a.attrelid = i.indrelid and a.attnum = i.indkey[0]
+        where i.indrelid = ${table}::regclass and a.attname = ${column}
+      `;
+
+      expect(indexes).toHaveLength(1);
+    });
+  });
+
   describe('patients', () => {
     it.each(['12345678', '1234567890', '12345678a', ' 123456789'])(
       'bsn CHECK rejects %j',
