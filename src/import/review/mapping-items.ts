@@ -401,6 +401,34 @@ export function confirmationItems(
 // Bookkeeping items of ADR-0004
 // ---------------------------------------------------------------------------------------------
 
+/**
+ * All but the last three characters, for an identifier that must not be readable in a payload.
+ * `review_items.payload` is jsonb, so the console's column-level masking cannot reach into it,
+ * and bsn retention is still an open vocabulary item ("bsn retention: keep, mask or drop").
+ */
+function mask(value: string): string {
+  if (value.length <= 3) return '*'.repeat(value.length);
+  return '*'.repeat(value.length - 3) + value.slice(-3);
+}
+
+const MASKED_SOURCE_COLUMNS = new Set(['bsn']);
+
+/** The source columns whose values differ, stored beside incoming, identifiers masked. */
+function sourceDifferences(
+  storedFields: Readonly<Record<string, string>>,
+  incomingFields: Readonly<Record<string, string>>,
+): Record<string, { stored: string; incoming: string }> {
+  const out: Record<string, { stored: string; incoming: string }> = {};
+  for (const [field, stored] of Object.entries(storedFields)) {
+    const incoming = incomingFields[field] ?? '';
+    if (incoming === stored) continue;
+    out[field] = MASKED_SOURCE_COLUMNS.has(field)
+      ? { stored: mask(stored), incoming: mask(incoming) }
+      : { stored, incoming };
+  }
+  return out;
+}
+
 export function changedSourceRowItems(
   changed: readonly ChangedRawRow[],
   ids: Ids,
@@ -411,7 +439,17 @@ export function changedSourceRowItems(
       title: `source row changed since import run ${c.stored.importRunId}`,
       reason:
         'the export contains a different version of a row already stored; the stored row is kept',
-      payload: { table: c.table, key: c.key, stored: c.stored, incoming: c.incoming },
+      // The differing columns only: the whole row would carry bsn, phone, dob and email of a
+      // patient whose record did not change in those columns into the review queue.
+      payload: {
+        table: c.table,
+        key: c.key,
+        stored_import_run_id: c.stored.importRunId,
+        stored_row_hash: c.stored.rowHash,
+        incoming_row_hash: c.incoming.rowHash,
+        incoming_line_no: c.incoming.lineNo,
+        differences: sourceDifferences(c.storedFields, c.incomingFields),
+      },
       patientId: c.table === 'legacy_patients_raw' ? (ids.patients.get(c.key) ?? null) : null,
       intakeId: c.table === 'legacy_intakes_raw' ? (ids.intakes.get(c.key) ?? null) : null,
       field: null,

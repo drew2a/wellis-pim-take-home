@@ -171,7 +171,8 @@ describe('npm run import', () => {
     }
     const lines = readFileSync('legacy_export/patients.csv', 'utf8').split('\r\n');
     const original = lines[1] as string;
-    lines[1] = original.replace(',Delft,', ',Elsewhere,');
+    // bsn changes too, so the item's payload can be checked for a readable identifier.
+    lines[1] = original.replace(',Delft,', ',Elsewhere,').replace(',251508596,', ',251508597,');
     expect(lines[1]).not.toBe(original);
     writeFileSync(join(dir, 'patients.csv'), lines.join('\r\n'));
     const before = await counts();
@@ -193,11 +194,24 @@ describe('npm run import', () => {
       .from(reviewItems)
       .where(eq(reviewItems.title, `source row changed since import run ${first.runId}`));
     expect(item).toMatchObject({ type: 'data_quality', scope: 'row', status: 'open' });
+    // Only the columns that differ, and bsn masked: review_items.payload is jsonb, which the
+    // console's column-level bsn masking cannot reach into.
     expect(item?.payload).toMatchObject({
       table: 'legacy_patients_raw',
-      stored: { city: 'Delft' },
-      incoming: { city: 'Elsewhere' },
+      differences: {
+        city: { stored: 'Delft', incoming: 'Elsewhere' },
+        bsn: { stored: '******596', incoming: '******597' },
+      },
     });
+    const differing = Object.keys(
+      (item?.payload as { differences: Record<string, unknown> }).differences,
+    ).sort();
+    expect(differing).toEqual(['bsn', 'city']);
+    // No unchanged identifier and no readable bsn anywhere in the payload.
+    const serialised = JSON.stringify(item?.payload);
+    for (const secret of ['zeynep.chen@live.nl', '06-53549409', '23-08-2000', '251508596']) {
+      expect(serialised).not.toContain(secret);
+    }
     const [raw] = await database.sql<{ city: string }[]>`
       select city from legacy_patients_raw where legacy_id = ${original.split(',')[0] ?? ''}
     `;

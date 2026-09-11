@@ -25,6 +25,8 @@ export interface ChangedRawRow {
   readonly key: string;
   /** The stored row's source columns under the export's own names. */
   readonly storedFields: Readonly<Record<string, string>>;
+  /** The incoming row's source columns, so the review item can diff field by field. */
+  readonly incomingFields: Readonly<Record<string, string>>;
   readonly stored: { readonly rowHash: string; readonly importRunId: number } & Record<
     string,
     unknown
@@ -148,32 +150,35 @@ export async function loadRawPatients(
   const rows = records.map((record) => {
     const f = byHeader(PATIENTS_HEADER, record.fields);
     return {
-      legacyId: f.legacy_id,
-      fullName: f.full_name,
-      email: f.email,
-      dob: f.dob,
-      sex: f.sex,
-      bsn: f.bsn,
-      phone: f.phone,
-      city: f.city,
-      weight: f.weight,
-      weightUnit: f.weight_unit,
-      heightCm: f.height_cm,
-      status: f.status,
-      signupDate: f.signup_date,
-      source: f.source,
-      lineNo: record.lineNo,
-      sourceFile: 'patients.csv',
-      rowHash: sha256Hex(record.raw),
-      importRunId: runId,
+      fields: f,
+      row: {
+        legacyId: f.legacy_id,
+        fullName: f.full_name,
+        email: f.email,
+        dob: f.dob,
+        sex: f.sex,
+        bsn: f.bsn,
+        phone: f.phone,
+        city: f.city,
+        weight: f.weight,
+        weightUnit: f.weight_unit,
+        heightCm: f.height_cm,
+        status: f.status,
+        signupDate: f.signup_date,
+        source: f.source,
+        lineNo: record.lineNo,
+        sourceFile: 'patients.csv',
+        rowHash: sha256Hex(record.raw),
+        importRunId: runId,
+      },
     };
   });
-  const { first, duplicateKeys } = firstPerKey(rows, (r) => r.legacyId);
+  const { first, duplicateKeys } = firstPerKey(rows, (r) => r.row.legacyId);
   const inserted = new Set<string>();
   for (const chunk of chunks(first)) {
     const returned = await db
       .insert(legacyPatientsRaw)
-      .values(chunk)
+      .values(chunk.map((r) => r.row))
       .onConflictDoNothing({ target: legacyPatientsRaw.legacyId })
       .returning({ key: legacyPatientsRaw.legacyId });
     for (const r of returned) inserted.add(r.key);
@@ -189,14 +194,14 @@ export async function loadRawPatients(
       .where(
         inArray(
           legacyPatientsRaw.legacyId,
-          chunk.map((r) => r.legacyId),
+          chunk.map((r) => r.row.legacyId),
         ),
       );
     for (const s of stored) byKey.set(s.legacyId, s);
   }
   const changed: ChangedRawRow[] = [];
   const stored: StoredRawRow<PatientFields>[] = [];
-  for (const incoming of first) {
+  for (const { row: incoming, fields } of first) {
     const existing = byKey.get(incoming.legacyId);
     if (existing === undefined) {
       throw new Error(`legacy_patients_raw ${incoming.legacyId}: neither inserted nor found`);
@@ -206,6 +211,7 @@ export async function loadRawPatients(
         table: 'legacy_patients_raw',
         key: existing.legacyId,
         storedFields: patientFields(existing),
+        incomingFields: fields,
         stored: existing,
         incoming,
       });
@@ -233,29 +239,32 @@ export async function loadRawIntakes(
   const rows = records.map((record) => {
     const f = byHeader(INTAKES_HEADER, record.fields);
     return {
-      intakeId: f.intake_id,
-      legacyPatientId: f.legacy_patient_id,
-      submittedAt: f.submitted_at,
-      questionnaireVersion: f.questionnaire_version,
-      weight: f.weight,
-      height: f.height,
-      medsCurrent: f.meds_current,
-      conditions: f.conditions,
-      alcoholUnitsWeek: f.alcohol_units_week,
-      outcome: f.outcome,
-      reviewerNote: f.reviewer_note,
-      lineNo: record.lineNo,
-      sourceFile: 'intakes.csv',
-      rowHash: sha256Hex(record.raw),
-      importRunId: runId,
+      fields: f,
+      row: {
+        intakeId: f.intake_id,
+        legacyPatientId: f.legacy_patient_id,
+        submittedAt: f.submitted_at,
+        questionnaireVersion: f.questionnaire_version,
+        weight: f.weight,
+        height: f.height,
+        medsCurrent: f.meds_current,
+        conditions: f.conditions,
+        alcoholUnitsWeek: f.alcohol_units_week,
+        outcome: f.outcome,
+        reviewerNote: f.reviewer_note,
+        lineNo: record.lineNo,
+        sourceFile: 'intakes.csv',
+        rowHash: sha256Hex(record.raw),
+        importRunId: runId,
+      },
     };
   });
-  const { first, duplicateKeys } = firstPerKey(rows, (r) => r.intakeId);
+  const { first, duplicateKeys } = firstPerKey(rows, (r) => r.row.intakeId);
   const inserted = new Set<string>();
   for (const chunk of chunks(first)) {
     const returned = await db
       .insert(legacyIntakesRaw)
-      .values(chunk)
+      .values(chunk.map((r) => r.row))
       .onConflictDoNothing({ target: legacyIntakesRaw.intakeId })
       .returning({ key: legacyIntakesRaw.intakeId });
     for (const r of returned) inserted.add(r.key);
@@ -268,14 +277,14 @@ export async function loadRawIntakes(
       .where(
         inArray(
           legacyIntakesRaw.intakeId,
-          chunk.map((r) => r.intakeId),
+          chunk.map((r) => r.row.intakeId),
         ),
       );
     for (const s of stored) byKey.set(s.intakeId, s);
   }
   const changed: ChangedRawRow[] = [];
   const stored: StoredRawRow<IntakeFields>[] = [];
-  for (const incoming of first) {
+  for (const { row: incoming, fields } of first) {
     const existing = byKey.get(incoming.intakeId);
     if (existing === undefined) {
       throw new Error(`legacy_intakes_raw ${incoming.intakeId}: neither inserted nor found`);
@@ -285,6 +294,7 @@ export async function loadRawIntakes(
         table: 'legacy_intakes_raw',
         key: existing.intakeId,
         storedFields: intakeFields(existing),
+        incomingFields: fields,
         stored: existing,
         incoming,
       });
@@ -310,24 +320,27 @@ export async function loadRawConsentEvents(
   records: readonly JsonlRecord[],
 ): Promise<RawLoadResult<ConsentLine>> {
   const rows = records.map((record) => ({
-    patientLegacyId: record.fields.patient_legacy_id,
-    type: record.fields.type,
-    action: record.fields.action,
-    at: record.fields.at,
-    version: record.fields.version,
-    lineNo: record.lineNo,
-    sourceFile: 'consents.jsonl',
-    rowHash: sha256Hex(record.raw),
-    importRunId: runId,
+    fields: record.fields,
+    row: {
+      patientLegacyId: record.fields.patient_legacy_id,
+      type: record.fields.type,
+      action: record.fields.action,
+      at: record.fields.at,
+      version: record.fields.version,
+      lineNo: record.lineNo,
+      sourceFile: 'consents.jsonl',
+      rowHash: sha256Hex(record.raw),
+      importRunId: runId,
+    },
   }));
   // line_no is the key and the parser counts lines, so the export cannot repeat one (ADR-0004);
   // the split is here anyway so the three loaders answer the question the same way.
-  const { first, duplicateKeys } = firstPerKey(rows, (r) => String(r.lineNo));
+  const { first, duplicateKeys } = firstPerKey(rows, (r) => String(r.row.lineNo));
   const inserted = new Set<number>();
   for (const chunk of chunks(first)) {
     const returned = await db
       .insert(legacyConsentEventsRaw)
-      .values(chunk)
+      .values(chunk.map((r) => r.row))
       .onConflictDoNothing({ target: legacyConsentEventsRaw.lineNo })
       .returning({ key: legacyConsentEventsRaw.lineNo });
     for (const r of returned) inserted.add(r.key);
@@ -340,14 +353,14 @@ export async function loadRawConsentEvents(
       .where(
         inArray(
           legacyConsentEventsRaw.lineNo,
-          chunk.map((r) => r.lineNo),
+          chunk.map((r) => r.row.lineNo),
         ),
       );
     for (const s of stored) byKey.set(s.lineNo, s);
   }
   const changed: ChangedRawRow[] = [];
   const stored: StoredRawRow<ConsentLine>[] = [];
-  for (const incoming of first) {
+  for (const { row: incoming, fields } of first) {
     const existing = byKey.get(incoming.lineNo);
     if (existing === undefined) {
       throw new Error(
@@ -359,6 +372,7 @@ export async function loadRawConsentEvents(
         table: 'legacy_consent_events_raw',
         key: String(existing.lineNo),
         storedFields: consentFields(existing),
+        incomingFields: fields,
         stored: existing,
         incoming,
       });
