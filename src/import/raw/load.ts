@@ -18,6 +18,12 @@ export type RawTable = 'legacy_patients_raw' | 'legacy_intakes_raw' | 'legacy_co
 export interface ChangedRawRow {
   readonly table: RawTable;
   readonly key: string;
+  /**
+   * The stored row's source columns under the export's own names. Canonical rows are rewritten
+   * from the raw layer (ADR-0004), so the mapper reads these, not the incoming file, for a row
+   * whose source changed.
+   */
+  readonly storedFields: Readonly<Record<string, string>>;
   readonly stored: { readonly rowHash: string; readonly importRunId: number } & Record<
     string,
     unknown
@@ -102,6 +108,22 @@ export async function loadRawPatients(
         changed.push({
           table: 'legacy_patients_raw',
           key: incoming.legacyId,
+          storedFields: {
+            legacy_id: existing.legacyId,
+            full_name: existing.fullName,
+            email: existing.email,
+            dob: existing.dob,
+            sex: existing.sex,
+            bsn: existing.bsn,
+            phone: existing.phone,
+            city: existing.city,
+            weight: existing.weight,
+            weight_unit: existing.weightUnit,
+            height_cm: existing.heightCm,
+            status: existing.status,
+            signup_date: existing.signupDate,
+            source: existing.source,
+          },
           stored: existing,
           incoming,
         });
@@ -167,6 +189,19 @@ export async function loadRawIntakes(
         changed.push({
           table: 'legacy_intakes_raw',
           key: incoming.intakeId,
+          storedFields: {
+            intake_id: existing.intakeId,
+            legacy_patient_id: existing.legacyPatientId,
+            submitted_at: existing.submittedAt,
+            questionnaire_version: existing.questionnaireVersion,
+            weight: existing.weight,
+            height: existing.height,
+            meds_current: existing.medsCurrent,
+            conditions: existing.conditions,
+            alcohol_units_week: existing.alcoholUnitsWeek,
+            outcome: existing.outcome,
+            reviewer_note: existing.reviewerNote,
+          },
           stored: existing,
           incoming,
         });
@@ -225,6 +260,13 @@ export async function loadRawConsentEvents(
         changed.push({
           table: 'legacy_consent_events_raw',
           key: String(incoming.lineNo),
+          storedFields: {
+            patient_legacy_id: existing.patientLegacyId,
+            type: existing.type,
+            action: existing.action,
+            at: existing.at,
+            version: existing.version,
+          },
           stored: existing,
           incoming,
         });
