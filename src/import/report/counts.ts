@@ -3,7 +3,7 @@
 // The report files come in a later branch; this is the stdout form.
 import type { ImportSummary } from '../run';
 
-const line = (label: string, value: string | number): string => `  ${label.padEnd(44)}${value}`;
+const line = (label: string, value: string | number): string => `  ${label.padEnd(48)} ${value}`;
 
 function sortedEntries(record: Readonly<Record<string, number>>): [string, number][] {
   return Object.entries(record).sort(([a], [b]) => a.localeCompare(b));

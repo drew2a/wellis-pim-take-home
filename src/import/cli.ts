@@ -71,7 +71,8 @@ async function main(): Promise<void> {
 // Only when run as a script: the test imports parseArgs without starting an import.
 if (process.argv[1]?.endsWith('cli.ts') === true) {
   main().catch((error: unknown) => {
-    console.error(error instanceof Error ? error.message : error);
+    // Drizzle wraps the driver error and keeps the Postgres message in `cause`.
+    for (let e: unknown = error; e instanceof Error; e = e.cause) console.error(e.message);
     process.exitCode = 1;
   });
 }
