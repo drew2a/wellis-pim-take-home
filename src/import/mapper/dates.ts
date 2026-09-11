@@ -44,17 +44,17 @@ export function readDateBySeparator(raw: string): ReadDate | null {
 }
 
 /**
- * The date the value would be if the convention were wrong (day and month swapped), when that
- * is a valid calendar date different from the reading. The review layer uses it for the
- * minor/adult flip check; ISO values have no alternative under the convention.
+ * The date the value would be if its two non-year parts were read the other way round (Y-D-M for
+ * ISO, M-D-Y for dash, D-M-Y for slash), when that is a valid calendar date different from the
+ * reading (data-profile P-4: 987 values, 921 of them a different date). The review layer uses
+ * it for the minor/adult flip check.
  */
 export function alternativeReading(raw: string): string | null {
-  const m = DASH.exec(raw) ?? SLASH.exec(raw);
-  if (!m) return null;
   const read = readDateBySeparator(raw);
-  const [a, b, y] = [Number(m[1]), Number(m[2]), Number(m[3])];
-  const swapped = DASH.test(raw) ? isoIfValid(y, a, b) : isoIfValid(y, b, a);
-  return swapped === null || swapped === read?.iso ? null : swapped;
+  if (read === null) return null;
+  const [y, m, d] = read.iso.split('-').map(Number) as [number, number, number];
+  const swapped = isoIfValid(y, d, m);
+  return swapped === null || swapped === read.iso ? null : swapped;
 }
 
 /** Whole years between two ISO dates, as a birthday count. */

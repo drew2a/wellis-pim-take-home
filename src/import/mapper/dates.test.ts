@@ -32,8 +32,11 @@ describe('alternativeReading', () => {
     expect(alternativeReading('03-02-1960')).toBe('1960-03-02');
     expect(alternativeReading('02/03/1960')).toBe('1960-03-02');
   });
-  it('is null for ISO, for day = month, and when the swap is not a date', () => {
-    expect(alternativeReading('1960-02-03')).toBeNull();
+  it('reads ISO as Y-D-M: the profile counts those among the ambiguous values (P-4)', () => {
+    expect(alternativeReading('1960-02-03')).toBe('1960-03-02');
+    expect(alternativeReading('1989-05-28')).toBeNull();
+  });
+  it('is null for day = month and when the swap is not a date', () => {
     expect(alternativeReading('03-03-1960')).toBeNull();
     expect(alternativeReading('23-08-2000')).toBeNull();
   });
