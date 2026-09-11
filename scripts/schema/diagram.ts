@@ -1,16 +1,16 @@
 // Renders the Mermaid erDiagram in docs/schema.md from src/db/schema.ts, so the picture cannot
 // drift from the code. Group membership is the one thing the schema module does not know; it is
-// declared here in ADR-0004's order and checked for completeness. Append-only tables are read
-// from the migration that installs the trigger, not typed by hand.
+// declared here in ADR-0004's order and checked for completeness. Append-only tables come from
+// src/db/append-only.ts, the same list the append-only test compares with pg_trigger.
 //
 //   npm run schema:diagram          rewrite the generated block
 //   npm run schema:diagram -- --check   exit 1 if the block is stale (runs in npm run check)
-import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { readFileSync, writeFileSync } from 'node:fs';
 
 import { getTableName, is } from 'drizzle-orm';
 import { getTableConfig, PgEnumColumn, PgTable } from 'drizzle-orm/pg-core';
 
+import { APPEND_ONLY_TABLE_NAMES } from '../../src/db/append-only';
 import * as schema from '../../src/db/schema';
 
 const DOC = 'docs/schema.md';
@@ -45,22 +45,6 @@ function tablesByName(): Map<string, PgTable> {
   return tables;
 }
 
-function appendOnlyTables(): Set<string> {
-  const names = new Set<string>();
-  for (const file of readdirSync('drizzle').filter((f) => f.endsWith('.sql'))) {
-    const sql = readFileSync(join('drizzle', file), 'utf8');
-    for (const match of sql.matchAll(
-      /CREATE TRIGGER \w+\s+BEFORE UPDATE OR DELETE OR TRUNCATE ON "(\w+)"/g,
-    )) {
-      names.add(match[1] as string);
-    }
-  }
-  if (names.size === 0) {
-    throw new Error('no append-only triggers found under drizzle/');
-  }
-  return names;
-}
-
 function assertGroupsCoverSchema(tables: Map<string, PgTable>): void {
   const grouped = GROUPS.flatMap((g) => g.tables);
   const missing = [...tables.keys()].filter((name) => !grouped.includes(name));
@@ -70,6 +54,17 @@ function assertGroupsCoverSchema(tables: Map<string, PgTable>): void {
     throw new Error(
       `GROUPS out of step with src/db/schema.ts — missing: [${missing.join(', ')}], ` +
         `unknown: [${unknown.join(', ')}], duplicated: [${duplicated.join(', ')}]`,
+    );
+  }
+  // ADR-0007's rule in group terms: raw and evidence are append-only, nothing else is.
+  const locked = GROUPS.filter((g) => g.title === 'raw' || g.title === 'evidence')
+    .flatMap((g) => g.tables)
+    .sort((a, b) => a.localeCompare(b));
+  const declared = [...APPEND_ONLY_TABLE_NAMES].sort((a, b) => a.localeCompare(b));
+  if (locked.join(',') !== declared.join(',')) {
+    throw new Error(
+      `GROUPS raw+evidence [${locked.join(', ')}] differ from src/db/append-only.ts ` +
+        `[${declared.join(', ')}]`,
     );
   }
 }
@@ -140,7 +135,7 @@ function renderEnums(): string[] {
 function renderBlock(): string {
   const tables = tablesByName();
   assertGroupsCoverSchema(tables);
-  const appendOnly = appendOnlyTables();
+  const appendOnly = APPEND_ONLY_TABLE_NAMES;
 
   const diagram = ['```mermaid', 'erDiagram'];
   for (const group of GROUPS) {
@@ -157,7 +152,7 @@ function renderBlock(): string {
   return [
     BEGIN,
     '',
-    `Generated from \`src/db/schema.ts\` and \`drizzle/\` by \`npm run schema:diagram\`; do not edit by hand.`,
+    `Generated from \`src/db/schema.ts\` and \`src/db/append-only.ts\` by \`npm run schema:diagram\`; do not edit by hand.`,
     `Append-only (UPDATE, DELETE and TRUNCATE rejected by trigger): ${locked.map((n) => `\`${n}\``).join(', ')}.`,
     '',
     ...diagram,

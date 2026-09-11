@@ -1,12 +1,13 @@
 import { getTableName, type Table } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
+import { APPEND_ONLY_TABLE_NAMES } from '@/db/append-only';
 import * as schema from '@/db/schema';
 import { createTestDatabase, expectDatabaseError, type TestDatabase } from '@/test/database';
 import * as rows from '@/test/rows';
 
-// ADR-0007: what is evidence is immutable in the database; what is derived or decided is not.
-// One row per evidence table, plus one column to attempt an UPDATE on.
+// One row per table in APPEND_ONLY_TABLES (src/db/append-only.ts), plus one column to attempt
+// an UPDATE on; a test below fails if this list and that one drift apart.
 interface EvidenceTable {
   table: Table;
   column: string;
@@ -70,6 +71,29 @@ describe('evidence tables are append-only (R-B21, ADR-0007)', () => {
     // Still runs when beforeAll failed before assigning `database`; a TypeError here would bury
     // the real failure under a second one.
     await (database as TestDatabase | undefined)?.drop();
+  });
+
+  const declared = [...APPEND_ONLY_TABLE_NAMES].sort((a, b) => a.localeCompare(b));
+
+  it('covers exactly the tables declared in src/db/append-only.ts', () => {
+    const tested = EVIDENCE_TABLES.map((t) => getTableName(t.table)).sort((a, b) =>
+      a.localeCompare(b),
+    );
+
+    expect(tested).toEqual(declared);
+  });
+
+  it('matches the tables that carry the trigger in the migrated database', async () => {
+    // The migration is hand-written SQL, so this is the only check that the declared list and
+    // drizzle/0001_append_only_evidence.sql name the same tables.
+    const rows = await database.sql<{ relname: string }[]>`
+      select c.relname
+      from pg_trigger t join pg_class c on c.oid = t.tgrelid
+      where t.tgfoid = 'reject_evidence_mutation'::regproc and not t.tgisinternal
+      order by c.relname
+    `;
+
+    expect(rows.map((row) => row.relname)).toEqual(declared);
   });
 
   describe.each(EVIDENCE_TABLES.map((t) => [getTableName(t.table), t] as const))(

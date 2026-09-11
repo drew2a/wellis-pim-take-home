@@ -58,7 +58,7 @@ is NOT NULL.
 
 <!-- BEGIN GENERATED: npm run schema:diagram -->
 
-Generated from `src/db/schema.ts` and `drizzle/` by `npm run schema:diagram`; do not edit by hand.
+Generated from `src/db/schema.ts` and `src/db/append-only.ts` by `npm run schema:diagram`; do not edit by hand.
 Append-only (UPDATE, DELETE and TRUNCATE rejected by trigger): `audit_entries`, `consent_events`, `legacy_consent_events_raw`, `legacy_intakes_raw`, `legacy_patients_raw`, `normalisation_records`.
 
 ```mermaid
