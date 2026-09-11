@@ -9,7 +9,7 @@ import type { MappedIntake } from '../mapper/intake';
 import type { MappedPatient } from '../mapper/patient';
 import type { Flag } from '../mapper/types';
 import type { HumanOwnedConflict } from '../canonical/human-owned';
-import type { ChangedRawRow } from '../raw/load';
+import type { ChangedRawRow, RepeatedRawRow } from '../raw/load';
 import { dedupeKey, type ReviewItemDraft } from './items';
 
 export interface Ids {
@@ -463,6 +463,50 @@ export function changedSourceRowItems(
       ]),
     }),
   );
+}
+
+/**
+ * ADR-0009 item 9: a natural key the export repeats with different values. One row is stored and
+ * the later one is not, so this item is the only place that row survives — which is why the
+ * payload carries it whole, as exported, identifiers included.
+ */
+export function repeatedKeyItems(repeats: readonly RepeatedRawRow[], ids: Ids): ReviewItemDraft[] {
+  return repeats
+    .filter((r) => !r.identical)
+    .map((r) => {
+      const patient = r.table === 'legacy_patients_raw';
+      const entityType = patient ? 'legacy_patient' : 'legacy_intake';
+      const label = patient ? 'legacy id' : 'intake id';
+      return rowItem({
+        type: 'data_quality',
+        title: `${label} repeated in the export with different values`,
+        reason:
+          `line ${r.storedLineNo} is stored and line ${r.lineNo} is not; keep the stored values ` +
+          'or replace individual fields through the resolution path',
+        payload: {
+          table: r.table,
+          key: r.key,
+          stored_line_no: r.storedLineNo,
+          repeated_line_no: r.lineNo,
+          repeated_row_hash: r.rowHash,
+          differences: sourceDifferences(r.storedFields, r.fields),
+          // Unmasked and complete: the raw table is keyed by this natural key, so the repeated
+          // row is stored nowhere else and a redacted copy would lose it (ADR-0009 item 9).
+          repeated_row: r.fields,
+        },
+        patientId: patient ? (ids.patients.get(r.key) ?? null) : null,
+        intakeId: patient ? null : (ids.intakes.get(r.key) ?? null),
+        field: null,
+        dedupeKey: dedupeKey([
+          'data_quality',
+          'row',
+          `${entityType}:${r.key}`,
+          null,
+          'SOURCE_KEY_REPEATED',
+          r.rowHash,
+        ]),
+      });
+    });
 }
 
 export function humanOwnedConflictItems(

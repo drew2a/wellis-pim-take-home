@@ -11,7 +11,11 @@ import { parseCsv, serialiseCsvRecord, type CsvRecord } from '../source/csv';
 import { readExportFiles } from '../source/files';
 import { parseConsentsJsonl } from '../source/jsonl';
 import { INTAKES_HEADER, PATIENTS_HEADER } from '../source/layout';
+import { repeatedKeyItems } from '../review/mapping-items';
 import { loadRawConsentEvents, loadRawIntakes, loadRawPatients } from './load';
+
+/** No canonical rows exist in this file, so every item's patient/intake reference is null. */
+const NO_IDS = { patients: new Map<string, string>(), intakes: new Map<string, string>() };
 
 const files = readExportFiles('legacy_export');
 const patients = parseCsv(files['patients.csv'].bytes, PATIENTS_HEADER);
@@ -108,13 +112,13 @@ describe('raw load', () => {
   // layer mapped both and died on the patient_legacy_ids primary key.
   it('keeps the first of two source rows sharing a natural key and reports the repeat', async () => {
     const dupRun = await startRun(database.db, { files, asOf: '2026-09-08', dryRun: false });
-    const first = withLegacyId(patients[10] as CsvRecord, 'recDuplicateKey', 2);
-    const second = withLegacyId(patients[11] as CsvRecord, 'recDuplicateKey', 3);
+    // Two rows that both carry a bsn, so the payload's masking can be checked.
+    const first = withLegacyId(patients[0] as CsvRecord, 'recDuplicateKey', 2);
+    const second = withLegacyId(patients[2] as CsvRecord, 'recDuplicateKey', 3);
 
     const result = await loadRawPatients(database.db, dupRun, [first, second]);
 
     expect(result.inserted).toBe(1);
-    expect(result.duplicateKeys).toEqual(['recDuplicateKey']);
     expect(result.changed).toEqual([]);
     // One row to map, carrying the first occurrence's values.
     expect(result.stored).toHaveLength(1);
@@ -126,6 +130,61 @@ describe('raw load', () => {
       .from(legacyPatientsRaw)
       .where(sql`${legacyPatientsRaw.legacyId} = 'recDuplicateKey'`);
     expect(rows).toHaveLength(1);
+    // The later occurrence is reported whole: this is the only copy of it that exists.
+    expect(result.repeats).toHaveLength(1);
+    expect(result.repeats[0]).toMatchObject({
+      table: 'legacy_patients_raw',
+      key: 'recDuplicateKey',
+      storedLineNo: 2,
+      lineNo: 3,
+      identical: false,
+    });
+    expect(result.repeats[0]?.fields.full_name).toBe(second.fields[1]);
+    expect(result.repeats[0]?.storedFields.full_name).toBe(first.fields[1]);
+
+    const [item] = repeatedKeyItems(result.repeats, NO_IDS);
+    expect(item).toMatchObject({
+      type: 'data_quality',
+      scope: 'row',
+      title: 'legacy id repeated in the export with different values',
+      field: null,
+    });
+    const payload = item?.payload as {
+      differences: Record<string, { stored: string; incoming: string }>;
+      repeated_row: Record<string, string>;
+      stored_line_no: number;
+      repeated_line_no: number;
+    };
+    expect(payload.stored_line_no).toBe(2);
+    expect(payload.repeated_line_no).toBe(3);
+    expect(payload.differences.full_name).toEqual({
+      stored: first.fields[1],
+      incoming: second.fields[1],
+    });
+    // bsn is masked in the side-by-side view, where it is shown to be read...
+    const rawBsn = second.fields[5] as string;
+    expect(payload.differences.bsn?.incoming).toBe(
+      '*'.repeat(rawBsn.length - 3) + rawBsn.slice(-3),
+    );
+    // ...and whole in the copy of the row, which exists nowhere else (ADR-0009 item 9).
+    expect(payload.repeated_row.bsn).toBe(rawBsn);
+    expect(payload.repeated_row).toEqual(result.repeats[0]?.fields);
+    // A re-run of the same export finds its own item rather than raising a second.
+    expect(item?.dedupeKey).toContain('SOURCE_KEY_REPEATED');
+    expect(item?.dedupeKey).toContain(result.repeats[0]?.rowHash as string);
+  });
+
+  it('reports a byte-identical repeat as identical, so it raises no item (ADR-0009 item 9)', async () => {
+    const run = await startRun(database.db, { files, asOf: '2026-09-08', dryRun: false });
+    const row = withLegacyId(patients[12] as CsvRecord, 'recIdenticalRepeat', 2);
+    const same = { ...row, lineNo: 3 };
+
+    const result = await loadRawPatients(database.db, run, [row, same]);
+
+    expect(result.inserted).toBe(1);
+    expect(result.repeats).toHaveLength(1);
+    expect(result.repeats[0]?.identical).toBe(true);
+    expect(repeatedKeyItems(result.repeats, NO_IDS)).toEqual([]);
   });
 
   it('reports a changed source row with both versions and leaves the stored row alone', async () => {

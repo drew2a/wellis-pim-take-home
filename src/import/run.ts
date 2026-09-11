@@ -19,6 +19,7 @@ import {
   loadRawPatients,
   type ChangedRawRow,
   type RawTable,
+  type RepeatedRawRow,
 } from './raw/load';
 import {
   dobFlipItems,
@@ -34,6 +35,7 @@ import {
   humanOwnedConflictItems,
   intakeFlagItems,
   patientFlagItems,
+  repeatedKeyItems,
   unseenValueItems,
   type Ids,
 } from './review/mapping-items';
@@ -70,8 +72,8 @@ export interface ImportSummary {
         readonly inserted: number;
         readonly unchanged: number;
         readonly changed: number;
-        /** Natural keys the export repeats; the raw table holds the first occurrence only. */
-        readonly duplicates: number;
+        /** Later occurrences of a repeated natural key; the raw table holds the first only. */
+        readonly repeated: number;
       }
     >
   >;
@@ -116,11 +118,13 @@ function buildReviewItems(
   rules: Rules,
   orphans: readonly MappedIntake[],
   changedRows: readonly ChangedRawRow[],
+  repeats: readonly RepeatedRawRow[],
   conflicts: Parameters<typeof humanOwnedConflictItems>[0],
 ): ReviewItemDraft[] {
   const shifted = shiftedPatients(data.patients);
   return [
     ...changedSourceRowItems(changedRows, ids),
+    ...repeatedKeyItems(repeats, ids),
     ...data.patients.flatMap((p) => patientFlagItems(p, ids)),
     ...data.intakes.flatMap((i) => intakeFlagItems(i, ids, shifted.has(i.legacyPatientId))),
     ...data.consents.flatMap((c) => consentFlagItems(c, ids)),
@@ -186,6 +190,9 @@ export async function runImport(db: Queryable, options: ImportOptions): Promise<
         options.rules,
         intakes.orphans,
         [...rawPatients.changed, ...rawIntakes.changed, ...rawConsents.changed],
+        // consents.jsonl is keyed by line number, which the parser counts, so it cannot repeat
+        // a key (ADR-0004); only the two CSV files can.
+        [...rawPatients.repeats, ...rawIntakes.repeats],
         conflicts,
       );
       const reviewItemsInserted = await insertReviewItems(tx, runId, items);
@@ -194,12 +201,12 @@ export async function runImport(db: Queryable, options: ImportOptions): Promise<
         inserted: number;
         unchanged: number;
         changed: readonly unknown[];
-        duplicateKeys: readonly string[];
+        repeats: readonly unknown[];
       }) => ({
         inserted: r.inserted,
         unchanged: r.unchanged,
         changed: r.changed.length,
-        duplicates: r.duplicateKeys.length,
+        repeated: r.repeats.length,
       });
       const result: ImportSummary = {
         runId,

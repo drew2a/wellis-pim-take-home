@@ -37,6 +37,24 @@ export interface ChangedRawRow {
   >;
 }
 
+/**
+ * A later occurrence of a natural key the raw table already holds. The raw table is keyed by
+ * that natural key, so this row is never stored: the review item's payload is the only place
+ * it survives (ADR-0009 item 9).
+ */
+export interface RepeatedRawRow {
+  readonly table: RawTable;
+  readonly key: string;
+  /** The occurrence the raw table holds, to diff this one against. */
+  readonly storedLineNo: number;
+  readonly storedFields: Readonly<Record<string, string>>;
+  readonly lineNo: number;
+  readonly fields: Readonly<Record<string, string>>;
+  readonly rowHash: string;
+  /** Byte-identical to the stored row: a count, not a decision (ADR-0009 item 9). */
+  readonly identical: boolean;
+}
+
 /** One row as the raw table holds it, which is what the mapper reads. */
 export interface StoredRawRow<F> {
   readonly key: string;
@@ -55,10 +73,10 @@ export interface RawLoadResult<F> {
   /** The stored rows for this export's keys, in file order, one per key. */
   readonly stored: readonly StoredRawRow<F>[];
   /**
-   * Keys the export repeats. Only the first occurrence is in the raw table and in `stored`; the
-   * rest are reported here rather than silently dropped or collided on downstream.
+   * Later occurrences of a key the export repeats. Only the first occurrence is in the raw
+   * table and in `stored`; the rest are reported here rather than silently dropped.
    */
-  readonly duplicateKeys: readonly string[];
+  readonly repeats: readonly RepeatedRawRow[];
 }
 
 // Postgres accepts 65535 bind parameters per statement; 500 rows of 18 columns stays far below.
@@ -71,27 +89,52 @@ function chunks<T>(items: readonly T[]): T[][] {
 }
 
 /**
- * The first occurrence of each natural key, in file order, and the keys the export repeats.
- * Only the first occurrence reaches the raw table: the key is unique there, so a repeat would
- * be dropped by ON CONFLICT DO NOTHING anyway, unreported and invisible to the canonical layer.
+ * The first occurrence of each natural key, in file order, and the later occurrences. Only the
+ * first reaches the raw table: the key is unique there, so a repeat would be dropped by ON
+ * CONFLICT DO NOTHING anyway, unreported and invisible to the canonical layer.
  */
 function firstPerKey<Row>(
   rows: readonly Row[],
   key: (row: Row) => string,
-): { first: readonly Row[]; duplicateKeys: readonly string[] } {
+): { first: readonly Row[]; repeats: readonly Row[] } {
   const first: Row[] = [];
   const seen = new Set<string>();
-  const duplicateKeys: string[] = [];
+  const repeats: Row[] = [];
   for (const row of rows) {
     const k = key(row);
     if (seen.has(k)) {
-      duplicateKeys.push(k);
+      repeats.push(row);
       continue;
     }
     seen.add(k);
     first.push(row);
   }
-  return { first, duplicateKeys };
+  return { first, repeats };
+}
+
+/** A later occurrence, diffed against whatever the raw table actually holds for that key. */
+function repeated<K, Stored extends { lineNo: number; rowHash: string }>(
+  table: RawTable,
+  key: K,
+  row: { lineNo: number; rowHash: string },
+  fields: Readonly<Record<string, string>>,
+  byKey: ReadonlyMap<K, Stored>,
+  toFields: (stored: Stored) => Readonly<Record<string, string>>,
+): RepeatedRawRow {
+  const existing = byKey.get(key);
+  if (existing === undefined) {
+    throw new Error(`${table} ${String(key)}: repeated key has no stored row`);
+  }
+  return {
+    table,
+    key: String(key),
+    storedLineNo: existing.lineNo,
+    storedFields: toFields(existing),
+    lineNo: row.lineNo,
+    fields,
+    rowHash: row.rowHash,
+    identical: existing.rowHash === row.rowHash,
+  };
 }
 
 type PatientFields = Record<(typeof PATIENTS_HEADER)[number], string>;
@@ -173,7 +216,7 @@ export async function loadRawPatients(
       },
     };
   });
-  const { first, duplicateKeys } = firstPerKey(rows, (r) => r.row.legacyId);
+  const { first, repeats } = firstPerKey(rows, (r) => r.row.legacyId);
   const inserted = new Set<string>();
   for (const chunk of chunks(first)) {
     const returned = await db
@@ -227,7 +270,9 @@ export async function loadRawPatients(
     unchanged: first.length - inserted.size - changed.length,
     changed,
     stored,
-    duplicateKeys,
+    repeats: repeats.map(({ row, fields }) =>
+      repeated('legacy_patients_raw', row.legacyId, row, fields, byKey, patientFields),
+    ),
   };
 }
 
@@ -259,7 +304,7 @@ export async function loadRawIntakes(
       },
     };
   });
-  const { first, duplicateKeys } = firstPerKey(rows, (r) => r.row.intakeId);
+  const { first, repeats } = firstPerKey(rows, (r) => r.row.intakeId);
   const inserted = new Set<string>();
   for (const chunk of chunks(first)) {
     const returned = await db
@@ -310,7 +355,9 @@ export async function loadRawIntakes(
     unchanged: first.length - inserted.size - changed.length,
     changed,
     stored,
-    duplicateKeys,
+    repeats: repeats.map(({ row, fields }) =>
+      repeated('legacy_intakes_raw', row.intakeId, row, fields, byKey, intakeFields),
+    ),
   };
 }
 
@@ -335,7 +382,7 @@ export async function loadRawConsentEvents(
   }));
   // line_no is the key and the parser counts lines, so the export cannot repeat one (ADR-0004);
   // the split is here anyway so the three loaders answer the question the same way.
-  const { first, duplicateKeys } = firstPerKey(rows, (r) => String(r.row.lineNo));
+  const { first, repeats } = firstPerKey(rows, (r) => String(r.row.lineNo));
   const inserted = new Set<number>();
   for (const chunk of chunks(first)) {
     const returned = await db
@@ -388,6 +435,8 @@ export async function loadRawConsentEvents(
     unchanged: first.length - inserted.size - changed.length,
     changed,
     stored,
-    duplicateKeys,
+    repeats: repeats.map(({ row, fields }) =>
+      repeated('legacy_consent_events_raw', row.lineNo, row, fields, byKey, consentFields),
+    ),
   };
 }
