@@ -1,6 +1,6 @@
 # ADR-0009: Importer conventions: blanking rules, entity identifiers, system actors, dry runs
 
-- **Status:** proposed
+- **Status:** accepted
 - **Date:** 2026-09-11
 - **Deciders:** Andrei Andreev
 - **Requirements:** R-A7, R-A9, R-A10, R-A14, R-A15, R-A17, R-A22, R-B20 · **Amends:** ADR-0004
