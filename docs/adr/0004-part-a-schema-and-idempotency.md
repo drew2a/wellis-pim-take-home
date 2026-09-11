@@ -1,6 +1,7 @@
 # ADR-0004: Part A target schema, raw retention and idempotency
 
 - **Status:** accepted
+- **Amended by:** [ADR-0007](0007-amendments-to-adr-0004-append-only-evidence-and-consent-timestamps.md) (audit lock by trigger on every evidence table; `consent_events.at` is `timestamptz`); [ADR-0008](0008-re-runs-under-immutability-patient-membership-and-provenance.md) (idempotency keys for `consent_events` and `audit_entries`; `normalisation_records` key gains `to_value`; provenance wording; three `CHECK`s)
 - **Date:** 2026-09-09
 - **Deciders:** Andrei Andreev
 - **Requirements:** R-A2, R-A5, R-A6, R-A7, R-A8, R-A12, R-A14, R-A15, R-A16, R-A17, R-B20, R-B21,

@@ -2,8 +2,23 @@ import { z } from 'zod';
 
 // Validated once, at the process boundary (CLAUDE.md §2, ADR-0003). Everything downstream
 // trusts the resulting type and never re-checks the raw environment.
+const postgresUrl = z.url({ protocol: /^postgres(ql)?$/ });
+
+// `KEY=` in a .env file and a CI variable bound to an unset secret both arrive as '', which
+// means "not set" for an optional variable; `.optional()` alone would reject the empty string.
+const optional = <T extends z.ZodType>(schema: T) =>
+  z.preprocess((value) => (value === '' ? undefined : value), schema.optional());
+
 const envSchema = z.object({
-  DATABASE_URL: z.url({ protocol: /^postgres(ql)?$/ }),
+  DATABASE_URL: postgresUrl,
+  // Same role and secret as DATABASE_URL through the Supabase session pooler (port 5432) instead
+  // of the transaction pooler (6543), which cannot run migrations. Read by drizzle-kit only
+  // (ADR-0008). Locally and in CI one URL serves both, so db:migrate falls back to DATABASE_URL.
+  MIGRATION_URL: optional(postgresUrl),
+  // The integration tests create and FORCE-drop databases on the DATABASE_URL host. They refuse
+  // a non-local host unless this is set, so a .env pointed at production for a migration cannot
+  // be hit by `npm run check`.
+  ALLOW_REMOTE_TEST_DATABASE: optional(z.literal('1')),
 });
 
 export type Env = z.infer<typeof envSchema>;
