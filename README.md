@@ -18,7 +18,7 @@ git clone <this repository> && cd wellis-pim-take-home
 npm ci
 cp .env.example .env        # DATABASE_URL for the compose database (host port 55432)
 npm run db:up               # starts Postgres 17 and waits until it is healthy
-npm run db:migrate          # applies drizzle/ migrations (none yet)
+npm run db:migrate          # applies the migrations under drizzle/ (see docs/schema.md)
 npm run dev                 # http://localhost:3000
 ```
 
@@ -60,5 +60,8 @@ URL carries no `sslmode` because that database has no certificate. The client in
 transaction-mode pooler does not support them, and each function instance holds a pool of at
 most 5 connections and drops idle ones after 20 seconds.
 
-The production database is seeded by running the importer (`npm run import`, Part A) against
-that connection string once the schema and migrations exist.
+Migrations run through the **session** pooler (port 5432), because the transaction pooler does
+not support the session-level features drizzle-kit needs. `MIGRATION_URL` is that URL: the same
+role and the same secret as `DATABASE_URL`, read by drizzle-kit only, and unset locally and in CI
+where one URL serves both (ADR-0008). The production database is seeded by running the importer
+(`npm run import`, Part A) with `DATABASE_URL` pointed at whichever pooler fits.
