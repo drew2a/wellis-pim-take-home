@@ -2,6 +2,7 @@
 // never changes across runs (consent events reference it and cannot be updated). New rows are
 // inserted with their alias; existing rows are rewritten from raw except human-owned fields.
 import { eq, inArray } from 'drizzle-orm';
+import { randomUUID } from 'node:crypto';
 
 import { patientLegacyIds, patients } from '@/db/schema';
 
@@ -34,20 +35,22 @@ export async function loadPatients(
   const fresh = mapped.filter((p) => !ids.has(p.legacyId));
   let inserted = 0;
   for (let i = 0; i < fresh.length; i += CHUNK) {
-    const chunk = fresh.slice(i, i + CHUNK);
-    const returned = await db
-      .insert(patients)
-      .values(chunk.map((p) => ({ ...p.canonical, createdByRun: runId })))
-      .returning({ id: patients.id });
-    if (returned.length !== chunk.length) {
-      throw new Error(`patients insert returned ${returned.length} rows for ${chunk.length}`);
-    }
-    const aliasRows = chunk.map((p, j) => {
-      const id = (returned[j] as { id: string }).id;
-      ids.set(p.legacyId, id);
-      return { legacyId: p.legacyId, patientId: id };
-    });
-    await db.insert(patientLegacyIds).values(aliasRows);
+    // The uuid is generated here rather than read back from `RETURNING`: Postgres does not
+    // promise that RETURNING yields rows in VALUES order, and pairing them by index is what
+    // builds the alias. A mis-paired alias would attach another person's intakes and consent
+    // events to this patient, silently and with no constraint to catch it.
+    const chunk = fresh.slice(i, i + CHUNK).map((p) => ({ id: randomUUID(), patient: p }));
+    await db.insert(patients).values(
+      chunk.map(({ id, patient }) => ({
+        ...patient.canonical,
+        id,
+        createdByRun: runId,
+      })),
+    );
+    await db
+      .insert(patientLegacyIds)
+      .values(chunk.map(({ id, patient }) => ({ legacyId: patient.legacyId, patientId: id })));
+    for (const { id, patient } of chunk) ids.set(patient.legacyId, id);
     inserted += chunk.length;
   }
 

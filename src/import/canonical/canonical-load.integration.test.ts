@@ -4,7 +4,7 @@
 import { eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { auditEntries, intakes, patients } from '@/db/schema';
+import { auditEntries, intakes, patientLegacyIds, patients } from '@/db/schema';
 import { loadRules } from '@/rules/load';
 import { createTestDatabase, type TestDatabase } from '@/test/database';
 
@@ -115,6 +115,20 @@ describe('canonical load', () => {
       audit_entries: 2917,
       normalisation_records: draftCount,
     });
+  });
+
+  // The alias is what resolves every intake and consent event to a person, so a legacy id
+  // pointing at the wrong patients row would silently attach one person's medical and consent
+  // history to another. Checked by content, not by insert order.
+  it('points every legacy id at the patient row mapped from that legacy row', async () => {
+    const rows = await database.db
+      .select({ legacyId: patientLegacyIds.legacyId, fullName: patients.fullName })
+      .from(patientLegacyIds)
+      .innerJoin(patients, eq(patients.id, patientLegacyIds.patientId));
+    expect(rows).toHaveLength(2466);
+    const names = new Map(rows.map((r) => [r.legacyId, r.fullName]));
+    const wrong = mappedPatients.filter((p) => names.get(p.legacyId) !== p.canonical.fullName);
+    expect(wrong.map((p) => p.legacyId)).toEqual([]);
   });
 
   it('keeps orphans with a null patient and the raw legacy id (ADR-0006)', async () => {
