@@ -241,9 +241,10 @@ describe('npm run import', () => {
     `;
     const states = Object.fromEntries(rows.map((r) => [r.state, Number(r.n)]));
     // ADR-0005's counts are over the 2466 legacy rows; these are over the 2438 surviving
-    // patients, and the difference is exactly the 28 merged rows: 23 of them held `no_record`
-    // and 5 `unknown_pre_log` -- a duplicate row that never appeared in the consent log. No
-    // survivor's state changes, because the union of a patient's events gains nothing.
+    // patients. Two things separate them: the 28 merged rows take their own state with them,
+    // and a merge hands the survivor its duplicate's events, so 18 survivors that had no record
+    // of their own gain one. The import report states both tables and the move between them
+    // (`report.integration.test.ts`).
     expect(states).toEqual({
       granted: 2091,
       revoked: 269,
