@@ -52,9 +52,15 @@ against a Postgres service container, then `npm run build`.
 ## Import
 
 ```sh
-npm run import -- --as-of 2026-09-08            # loads legacy_export/ into DATABASE_URL
-npm run import -- --as-of 2026-09-08 --dry-run  # same run, rolled back; only its import_runs row stays
+npm run import -- --as-of 2026-09-08            # loads legacy_export/ and writes reports/
+npm run import -- --as-of 2026-09-08 --dry-run  # same run, rolled back; prints the report, writes no file
 ```
+
+**The import report is [`reports/import-report.md`](reports/import-report.md)**, rendered from
+[`reports/import-report.json`](reports/import-report.json), which the command produces by counting
+the database the run left behind. Read that file for what came in, what was cleaned, what was
+quarantined, the rules and assumptions, and what `EXPORT-NOTES.md` did not warn about (R-A18 to
+R-A23).
 
 One run reads the three files, stores every row byte-faithfully in the `legacy_*_raw` tables,
 maps them into the canonical tables by the rules of ADR-0005, writes a normalisation record for
@@ -69,7 +75,13 @@ scope. Those printed numbers are the only source for any figure quoted about the
 typed by hand. Running the command twice changes no table but `import_runs`
 (`src/import/run.integration.test.ts`). The rule set the importer applies lives in
 `rules/v1.json`; the codes and their evidence in `src/import/mapper/rule-codes.ts`; the
-conventions in ADR-0009 and ADR-0011. The report files are not part of this command yet.
+conventions in ADR-0009 and ADR-0011.
+
+The report is a statement about the **export**, not about the run: it carries `--as-of`, the
+importer version and the ruleset version, and no run id and no wall-clock, so two runs over one
+export render byte-identical files and a diff of the committed report is a change in the data or
+in the rules (ADR-0011 item 14). The run keeps the link through `import_runs.report_path`; a dry
+run prints the same report and leaves that column null.
 
 ### What one run over `legacy_export/` does
 
@@ -83,7 +95,8 @@ conventions in ADR-0009 and ADR-0011. The report files are not part of this comm
 | shadow evaluations | 2917, one per legacy intake: 2304 cleared, 331 flagged, 254 rejected, 28 not evaluable |
 | review items raised | 336 |
 
-Every number above is printed by the command; none is typed by hand. Two consecutive runs change
+Every number above is printed by the command and appears in `reports/import-report.json`; none is
+typed by hand. Two consecutive runs change
 no table but `import_runs`, merges, derived states and shadow evaluations included.
 
 **Identity.** Four exact keys — canonical email, bsn, E.164 phone, folded name with date of birth —
