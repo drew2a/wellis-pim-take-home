@@ -14,6 +14,13 @@ const INTEGER = /^[0-9]+$/u;
 
 type Bounds = Rules['plausibility']['weight_kg'];
 
+/**
+ * The shape a weight cell must have to be read as a number at all. Exported so that the detector
+ * for the unit-less weights asks the same question the mapper did, rather than a looser one: a
+ * cell this rejects never reaches the missing-unit rule, so it has no unit question to answer.
+ */
+export const isDecimal = (raw: string): boolean => DECIMAL.test(raw);
+
 /** One decimal, as the numeric(5,1) column stores it, with `.0` written out. */
 export function oneDecimal(value: number): string {
   return value.toFixed(1);

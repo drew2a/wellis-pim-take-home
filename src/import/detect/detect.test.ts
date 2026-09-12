@@ -182,6 +182,27 @@ describe('the weight detectors over this export', () => {
     expect(item).toMatchObject({ type: 'vocabulary', scope: 'vocabulary' });
   });
 
+  // The mapper blanks a weight that is not a number before the missing-unit rule can run, so the
+  // item must not read such a row both ways: `NaN` in a jsonb payload is a silent fallback
+  // (`CLAUDE.md` §5) and asks a reviewer whether a non-number is in pounds.
+  it('leaves out a unit-less row whose weight is not a number', () => {
+    const unitLess = (legacyId: string, rawWeight: string): WeightRow => ({
+      legacyId,
+      rawWeight,
+      rawUnit: '',
+      weightKg: null,
+      heightCm: 170,
+      intakes: [],
+    });
+
+    const item = unitMissingItem([unitLess('recNumber', '82.5'), unitLess('recText', 'n.v.t.')]);
+    const rows = (item?.payload as { rows: { legacy_id: string }[] }).rows;
+
+    expect(rows.map((row) => row.legacy_id)).toEqual(['recNumber']);
+    expect(JSON.stringify(item?.payload)).not.toContain('NaN');
+    expect(unitMissingItem([unitLess('recText', 'n.v.t.')])).toBeNull();
+  });
+
   /*
    * ADR-0005 predicts 3 kg row items here and this export produces none, because ADR-0009 item 2
    * was decided after it. The four diverging kg pairs are `rec2LxzDL6x93TyyD`/`INT-7194` (ratio

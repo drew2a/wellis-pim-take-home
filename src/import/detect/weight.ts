@@ -6,6 +6,7 @@
 // moved further than 2684 of 2688 intakes ever moved, and a unit column the export left empty.
 import type { Rules } from '@/rules/schema';
 
+import { isDecimal } from '../mapper/numbers';
 import { RULE_CODES } from '../mapper/rule-codes';
 import { dedupeKey, type ReviewItemDraft } from '../review/items';
 import type { Ids } from '../review/mapping-items';
@@ -38,7 +39,11 @@ function bmi(weightKg: number, heightCm: number | null): number | null {
  * applying, which is why the payload lists them (ADR-0005).
  */
 export function unitMissingItem(rows: readonly WeightRow[]): ReviewItemDraft | null {
-  const affected = rows.filter((row) => row.rawUnit === '' && row.rawWeight !== '');
+  // `isDecimal`, not `!== ''`: the mapper blanks a weight that is not a number before the
+  // missing-unit rule can ever run on it (`NON_NUMERIC_TO_NULL`), so such a row carries no
+  // question for this item — and reading it both ways would put `NaN` in the payload and ask a
+  // reviewer whether a value that is not a number is in pounds.
+  const affected = rows.filter((row) => row.rawUnit === '' && isDecimal(row.rawWeight));
   if (affected.length === 0) return null;
   return {
     type: 'vocabulary',

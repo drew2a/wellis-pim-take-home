@@ -15,6 +15,7 @@ import { recomputeConsentStates } from '@/consent/states';
 
 import { dedupeKeyFor } from './audit';
 import { maskIdentifier } from './mask';
+import { survivorOf } from './membership';
 
 /**
  * The fields ADR-0006 calls "about the person". `source` and `signup_date` are deliberately absent:
@@ -249,9 +250,13 @@ export async function unmergePatient(
     },
   ]);
 
+  // The survivor of this merge may itself have been merged away since — merge B into A, then A
+  // into C — so the states belong to the end of its chain, not to A. Writing them for A would
+  // leave rows on a patient that no longer survives and leave C's own states derived over B's
+  // events, which is what ADR-0011 item 13 writes them for.
   await recomputeConsentStates(db, {
     declaredTypes: request.declaredConsentTypes,
-    survivorIds: [survivorId, loserId],
+    survivorIds: [await survivorOf(db, survivorId), loserId],
   });
   return { survivorId, released, repointedLegacyIds };
 }
