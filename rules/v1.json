@@ -8,13 +8,16 @@
     "tolerance": { "min": 0.9, "max": 1.1 }
   },
   "age": {
-    "minimum_years": 18,
-    "reference": "submitted_at"
+    "minimum_years": 18
   },
   "bmi": {
     "reject_below": 27,
     "flag_band": { "min": 27, "max": 30, "min_inclusive": true, "max_inclusive": true },
     "rounding": "none"
+  },
+  "precedence": {
+    "absolute_rejects": ["age_below_minimum"],
+    "flag_preempts_reject": true
   },
   "glp1_terms": [
     "semaglutide",

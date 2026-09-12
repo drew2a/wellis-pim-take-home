@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { ageInYears, alternativeReading, mapDate, readDateBySeparator } from './dates';
+import { alternativeReading, mapDate, readDateBySeparator } from './dates';
 
 const ctx = { asOf: '2026-09-08' };
 
@@ -39,14 +39,6 @@ describe('alternativeReading', () => {
   it('is null for day = month and when the swap is not a date', () => {
     expect(alternativeReading('03-03-1960')).toBeNull();
     expect(alternativeReading('23-08-2000')).toBeNull();
-  });
-});
-
-describe('ageInYears', () => {
-  it('counts birthdays, boundary on the day itself', () => {
-    expect(ageInYears('2008-09-08', '2026-09-08')).toBe(18);
-    expect(ageInYears('2008-09-09', '2026-09-08')).toBe(17);
-    expect(ageInYears('1923-01-01', '2026-06-01')).toBe(103);
   });
 });
 

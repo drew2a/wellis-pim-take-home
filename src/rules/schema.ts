@@ -9,33 +9,58 @@ const bounds = z
   .refine((b) => b.min < b.max, { message: 'min must be below max' });
 
 // Matching lowercases the input and looks for the term on word boundaries (ADR-0005), so a term
-// with an uppercase letter could never match; refusing it here is cheaper than a silent miss.
+// with an uppercase letter could never match; refusing it here is cheaper than a silent miss. A
+// term without a letter or a digit is worse than useless: matching keeps letters and digits and
+// makes every other character a boundary, so `-` tokenises to nothing and would match every
+// segment. Both are caught at load, before a single row is read (`CLAUDE.md` §2).
 const term = z
   .string()
   .trim()
   .min(1)
-  .refine((t) => t === t.toLowerCase(), { message: 'terms are lowercase' });
+  .refine((t) => t === t.toLowerCase(), { message: 'terms are lowercase' })
+  .refine((t) => /[\p{L}\p{N}]/u.test(t), { message: 'terms need a letter or a digit' });
 const termList = z.array(term).nonempty();
+
+// The rules the engine can name in a precedence statement: the two that reject (ADR-0010). A
+// ruleset marks one absolute — age under 18 is a legal gate a reviewer cannot resolve in the
+// patient's favour — and leaves the rest to yield to a flag.
+export const REJECT_RULES = ['age_below_minimum', 'bmi_below_minimum'] as const;
+export type RejectRule = (typeof REJECT_RULES)[number];
 
 export const rulesSchema = z.object({
   version: z.literal('v1'),
   plausibility: z.object({ weight_kg: bounds, height_cm: bounds }),
   weight_divergence: z.object({ tolerance: bounds }),
-  age: z.object({
-    minimum_years: z.number().int().positive(),
-    // Q4 default: age is measured at submission (QUESTIONS.md).
-    reference: z.literal('submitted_at'),
-  }),
-  bmi: z.object({
-    reject_below: z.number().positive(),
-    flag_band: z.object({
-      min: z.number().positive(),
-      max: z.number().positive(),
-      min_inclusive: z.boolean(),
-      max_inclusive: z.boolean(),
+  // Only the threshold: the reference date (Q4: submission) is the caller's, because the engine
+  // is handed whole years and never a date. A `reference` field here would be read by nothing and
+  // could be changed without changing a single evaluation (ADR-0010).
+  age: z.object({ minimum_years: z.number().int().positive() }),
+  // The BMI thresholds are cross-validated for the same reason as `bounds`: each number is
+  // individually plausible while the pair is not. The engine rejects below `reject_below` before
+  // it considers the band (ADR-0010), so a `reject_below` at or above the top of the band makes
+  // the band unreachable and every patient the band exists for would be rejected instead.
+  bmi: z
+    .object({
+      reject_below: z.number().positive(),
+      flag_band: z
+        .object({
+          min: z.number().positive(),
+          max: z.number().positive(),
+          min_inclusive: z.boolean(),
+          max_inclusive: z.boolean(),
+        })
+        .refine((b) => b.min < b.max, { message: 'min must be below max' }),
+      // Q2 default: thresholds apply to the unrounded value; rounding is for display only.
+      rounding: z.literal('none'),
+    })
+    .refine((b) => b.reject_below < b.flag_band.max, {
+      message: 'reject_below must be below the top of the flag band, or the band is unreachable',
     }),
-    // Q2 default: thresholds apply to the unrounded value; rounding is for display only.
-    rounding: z.literal('none'),
+  // Q1 default (ADR-0010): collect every match, then resolve. Required, so a ruleset that states
+  // no precedence fails at load rather than falling back to a default buried in the engine.
+  precedence: z.object({
+    absolute_rejects: z.array(z.enum(REJECT_RULES)),
+    flag_preempts_reject: z.boolean(),
   }),
   glp1_terms: termList,
   flag_condition_terms: termList,
