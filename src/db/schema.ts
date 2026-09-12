@@ -22,6 +22,8 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core';
 
+import { ELIGIBILITY_OUTCOMES, type EvaluatedInputs } from '@/eligibility/types';
+
 // ---------------------------------------------------------------------------------------------
 // Enums
 // ---------------------------------------------------------------------------------------------
@@ -43,6 +45,12 @@ export const historyReportEnum = pgEnum('history_report', [
   'reported',
 ]);
 export const outcomeEnum = pgEnum('outcome', ['approved', 'rejected', 'pending', 'unknown']);
+// The engine's own vocabulary, generated from the engine's list so the two cannot drift. It is
+// not the legacy outcome vocabulary above and never translated into it: `not_evaluable` has no
+// image there, and a translated copy of a verdict is a second value that can disagree with the
+// first (ADR-0011 item 1).
+export const engineOutcomeEnum = pgEnum('engine_outcome', ELIGIBILITY_OUTCOMES);
+export type EngineOutcome = (typeof engineOutcomeEnum.enumValues)[number];
 // Legacy states are terminal and filterable; the rest belong to the Part B state machine.
 export const intakeStateEnum = pgEnum('intake_state', [
   'legacy_approved',
@@ -342,15 +350,24 @@ export const eligibilityEvaluations = pgTable(
       .notNull()
       .references(() => intakes.id),
     rulesetVersion: text('ruleset_version').notNull(),
-    // The engine's verdict in the vocabulary of the legacy outcome it is compared with.
-    outcome: outcomeEnum('outcome').notNull(),
+    // The engine's verdict, in the engine's vocabulary (ADR-0011 item 1).
+    engineOutcome: engineOutcomeEnum('engine_outcome').notNull(),
     reasons: jsonb('reasons').$type<string[]>().notNull(),
+    // What the rules saw: age, weight, height, the unrounded BMI and the matched terms with the
+    // text that matched them, so the row explains itself without re-running the engine (ADR-0010).
+    inputs: jsonb('inputs').$type<EvaluatedInputs>().notNull(),
     // True for legacy intakes evaluated at import, where nothing is applied (ADR-0005).
     shadow: boolean('shadow').notNull(),
     evaluatedAt: timestamptz('evaluated_at').notNull().defaultNow(),
     importRunId: importRunRef('import_run_id'),
   },
   (table) => [
+    // A shadow row is derived from (intake, ruleset) and is recomputed on every run, so the
+    // upsert needs this target; Part B's rows record what a patient was told at submission and
+    // each one is a new fact (ADR-0011 item 2).
+    uniqueIndex('eligibility_evaluations_shadow_unique')
+      .on(table.intakeId, table.rulesetVersion)
+      .where(sql`${table.shadow}`),
     index('eligibility_evaluations_intake_id_idx').on(table.intakeId),
     index('eligibility_evaluations_import_run_id_idx').on(table.importRunId),
   ],

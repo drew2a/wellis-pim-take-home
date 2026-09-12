@@ -1,16 +1,25 @@
 import type { TermMatch } from './terms';
 
 /**
- * The engine's verdict (§3B, R-B6). A missing input can only remove the possibility of clearing,
- * never cancel a rule that fired on the inputs that are present, so an evaluation that matched no
- * rule while an input was missing is `not_evaluable` rather than `auto_cleared` (ADR-0010).
+ * The engine's verdict (§3B, R-B6), as a list so that the `engine_outcome` database enum is
+ * generated from it and cannot drift (ADR-0011 item 1).
+ *
+ * A missing input can only remove the possibility of clearing, never cancel a rule that fired on
+ * the inputs that are present, so an evaluation that matched no rule while an input was missing is
+ * `not_evaluable` rather than `auto_cleared` (ADR-0010).
  *
  * The state machine maps the three `auto_*` outcomes onto an intake state; `not_evaluable` never
  * enters it. The Part B form validates its inputs before `evaluate` runs, and at import the
  * history audit stores the outcome in a shadow row and counts it in the report.
  */
-export type EligibilityOutcome =
-  'auto_rejected' | 'auto_flagged' | 'auto_cleared' | 'not_evaluable';
+export const ELIGIBILITY_OUTCOMES = [
+  'auto_rejected',
+  'auto_flagged',
+  'auto_cleared',
+  'not_evaluable',
+] as const;
+
+export type EligibilityOutcome = (typeof ELIGIBILITY_OUTCOMES)[number];
 
 export interface EligibilityInput {
   /**

@@ -22,6 +22,20 @@
       "when": 1789131024689,
       "tag": "0002_import_runs_as_of",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1789211441452,
+      "tag": "0003_evaluation_engine_outcome",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1789211449647,
+      "tag": "0004_drop_evaluation_legacy_outcome",
+      "breakpoints": true
     }
   ]
 }

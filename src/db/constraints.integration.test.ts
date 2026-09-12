@@ -347,4 +347,64 @@ describe('database constraints (ADR-0004)', () => {
       );
     });
   });
+
+  // ADR-0011 item 2: a shadow evaluation is derived from (intake, ruleset) and is recomputed,
+  // so the re-run needs a conflict target; Part B's rows record what a patient was told and
+  // each one is a new fact.
+  describe('eligibility_evaluations', () => {
+    async function insertIntake(intakeId: string): Promise<string> {
+      const [row] = await database.db
+        .insert(schema.intakes)
+        .values(rows.intakeRow(intakeId))
+        .returning({ id: schema.intakes.id });
+      return (row as { id: string }).id;
+    }
+
+    it('rejects a second shadow row for one intake and ruleset version', async () => {
+      const intake = await insertIntake('INT-shadow-twice');
+      await database.db
+        .insert(schema.eligibilityEvaluations)
+        .values(rows.eligibilityEvaluationRow(intake));
+
+      await expectDatabaseError(
+        database.db
+          .insert(schema.eligibilityEvaluations)
+          .values(rows.eligibilityEvaluationRow(intake)),
+        UNIQUE,
+      );
+    });
+
+    it('accepts a shadow row per ruleset version, and any number of non-shadow rows', async () => {
+      const intake = await insertIntake('INT-shadow-per-version');
+
+      await database.db
+        .insert(schema.eligibilityEvaluations)
+        .values(rows.eligibilityEvaluationRow(intake));
+      await database.db
+        .insert(schema.eligibilityEvaluations)
+        .values(rows.eligibilityEvaluationRow(intake, { rulesetVersion: 'v2' }));
+      await database.db
+        .insert(schema.eligibilityEvaluations)
+        .values(rows.eligibilityEvaluationRow(intake, { shadow: false }));
+      await database.db
+        .insert(schema.eligibilityEvaluations)
+        .values(rows.eligibilityEvaluationRow(intake, { shadow: false }));
+    });
+
+    it('stores the engine vocabulary, not the legacy one (ADR-0011 item 1)', async () => {
+      const intake = await insertIntake('INT-engine-vocabulary');
+
+      await database.db
+        .insert(schema.eligibilityEvaluations)
+        .values(rows.eligibilityEvaluationRow(intake, { engineOutcome: 'not_evaluable' }));
+      await expectDatabaseError(
+        database.db.insert(schema.eligibilityEvaluations).values({
+          ...rows.eligibilityEvaluationRow(intake),
+          // The legacy vocabulary of ADR-0004, which this column no longer speaks.
+          engineOutcome: 'approved' as unknown as schema.EngineOutcome,
+        }),
+        UNKNOWN_ENUM_VALUE,
+      );
+    });
+  });
 });
