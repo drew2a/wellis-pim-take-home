@@ -23,6 +23,7 @@ import { mergePatients, unmergePatient } from './merge';
 
 const TYPES = ['data_processing'];
 const REASON = 'tier-1 merge: survivor has intakes';
+const REVIEWER = 'dr. reviewer';
 
 describe('mergePatients / unmergePatient (ADR-0006)', () => {
   let database: TestDatabase;
@@ -70,8 +71,13 @@ describe('mergePatients / unmergePatient (ADR-0006)', () => {
     return row?.patientId;
   }
 
+  /** Ordered, because two cases below read the trail as a sequence of transitions. */
   async function auditFor(patientId: string) {
-    return database.db.select().from(auditEntries).where(eq(auditEntries.entityId, patientId));
+    return database.db
+      .select()
+      .from(auditEntries)
+      .where(eq(auditEntries.entityId, patientId))
+      .orderBy(auditEntries.at);
   }
 
   it('repoints every legacy id, points the loser at the survivor and records both entities', async () => {
@@ -166,34 +172,39 @@ describe('mergePatients / unmergePatient (ADR-0006)', () => {
     expect(states[0]).toMatchObject({ patientId: survivor, state: 'revoked' });
   });
 
-  // ADR-0012 item 1: the five fields the dedupe key was built from are byte-identical for the
-  // second merge of one pair, so without the occurrence both its entries were dropped and a real
-  // transition went unaudited while `merged_into` and the alias rows were rewritten (R-B20).
+  // ADR-0012 items 1 and 2: the five fields the dedupe key is built from are byte-identical for
+  // the second merge of one pair, so a second merge under the importer's key would be dropped and
+  // a real transition would go unaudited (R-B20). Only a human can re-merge a pair a human
+  // separated, and a human entry carries no key (ADR-0008 item 1), so the second merge keeps its
+  // own rows.
   it('audits a second merge of the same pair after a reviewer took the first one back', async () => {
     const survivor = await insertPatient('recSurvivor', { city: null });
     const loser = await insertPatient('recLoser', { city: 'Delft' });
     const unmerge = () =>
       unmergePatient(database.db, {
         loserId: loser,
-        actor: 'dr. reviewer',
+        actor: REVIEWER,
         reason: 'not the same person after all',
         declaredConsentTypes: TYPES,
       });
     await merge(survivor, loser);
     await unmerge();
 
-    const again = await merge(survivor, loser);
+    const again = await merge(survivor, loser, REVIEWER);
 
     expect(again.merged).toBe(true);
-    // Two merges and one unmerge on the loser, two absorb/release pairs on the survivor.
-    const merges = (await auditFor(loser)).filter((entry) => entry.toState === 'merged');
-    expect(merges).toHaveLength(2);
-    expect(new Set(merges.map((entry) => entry.dedupeKey)).size).toBe(2);
-    expect(merges.every((entry) => entry.actor === IMPORTER_ACTOR)).toBe(true);
+    // Merge, unmerge and merge again: three transitions on the loser, three entries.
+    const entries = await auditFor(loser);
+    expect(entries).toHaveLength(3);
+    expect(entries.map((entry) => entry.toState)).toEqual(['merged', 'independent', 'merged']);
+    const merges = entries.filter((entry) => entry.toState === 'merged');
+    expect(merges.map((entry) => entry.actor)).toEqual([IMPORTER_ACTOR, REVIEWER]);
+    // The importer's entry keeps its deterministic key; the reviewer's is a new event.
+    expect(merges.map((entry) => entry.dedupeKey === null)).toEqual([false, true]);
     expect(await auditFor(survivor)).toHaveLength(3);
 
-    // And the trail still describes the merge in force: the second unmerge releases the city the
-    // second merge took, rather than matching the first merge's entry.
+    // And the trail describes the merge in force: the second unmerge releases the city the second
+    // merge took, rather than matching the first merge's entry.
     const released = await unmerge();
     expect(released.released).toEqual([
       { field: 'city', from: null, to: 'Delft', source_legacy_id: 'recLoser' },
@@ -255,7 +266,7 @@ describe('mergePatients / unmergePatient (ADR-0006)', () => {
 
       const result = await unmergePatient(database.db, {
         loserId: loser,
-        actor: 'dr. reviewer',
+        actor: REVIEWER,
         reason: 'not the same person after all',
         declaredConsentTypes: TYPES,
       });
@@ -284,7 +295,7 @@ describe('mergePatients / unmergePatient (ADR-0006)', () => {
 
       await unmergePatient(database.db, {
         loserId: loser,
-        actor: 'dr. reviewer',
+        actor: REVIEWER,
         reason: 'not the same person after all',
         declaredConsentTypes: TYPES,
       });
@@ -292,7 +303,7 @@ describe('mergePatients / unmergePatient (ADR-0006)', () => {
       const entries = await auditFor(loser);
       expect(entries).toHaveLength(2);
       const unmerged = entries.find((entry) => entry.toState === 'independent');
-      expect(unmerged).toMatchObject({ actor: 'dr. reviewer', fromState: 'merged' });
+      expect(unmerged).toMatchObject({ actor: REVIEWER, fromState: 'merged' });
       // Each human decision is a new event and must never collide (ADR-0008 item 1).
       expect(unmerged?.dedupeKey).toBeNull();
       expect(await auditFor(survivor)).toHaveLength(2);
@@ -314,7 +325,7 @@ describe('mergePatients / unmergePatient (ADR-0006)', () => {
 
       await unmergePatient(database.db, {
         loserId: second,
-        actor: 'dr. reviewer',
+        actor: REVIEWER,
         reason: 'not the same person after all',
         declaredConsentTypes: TYPES,
       });
@@ -333,7 +344,7 @@ describe('mergePatients / unmergePatient (ADR-0006)', () => {
       await expect(
         unmergePatient(database.db, {
           loserId: alone,
-          actor: 'dr. reviewer',
+          actor: REVIEWER,
           reason: 'nothing to undo',
           declaredConsentTypes: TYPES,
         }),

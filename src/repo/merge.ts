@@ -161,7 +161,7 @@ export async function mergePatients(db: Queryable, request: MergeRequest): Promi
       .where(inArray(patientLegacyIds.legacyId, repointedLegacyIds));
   }
 
-  await writeEntries(db, request, await mergeOccurrence(db, loserId, survivorId), [
+  await writeEntries(db, request, [
     {
       entityId: loserId,
       fromState: 'independent',
@@ -226,7 +226,7 @@ export async function unmergePatient(
       .where(inArray(patientLegacyIds.legacyId, repointedLegacyIds));
   }
 
-  await writeEntries(db, request, await unmergeOccurrence(db, loserId, survivorId), [
+  await writeEntries(db, request, [
     {
       entityId: loserId,
       fromState: 'merged',
@@ -343,54 +343,15 @@ interface EntryDraft {
 }
 
 /**
- * The occurrence of this merge: how many times this loser has already been merged into this
- * survivor. A pair can be merged, unmerged by a reviewer and merged again, and the second merge's
- * five audit fields are byte-identical to the first's whenever the actor and the survivor rule
- * are — so without this the second merge's entries collide with the first's, `onConflictDoNothing`
- * drops them, and a real transition goes unaudited while `merged_into` and the alias rows are
- * rewritten (R-B20, `CLAUDE.md` §5, ADR-0012 item 1).
+ * One entry per entity, with the key ADR-0008 item 1 gives it: deterministic for the importer,
+ * null for a human. A pair can be merged, unmerged and merged again, and the second merge's five
+ * audit fields are byte-identical to the first's — but only a human can re-merge a pair a human
+ * separated (ADR-0012 item 2), and a human entry has no key to collide with, so the second
+ * transition keeps its own rows (ADR-0012 item 1).
  */
-async function mergeOccurrence(
-  db: Queryable,
-  loserId: string,
-  survivorId: string,
-): Promise<number> {
-  return countEntries(
-    db,
-    loserId,
-    (change) => change.field === MERGED_INTO && change.to === survivorId,
-  );
-}
-
-/** The same count for the reverse transition, which repeats for the same reason. */
-async function unmergeOccurrence(
-  db: Queryable,
-  loserId: string,
-  survivorId: string,
-): Promise<number> {
-  return countEntries(
-    db,
-    loserId,
-    (change) => change.field === MERGED_INTO && change.from === survivorId && change.to === null,
-  );
-}
-
-async function countEntries(
-  db: Queryable,
-  entityId: string,
-  matches: (change: AuditChange) => boolean,
-): Promise<number> {
-  const entries = await db
-    .select({ changes: auditEntries.changes })
-    .from(auditEntries)
-    .where(eq(auditEntries.entityId, entityId));
-  return entries.filter((entry) => (entry.changes ?? []).some(matches)).length;
-}
-
 async function writeEntries(
   db: Queryable,
   request: { actor: string; reviewItemId?: string | null },
-  occurrence: number,
   drafts: readonly EntryDraft[],
 ): Promise<void> {
   await db
@@ -412,7 +373,6 @@ async function writeEntries(
           draft.fromState,
           draft.toState,
           draft.reason,
-          occurrence,
         ),
       })),
     )

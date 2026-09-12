@@ -485,10 +485,9 @@ export const auditEntries = pgTable(
     // provenance of the importer's tier-1 merges (ADR-0006).
     changes: jsonb('changes').$type<AuditChange[]>(),
     // Importer-written entries: deterministic from (entity_type, entity_id, from_state, to_state,
-    // reason), the re-run's ON CONFLICT target under the append-only trigger. A transition an
-    // entity can reach twice — the same pair merged, unmerged and merged again — adds its
-    // occurrence, or the second one's entries collide with the first's (ADR-0012 item 1). Null for
-    // human entries, each of which is a new event (ADR-0008).
+    // reason), the re-run's ON CONFLICT target under the append-only trigger. Null for human
+    // entries, each of which is a new event (ADR-0008) — which is also what lets a transition
+    // repeat: only a human can merge a pair a human separated (ADR-0012).
     dedupeKey: text('dedupe_key').unique(),
   },
   (table) => [
