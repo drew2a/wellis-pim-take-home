@@ -49,6 +49,27 @@ individual steps are `typecheck`, `lint`, `format:check` (`format` rewrites), `t
 `test:integration` in `package.json`. CI (`.github/workflows/ci.yml`) runs `npm run check`
 against a Postgres service container, then `npm run build`.
 
+## Import
+
+```sh
+npm run import -- --as-of 2026-09-08            # loads legacy_export/ into DATABASE_URL
+npm run import -- --as-of 2026-09-08 --dry-run  # same run, rolled back; only its import_runs row stays
+```
+
+One run reads the three files, stores every row byte-faithfully in the `legacy_*_raw` tables,
+maps them into the canonical tables by the rules of ADR-0005, writes a normalisation record for
+every value that differs from raw, and raises review items for what the mapping cannot decide.
+Everything after the `import_runs` row happens in one transaction: a run that fails writes
+nothing else. `--as-of` is the reference date for every "future" judgement (a birth date after
+it is impossible) and is stored on the run so it is reproducible; it is required, never the
+clock. The command prints the counts per rule code, per field, and per review-item type and
+scope. Those printed numbers are the only source for any figure quoted about the import; none is
+typed by hand. Running the command twice changes no table but `import_runs`
+(`src/import/run.integration.test.ts`). The rule set the importer applies lives in
+`rules/v1.json`; the codes and their evidence in `src/import/mapper/rule-codes.ts`; the
+conventions in ADR-0009. Detector items (plausibility, weight divergence, consent state,
+duplicate patients) and the report files are not part of this command yet.
+
 ## Deploy
 
 The app runs on Vercel against Supabase-hosted Postgres, used only through its Postgres

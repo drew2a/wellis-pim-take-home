@@ -15,6 +15,13 @@
       "when": 1789126500123,
       "tag": "0001_append_only_evidence",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1789131024689,
+      "tag": "0002_import_runs_as_of",
+      "breakpoints": true
     }
   ]
 }

@@ -1,0 +1,54 @@
+{
+  "version": "v1",
+  "plausibility": {
+    "weight_kg": { "min": 30, "max": 300 },
+    "height_cm": { "min": 100, "max": 230 }
+  },
+  "weight_divergence": {
+    "tolerance": { "min": 0.9, "max": 1.1 }
+  },
+  "age": {
+    "minimum_years": 18,
+    "reference": "submitted_at"
+  },
+  "bmi": {
+    "reject_below": 27,
+    "flag_band": { "min": 27, "max": 30, "min_inclusive": true, "max_inclusive": true },
+    "rounding": "none"
+  },
+  "glp1_terms": [
+    "semaglutide",
+    "ozempic",
+    "wegovy",
+    "rybelsus",
+    "tirzepatide",
+    "mounjaro",
+    "liraglutide",
+    "saxenda",
+    "victoza",
+    "zepbound",
+    "trulicity",
+    "dulaglutide",
+    "exenatide",
+    "byetta",
+    "bydureon",
+    "lixisenatide"
+  ],
+  "flag_condition_terms": [
+    "schildklierkanker",
+    "schildkliercarcinoom",
+    "thyroid cancer",
+    "medullary thyroid",
+    "pancreatitis",
+    "alvleesklierontsteking"
+  ],
+  "weight_related_condition_terms": [
+    "hoge bloeddruk",
+    "hypertensie",
+    "slaapapneu",
+    "diabetes type 2",
+    "prediabetes",
+    "hoog cholesterol",
+    "pcos"
+  ]
+}

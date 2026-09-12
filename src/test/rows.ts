@@ -11,6 +11,7 @@ type Insert<T extends keyof typeof schema> = (typeof schema)[T] extends { $infer
 export const importRunRow = (): Insert<'importRuns'> => ({
   importerVersion: 'test',
   dryRun: false,
+  asOf: '2026-09-08',
   patientsSha256: 'a'.repeat(64),
   patientsBytes: 1,
   intakesSha256: 'b'.repeat(64),
