@@ -1,6 +1,6 @@
 # ADR-0011: Detector conventions: evaluation rows, merge mechanics, consent gaps, disagreement
 
-- **Status:** proposed
+- **Status:** approved
 - **Date:** 2026-09-12
 - **Deciders:** Andrei Andreev
 - **Requirements:** R-A7, R-A10, R-A11, R-A12, R-A15, R-A16, R-A17, R-A18 to R-A23, R-B11, R-B12,
