@@ -4,7 +4,12 @@
 -- map a merged-away row onto its survivor and overwrite it. This column answers that question
 -- and never changes. Null for a patient the new intake flow creates, which has no legacy row.
 --
--- No backfill: a database that already holds patients was loaded by an importer that did not
--- merge, so every alias still points at the row it created. The next run fills the column.
+-- Backfilled from the alias table, which is the only place the answer exists for rows already
+-- loaded: before this branch nothing merged, so every patient has exactly one alias and it is the
+-- legacy row that created it. Without the backfill the next run would see every stored patient as
+-- new and fail on the alias primary key.
 ALTER TABLE "patients" ADD COLUMN "created_from_legacy_id" text;--> statement-breakpoint
-ALTER TABLE "patients" ADD CONSTRAINT "patients_created_from_legacy_id_unique" UNIQUE("created_from_legacy_id");
+ALTER TABLE "patients" ADD CONSTRAINT "patients_created_from_legacy_id_unique" UNIQUE("created_from_legacy_id");--> statement-breakpoint
+UPDATE "patients" SET "created_from_legacy_id" = (
+  SELECT MIN("legacy_id") FROM "patient_legacy_ids" WHERE "patient_id" = "patients"."id"
+) WHERE "created_from_legacy_id" IS NULL;

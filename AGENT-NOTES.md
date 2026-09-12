@@ -151,6 +151,40 @@ human transition makes `state` human-owned (otherwise a re-run returns a reopene
 its legacy state), and an unseen outcome spelling sits in `legacy_pending` until its item is
 resolved.
 
+## Detectors and identity (2026-09-12, `feature/importer-detectors`)
+
+Same shape: the agent read ADR-0005 to ADR-0010, proposed the build, the order, what it would
+leave out, twelve decisions no accepted ADR settled and the tests it would write first. It also
+said, unprompted, that the branch was too large for one review and proposed the seam — everything
+that writes rows here, the import report next — which I took. Two things it caught that my list of
+obligations had missed: the mapper's 18 unit-less weights had no review item either (the same debt
+as the implausible values), and the counts in ADR-0005 needed checking rather than quoting.
+
+What the tests found, in order:
+
+- **`conflict` is "revoke before grant", not "revoke before grant *and* before signup".** ADR-0005
+  describes the 7 conflicts with both properties; only six have the second. The seventh revoked the
+  day after signing up. Under the narrower reading the derivation returns `granted` for a log that
+  contradicts itself, which is what the state exists to prevent.
+- **The second run overwrote 28 survivors with their losers' values.** After a merge repoints the
+  alias, the alias no longer says which exported row built which canonical row, and the importer
+  rewrites canonical rows from raw. A new column, `patients.created_from_legacy_id`, answers that
+  and never moves. The double-run test found it; nothing else would have.
+- **The weight-divergence detector finds nothing.** ADR-0005 predicts 3 items; all four diverging
+  pairs are tiny weights that ADR-0009 item 2 — decided later — now nulls as implausible, so there
+  is nothing to compare, and those patients already carry a plausibility item. I kept the detector
+  (Part B needs it) and had the zero recorded with its evidence instead of adjusted away.
+- **Two counts in accepted ADRs were wrong.** Same-day intake pairs need the profile's "any shared
+  plausible reading" to reach ADR-0006's five, and ADR-0006's "outcomes disagreeing in 3" is 2 by
+  canonical outcome and 4 by raw spelling. The second is a clerical fix under the lifecycle rule.
+
+Where I took the wheel: the disagreement definition. The agent proposed mapping `auto_flagged` to
+`pending` so the report could state one number. That conflates "the doctor never decided" with "a
+doctor should look" — they are different facts about a patient. The report carries the whole matrix
+instead and names two cells as hard disagreements (auto_rejected where legacy approved,
+auto_cleared where legacy rejected), which is one named predicate the report and any later query
+share.
+
 ## What I would do differently
 
 _To be filled at the end._

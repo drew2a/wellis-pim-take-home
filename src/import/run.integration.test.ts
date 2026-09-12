@@ -26,6 +26,8 @@ const TABLES = [
   'patient_legacy_ids',
   'intakes',
   'consent_events',
+  'consent_states',
+  'eligibility_evaluations',
   'normalisation_records',
   'review_items',
   'audit_entries',
