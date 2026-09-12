@@ -55,7 +55,13 @@ export function evaluate(input: EligibilityInput, rules: Rules): EligibilityResu
   const ageYears = wholeYears(input.ageYears);
   const weightKg = positiveFinite(input.weightKg, 'weightKg');
   const heightCm = positiveFinite(input.heightCm, 'heightCm');
-  const bmi = weightKg === null || heightCm === null ? null : weightKg / (heightCm / 100) ** 2;
+  // Integer arithmetic, not `weightKg / (heightCm / 100) ** 2`: dividing the height by 100 first
+  // is inexact for most heights, which moved BMIs that are mathematically 30.0 to either side of
+  // an inclusive band boundary (86.7 kg at 170 cm cleared, 76.8 kg at 160 cm flagged). Multiplying
+  // by 10000 instead keeps every one-decimal weight at an integer height exact (see the grid in
+  // `evaluate.test.ts`), so identical BMIs cannot get different outcomes.
+  const bmi =
+    weightKg === null || heightCm === null ? null : (weightKg * 10000) / (heightCm * heightCm);
 
   // The two clinical lists only ever add a flag, so they read the free-text answer as well. The
   // weight-related list can suppress a flag, so it reads the structured answer only (ADR-0005).

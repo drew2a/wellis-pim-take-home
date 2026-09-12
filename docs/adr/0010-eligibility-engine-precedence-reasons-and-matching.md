@@ -73,7 +73,12 @@ interface EligibilityInput {
   A legacy intake passes its raw `conditions` value as `conditions` and nothing as
   `conditionsOther`; the Part B form passes the checklist as `conditions` and the "other" box as
   `conditionsOther`.
-- BMI is `weightKg / (heightCm / 100) ** 2`, unrounded; rounding is display only (Q2, ADR-0005).
+- BMI is `weightKg * 10000 / (heightCm * heightCm)`, unrounded; rounding is display only (Q2,
+  ADR-0005). The multiplication is deliberate: `weightKg / (heightCm / 100) ** 2` divides by an
+  inexact quotient and lands a mathematically exact 30.0 on either side of an inclusive band
+  boundary depending on the height, so two patients with the same BMI get different outcomes.
+  The form here is exact for every one-decimal weight at every whole-centimetre height in the
+  plausibility bounds.
 - The engine **throws** on a non-finite or non-positive `weightKg` or `heightCm` and on a negative
   or non-integer `ageYears` (`CLAUDE.md` §2, fail loudly). Plausibility bounds stay outside the
   engine: nulling an implausible value is the mapper's job (ADR-0005 layer 1), and the engine then
@@ -186,7 +191,9 @@ One matcher, `src/eligibility/terms.ts`, used by the engine and by the history a
 
 ### Confirmation
 
-- Unit tests per rule at its boundaries (BMI 26.99 / 27.00 / 30.00 / 30.01; age 17 years 364 days
+- Unit tests per rule at its boundaries (BMI 26.99 / 27.00 / 30.00 / 30.01, and both band
+  boundaries over every height from 150 to 200 cm so the arithmetic is tested away from the
+  one height whose denominator is exact; age 17 years 364 days
   and 18 years 0 days; a 29 February birthday), every reason string asserted verbatim, the 26.99
   case pinning that the explanation does not round itself into a contradiction.
 - Unit tests for precedence: GLP-1 with BMI 24 → `auto_flagged` with both reasons and the

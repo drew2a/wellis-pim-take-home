@@ -10,7 +10,7 @@ import type { EligibilityInput } from './types';
 
 const rules = loadRules();
 
-// Height 200 cm makes the BMI denominator exactly 4, so a boundary is a weight, not a rounding.
+// Height 200 cm keeps the arithmetic in these cases readable: a BMI is the weight over four.
 const CLEARED: EligibilityInput = {
   ageYears: 40,
   weightKg: 140,
@@ -73,6 +73,34 @@ describe('BMI', () => {
     expect(evaluateWith({ weightKg: 120 })).toMatchObject({
       outcome: 'auto_flagged',
       reasons: ['flagged: BMI 30.0 with no weight-related condition'],
+    });
+  });
+
+  // Every height from 150 to 200 cm, not just the one where the arithmetic is convenient: BMI is
+  // compared against exact integer thresholds, so the boundary is decided by `1000 * tenths` vs
+  // `bmi * height²` — no floating point in the expectation. `86.7 kg` at 170 cm and `76.8 kg` at
+  // 160 cm are the weights the old `(heightCm / 100) ** 2` formula drifted on.
+  describe.each([
+    { boundary: 27, inside: 'auto_flagged', outside: 'auto_rejected' },
+    { boundary: 30, inside: 'auto_flagged', outside: 'auto_cleared' },
+  ] as const)('the $boundary boundary, at every height', ({ boundary, inside, outside }) => {
+    const heights = Array.from({ length: 51 }, (_unused, index) => 150 + index);
+
+    it.each(heights)('holds at %d cm', (heightCm) => {
+      const exactTenths = (boundary * heightCm * heightCm) / 1000;
+      // The nearest weight in whole tenths of a kilogram on each side of the boundary. A band
+      // boundary is inclusive, so the weight that lands exactly on it belongs inside the band.
+      const insideTenths = boundary === 27 ? Math.ceil(exactTenths) : Math.floor(exactTenths);
+      const outsideTenths = boundary === 27 ? insideTenths - 1 : insideTenths + 1;
+
+      expect(evaluateWith({ heightCm, weightKg: insideTenths / 10 }).outcome).toBe(inside);
+      expect(evaluateWith({ heightCm, weightKg: outsideTenths / 10 }).outcome).toBe(outside);
+
+      // Where the boundary weight is a weight a patient can actually type — one decimal — the
+      // engine must compute the boundary itself, not a value 4e-15 away from it.
+      if (Number.isInteger(exactTenths)) {
+        expect(evaluateWith({ heightCm, weightKg: insideTenths / 10 }).inputs.bmi).toBe(boundary);
+      }
     });
   });
 
