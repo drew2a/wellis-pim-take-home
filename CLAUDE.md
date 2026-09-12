@@ -142,7 +142,18 @@ it is appropriately tested; the tests are well-designed; comments explain *why* 
   asserting anything about it, and quote the command output that proves it.
 - Never report a requirement as done without the evidence (test output, row counts,
   a report line). Say plainly when something failed or was skipped.
-- Do not silently widen scope. Propose, then wait.
+- Do not silently widen scope.
+- **Working mode from 2026-09-12 (after the fifth branch).** The rules are in the files —
+  this document, the ADRs, `REQUIREMENTS.md`, `rules/v1.json` — and the agent has shown it
+  applies them. A session therefore opens with the branch goal, the agent states its plan in
+  a few lines and **proceeds without waiting for approval**. Small decisions are the agent's
+  to make and are recorded in the branch's ADR, where the repo owner sees them when
+  accepting it. The agent **stops and waits** in exactly two cases: a decision §1 classifies
+  as graded (schema, merge semantics, intake states, normalisation rules, the auto-fix /
+  review boundary — the `docs/adr/README.md` lifecycle), and the design of reviewer-facing
+  screens — what a reviewer sees and does in a day is the repo owner's decision. Acceptance
+  of ADRs, the pre-merge review in a fresh session, the disposition of findings and the
+  `--no-ff` merge into `main` stay with the repo owner (§3).
 - Prefer inline work for small things; use subagents only for genuinely heavy,
   cheap-to-summarise work (broad data profiling, large searches).
 
