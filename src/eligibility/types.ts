@@ -38,6 +38,24 @@ export interface EligibilityInput {
   readonly conditionsOther: readonly string[];
 }
 
+/**
+ * Every rule the engine can report as matched. The two that reject are named by the ruleset's
+ * precedence block (`REJECT_RULES`); the three that flag are named here and nowhere else.
+ *
+ * `matched` exists so that the history audit and the import report ask the engine which rules
+ * fired instead of re-deriving it from the thresholds, which would be a second implementation of
+ * the rules next to the one that decides (ADR-0011 item 21).
+ */
+export const MATCHED_RULES = [
+  'age_below_minimum',
+  'bmi_below_minimum',
+  'bmi_band_without_condition',
+  'glp1_medication',
+  'flag_condition',
+] as const;
+
+export type MatchedRule = (typeof MATCHED_RULES)[number];
+
 /** What the rules actually saw, so a stored evaluation explains itself (ADR-0010). */
 export interface EvaluatedInputs {
   readonly ageYears: number | null;
@@ -53,6 +71,8 @@ export interface EvaluatedInputs {
 export interface EligibilityResult {
   readonly outcome: EligibilityOutcome;
   readonly reasons: readonly string[];
+  /** The rules that fired, in the fixed rule order the reasons follow. */
+  readonly matched: readonly MatchedRule[];
   readonly inputs: EvaluatedInputs;
   readonly rulesetVersion: string;
 }

@@ -1,26 +1,39 @@
 // The one place that knows the order of an import run (ADR-0004, ADR-0009 item 6): raw load,
-// mapping, canonical load, review items, all inside one transaction so a thrown error writes
-// nothing. A dry run rolls that transaction back after the counts are known; its import_runs row
-// is committed on its own so the run is on record.
-import type { Rules } from '@/rules/schema';
-import { consentStates, patientLegacyIds } from '@/db/schema';
+// mapping, canonical load, identity, the derived rows, the detectors and their review items, all
+// inside one transaction so a thrown error writes nothing. A dry run rolls that transaction back
+// after the counts are known; its import_runs row is committed on its own so the run is on record.
+import { eq } from 'drizzle-orm';
 
 import { recomputeConsentStates } from '@/consent/states';
+import type { Queryable } from '@/db/queryable';
+import { consentStates, patientLegacyIds, patients as patientsTable } from '@/db/schema';
+import type { EligibilityOutcome } from '@/eligibility/types';
+import type { Rules } from '@/rules/schema';
 
 import { loadConsentEvents } from './canonical/consent-events';
 import { humanOwnedFields } from './canonical/human-owned';
 import { loadIntakes } from './canonical/intakes';
 import { loadPatients } from './canonical/patients';
-import type { Queryable } from '@/db/queryable';
-import { mapConsentEvent, type MappedConsentEvent } from './mapper/consent-event';
-import { mapIntake, type MappedIntake } from './mapper/intake';
-import { mapPatient, type MappedPatient } from './mapper/patient';
+import { consentItems, futureDatedConsentItem, type ConsentSubject } from './detect/consent';
+import { duplicateIntakeItems } from './detect/duplicate-intakes';
+import { plausibilityItems } from './detect/plausibility';
+import {
+  divergenceItems,
+  lbsReconciliationItem,
+  unitMissingItem,
+  type WeightRow,
+} from './detect/weight';
+import { clinicalHistoryItems, evaluateHistory, type ShadowEvaluation } from './history/audit';
+import { writeShadowEvaluations } from './history/evaluations';
 import { candidateGroups, type CandidateGroup } from './identity/candidates';
 import { identityConflictItems } from './identity/items';
 import { mergeTier1Groups, type Tier1MergeResult } from './identity/merge-tier1';
 import { identityRows } from './identity/rows';
-import { CONSENT_TYPES } from './mapper/vocabulary';
+import { mapConsentEvent, type MappedConsentEvent } from './mapper/consent-event';
+import { mapIntake, type MappedIntake } from './mapper/intake';
+import { mapPatient, type MappedPatient } from './mapper/patient';
 import type { RuleCode } from './mapper/rule-codes';
+import { CONSENT_TYPES } from './mapper/vocabulary';
 import {
   loadRawConsentEvents,
   loadRawIntakes,
@@ -109,6 +122,14 @@ export interface ImportSummary {
   };
   /** Derived `consent_states` rows, one per surviving patient and declared type. */
   readonly consentStatesWritten: number;
+  /** The history audit: one shadow evaluation per legacy intake, nothing applied (ADR-0005). */
+  readonly shadow: {
+    readonly evaluated: number;
+    readonly written: number;
+    readonly outcomes: Readonly<Record<EligibilityOutcome, number>>;
+    /** Legacy intakes each rule would fire on today, the report's disagreement figures. */
+    readonly ruleHits: Readonly<Record<string, number>>;
+  };
   /** Items the mapping raises for this export, `type/scope`, the same on every run. */
   readonly reviewItems: Readonly<Record<string, number>>;
   readonly reviewItemsInserted: number;
@@ -144,6 +165,11 @@ interface ItemInputs {
   readonly groups: readonly CandidateGroup[];
   /** legacy id -> the derived consent state, as context on an identity item (ADR-0006). */
   readonly consentStates: ReadonlyMap<string, string>;
+  readonly weightRows: readonly WeightRow[];
+  readonly consentSubjects: readonly ConsentSubject[];
+  readonly futureEvents: Parameters<typeof futureDatedConsentItem>[0];
+  readonly evaluations: readonly ShadowEvaluation[];
+  readonly asOf: string;
 }
 
 function buildReviewItems({
@@ -156,8 +182,18 @@ function buildReviewItems({
   conflicts,
   groups,
   consentStates,
+  weightRows,
+  consentSubjects,
+  futureEvents,
+  evaluations,
+  asOf,
 }: ItemInputs): ReviewItemDraft[] {
   const shifted = shiftedPatients(data.patients);
+  const optional = [
+    unitMissingItem(weightRows),
+    lbsReconciliationItem(weightRows, rules, ids),
+    futureDatedConsentItem(futureEvents, asOf),
+  ].filter((item): item is ReviewItemDraft => item !== null);
   return [
     ...changedSourceRowItems(changedRows, ids),
     ...repeatedKeyItems(repeats, ids),
@@ -171,6 +207,15 @@ function buildReviewItems({
     ...orphanItems(orphans, data, ids),
     ...humanOwnedConflictItems(conflicts),
     ...identityConflictItems(groups, { patientIds: ids.patients, consentStates }),
+    ...plausibilityItems(
+      { patients: data.patients, intakes: data.intakes, bounds: rules.plausibility },
+      ids,
+    ),
+    ...divergenceItems(weightRows, rules, ids),
+    ...duplicateIntakeItems(data.intakes, ids),
+    ...consentItems(consentSubjects),
+    ...clinicalHistoryItems(evaluations, ids, rules),
+    ...optional,
   ];
 }
 
@@ -217,6 +262,88 @@ async function consentStatesByLegacyId(
     if (state !== undefined && !byLegacyId.has(legacyId)) byLegacyId.set(legacyId, state);
   }
   return byLegacyId;
+}
+
+/** The rows the weight detectors read: the raw unit next to the canonical value (ADR-0005). */
+function weightRows(
+  stored: readonly { readonly fields: Readonly<Record<string, string>> }[],
+  data: Mapped,
+): WeightRow[] {
+  const rawByLegacyId = new Map(stored.map((row) => [row.fields.legacy_id as string, row.fields]));
+  const intakesByPatient = new Map<string, { intakeId: string; weightKg: string | null }[]>();
+  for (const intake of data.intakes) {
+    const list = intakesByPatient.get(intake.legacyPatientId) ?? [];
+    list.push({ intakeId: intake.intakeId, weightKg: intake.canonical.weightKg });
+    intakesByPatient.set(intake.legacyPatientId, list);
+  }
+  return data.patients.map((patient) => {
+    const raw = rawByLegacyId.get(patient.legacyId);
+    return {
+      legacyId: patient.legacyId,
+      rawWeight: raw?.weight ?? '',
+      rawUnit: raw?.weight_unit ?? '',
+      weightKg: patient.canonical.weightKg,
+      heightCm: patient.canonical.heightCm,
+      intakes: intakesByPatient.get(patient.legacyId) ?? [],
+    };
+  });
+}
+
+/** Consent events the run's --as-of places in the future, never the wall clock (ADR-0009 item 5). */
+function futureEvents(
+  consents: readonly MappedConsentEvent[],
+  asOf: string,
+): { sourceLine: number; legacyPatientId: string; action: string; at: string }[] {
+  const limit = Date.parse(`${asOf}T23:59:59.999Z`);
+  return consents.flatMap((event) =>
+    event.canonical === null || event.canonical.at.getTime() <= limit
+      ? []
+      : [
+          {
+            sourceLine: event.lineNo,
+            legacyPatientId: event.legacyPatientId,
+            action: event.canonical.action,
+            at: event.canonical.at.toISOString(),
+          },
+        ],
+  );
+}
+
+/**
+ * The derived consent states with the patient they belong to, for the consent items. Read back
+ * from the database rather than kept in memory: the states were just written there, and a report
+ * figure and an item must not be able to disagree about what the table holds.
+ */
+async function consentSubjects(db: Queryable): Promise<ConsentSubject[]> {
+  const states = await db
+    .select({
+      patientId: consentStates.patientId,
+      type: consentStates.type,
+      state: consentStates.state,
+      status: patientsTable.status,
+      signupDate: patientsTable.signupDate,
+    })
+    .from(consentStates)
+    .innerJoin(patientsTable, eq(patientsTable.id, consentStates.patientId));
+  const aliases = await db
+    .select({ legacyId: patientLegacyIds.legacyId, patientId: patientLegacyIds.patientId })
+    .from(patientLegacyIds)
+    .orderBy(patientLegacyIds.legacyId);
+  const legacyIdsByPatient = new Map<string, string[]>();
+  for (const alias of aliases) {
+    legacyIdsByPatient.set(alias.patientId, [
+      ...(legacyIdsByPatient.get(alias.patientId) ?? []),
+      alias.legacyId,
+    ]);
+  }
+  return states.flatMap((row) => {
+    const legacyIds = legacyIdsByPatient.get(row.patientId) ?? [];
+    // The item is keyed by the lowest legacy id the patient holds: a natural key, stable for this
+    // export, and never a uuid (`review_items.dedupe_key`, ADR-0004). A patient with none is a
+    // new-flow patient, which the importer does not raise items for.
+    const legacyId = legacyIds[0];
+    return legacyId === undefined ? [] : [{ ...row, legacyId, legacyIds }];
+  });
 }
 
 export async function runImport(db: Queryable, options: ImportOptions): Promise<ImportSummary> {
@@ -276,6 +403,11 @@ export async function runImport(db: Queryable, options: ImportOptions): Promise<
         declaredTypes: declaredConsentTypes,
       });
 
+      // Every legacy intake gets a shadow evaluation; nothing is applied and no legacy state
+      // changes (ADR-0005). The items it raises come from those same evaluations.
+      const evaluations = evaluateHistory(data.intakes, data.patients, options.rules);
+      const shadow = await writeShadowEvaluations(tx, runId, evaluations, intakes.ids);
+
       const items = buildReviewItems({
         data,
         ids,
@@ -288,6 +420,11 @@ export async function runImport(db: Queryable, options: ImportOptions): Promise<
         conflicts,
         groups,
         consentStates: await consentStatesByLegacyId(tx, patients.ids),
+        weightRows: weightRows(rawPatients.stored, data),
+        consentSubjects: await consentSubjects(tx),
+        futureEvents: futureEvents(data.consents, options.asOf),
+        evaluations,
+        asOf: options.asOf,
       });
       const reviewItemsInserted = await insertReviewItems(tx, runId, items);
 
@@ -333,6 +470,12 @@ export async function runImport(db: Queryable, options: ImportOptions): Promise<
         },
         identity: identitySummary(groups, merges),
         consentStatesWritten,
+        shadow: {
+          evaluated: evaluations.length,
+          written: shadow.written,
+          outcomes: shadow.outcomes,
+          ruleHits: tally(evaluations.flatMap((evaluation) => evaluation.result.matched)),
+        },
         reviewItems: tally(items.map((i) => `${i.type}/${i.scope}`)),
         reviewItemsInserted,
         humanOwnedConflicts: conflicts.length,

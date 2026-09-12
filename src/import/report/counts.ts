@@ -65,6 +65,14 @@ export function formatSummary(s: ImportSummary): string {
   out.push(line('fields a survivor took from its loser', s.identity.gainedFields));
   out.push(line('consent_states rows written', s.consentStatesWritten));
   out.push('');
+  out.push('shadow evaluation (ADR-0005: nothing applied, the legacy state stands)');
+  out.push(
+    line('legacy intakes evaluated / rows written', `${s.shadow.evaluated} / ${s.shadow.written}`),
+  );
+  for (const [outcome, n] of sortedEntries(s.shadow.outcomes)) out.push(line(`  ${outcome}`, n));
+  out.push('rules that would fire on a legacy intake today');
+  for (const [rule, n] of sortedEntries(s.shadow.ruleHits)) out.push(line(rule, n));
+  out.push('');
   out.push('review items (type/scope, over the whole export)');
   for (const [key, n] of sortedEntries(s.reviewItems)) out.push(line(key, n));
   out.push(line('review items inserted this run', s.reviewItemsInserted));

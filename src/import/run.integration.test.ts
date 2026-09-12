@@ -119,13 +119,82 @@ describe('npm run import', () => {
     );
 
     expect(first.reviewItems).toEqual({
-      'data_quality/row': 11 + 10 + 5 + 17 + 6 + 3,
+      // The mapping's 52, plus the 10 plausibility items ADR-0009 item 2 owed. The weight
+      // divergence detector adds none over this export (ADR-0011 item 19).
+      'data_quality/row': 11 + 10 + 5 + 17 + 6 + 3 + 10,
       'orphan_intake/row': 21,
-      'vocabulary/vocabulary': 5,
+      // The mapping's 5, plus the unit-less weights, the lbs non-reconciliation and the
+      // future-dated consent events.
+      'vocabulary/vocabulary': 5 + 3,
       'identity_conflict/row': 3 + 39,
+      'duplicate_intake/row': 5,
+      'consent/row': 83,
+      'clinical_history/row': 42 + 15 + 58,
     });
-    expect(first.reviewItemsInserted).toBe(52 + 21 + 5 + 42);
+    expect(first.reviewItemsInserted).toBe(62 + 21 + 8 + 42 + 5 + 83 + 115);
     expect(await itemCounts()).toEqual(first.reviewItems);
+  });
+
+  // ADR-0005's consent items, over the surviving patients rather than the legacy rows.
+  it('raises a consent item only where the state and the status cannot both be right', async () => {
+    const rows = await database.sql<{ title: string; n: string }[]>`
+      select title, count(*)::text as n from review_items where type = 'consent'
+      group by 1 order by 1
+    `;
+    const byTitle = Object.fromEntries(rows.map((r) => [r.title, Number(r.n)]));
+
+    expect(byTitle['consent log contradicts itself']).toBe(7);
+    expect(byTitle['consent revoked while the patient is active']).toBe(19);
+    // ADR-0005 counts 73 patients without a record whose status is active or paused, over the
+    // 2466 legacy rows; 16 of them are duplicate rows this run merged away, and a merged row is
+    // not a second person to chase for consent.
+    const noRecord = Object.entries(byTitle)
+      .filter(([title]) => title.startsWith('no consent record'))
+      .reduce((n, [, count]) => n + count, 0);
+    expect(noRecord).toBe(73 - 16);
+
+    // Churned and prospect patients raise none: there is nothing to stop.
+    const [wrongStatus] = await database.sql<{ n: string }[]>`
+      select count(*)::text as n from review_items i join patients p on p.id = i.patient_id
+      where i.type = 'consent' and p.status in ('churned', 'prospect')
+        and i.title not like 'consent log contradicts%'
+    `;
+    expect(Number(wrongStatus?.n)).toBe(0);
+  });
+
+  // ADR-0005: every legacy intake gets a shadow evaluation and no legacy state changes.
+  it('evaluates every legacy intake in shadow and applies nothing', async () => {
+    expect(first.shadow.evaluated).toBe(2917);
+    expect(first.shadow.written).toBe(2917);
+    expect(first.shadow.ruleHits).toEqual({
+      age_below_minimum: 70,
+      bmi_below_minimum: 191,
+      bmi_band_without_condition: 283,
+      glp1_medication: 42,
+      flag_condition: 15,
+    });
+
+    const [stored] = await database.sql<{ n: string; shadow: string }[]>`
+      select count(*)::text as n, count(*) filter (where shadow)::text as shadow
+      from eligibility_evaluations
+    `;
+    expect(Number(stored?.n)).toBe(2917);
+    expect(Number(stored?.shadow)).toBe(2917);
+    // One row per intake, and every intake has one.
+    const [unevaluated] = await database.sql<{ n: string }[]>`
+      select count(*)::text as n from intakes i
+      where not exists (select 1 from eligibility_evaluations e where e.intake_id = i.id)
+    `;
+    expect(Number(unevaluated?.n)).toBe(0);
+
+    // Nothing was applied: every legacy intake still carries the state its outcome gave it.
+    const [applied] = await database.sql<{ n: string }[]>`
+      select count(*)::text as n from intakes where state::text not like 'legacy_%'
+    `;
+    expect(Number(applied?.n)).toBe(0);
+    const outcomes = Object.values(first.shadow.outcomes).reduce((a, b) => a + b, 0);
+    expect(outcomes).toBe(2917);
+    expect(first.shadow.outcomes.not_evaluable).toBeGreaterThan(0);
   });
 
   // The reproducibility item deferred from the `feature/legacy-importer` review: the importer,
@@ -211,6 +280,9 @@ describe('npm run import', () => {
     // to the survivor (ADR-0006).
     expect(second.identity).toEqual({ ...first.identity, merged: 0, alreadyMerged: 28 });
     expect(second.consentStatesWritten).toBe(first.consentStatesWritten);
+    // A shadow row is derived, so the second run rewrites the same 2917 rows rather than adding
+    // a second verdict per intake (ADR-0011 item 2).
+    expect(second.shadow).toEqual(first.shadow);
   });
 
   it('writes only its import_runs row on a dry run (ADR-0009 item 6)', async () => {
