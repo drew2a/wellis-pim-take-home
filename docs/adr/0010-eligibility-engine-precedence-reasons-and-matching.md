@@ -1,6 +1,6 @@
 # ADR-0010: Eligibility engine — precedence, reason grammar, missing inputs and term matching
 
-- **Status:** proposed
+- **Status:** accepted
 - **Date:** 2026-09-12
 - **Deciders:** Andrei Andreev
 - **Requirements:** R-B5, R-B6, R-B7, R-B8, R-B9, R-B10, R-B11, R-B12 · **Resolves:** Q1
