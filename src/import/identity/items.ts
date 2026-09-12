@@ -9,7 +9,7 @@ import type { CandidateGroup, IdentityRow } from './candidates';
 /** What the console shows per row: the person fields, the row's provenance and its context. */
 function sideBySide(
   row: IdentityRow,
-  context: { intakeCount: number; consentState: string | null },
+  context: { intakeCount: number; consentStates: ReadonlyMap<string, string> },
 ): Record<string, unknown> {
   return {
     legacy_id: row.legacyId,
@@ -28,16 +28,20 @@ function sideBySide(
     signup_date: row.signupDate,
     source: row.source,
     intake_count: context.intakeCount,
-    consent_state: context.consentState,
+    // One state per consent type, never a single one: the table holds a row per type
+    // (ADR-0011 item 16), and `{}` where the patient has none (ADR-0012 item 3).
+    consent_states: Object.fromEntries(context.consentStates),
   };
 }
 
 export interface GroupContext {
   /** legacy id -> the patient uuid it resolves to, for the item's patient reference. */
   readonly patientIds: ReadonlyMap<string, string>;
-  /** legacy id -> the derived consent state of the patient, as context for the decision. */
-  readonly consentStates: ReadonlyMap<string, string>;
+  /** legacy id -> consent type -> the derived state, as context for the decision. */
+  readonly consentStates: ReadonlyMap<string, ReadonlyMap<string, string>>;
 }
+
+const EMPTY_STATES: ReadonlyMap<string, string> = new Map();
 
 const TITLES: Readonly<Record<2 | 3, string>> = {
   2: 'two patient records may be the same person',
@@ -75,7 +79,7 @@ export function identityConflictItems(
           rows: group.members.map((row) =>
             sideBySide(row, {
               intakeCount: row.intakeCount,
-              consentState: context.consentStates.get(row.legacyId) ?? null,
+              consentStates: context.consentStates.get(row.legacyId) ?? EMPTY_STATES,
             }),
           ),
           actions: ['merge_with_chosen_values', 'not_the_same_person'],

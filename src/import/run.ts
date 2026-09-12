@@ -163,8 +163,8 @@ interface ItemInputs {
   readonly repeats: readonly RepeatedRawRow[];
   readonly conflicts: Parameters<typeof humanOwnedConflictItems>[0];
   readonly groups: readonly CandidateGroup[];
-  /** legacy id -> the derived consent state, as context on an identity item (ADR-0006). */
-  readonly consentStates: ReadonlyMap<string, string>;
+  /** legacy id -> consent type -> the derived state, as context on an identity item (ADR-0006). */
+  readonly consentStates: ReadonlyMap<string, ReadonlyMap<string, string>>;
   readonly weightRows: readonly WeightRow[];
   readonly consentSubjects: readonly ConsentSubject[];
   readonly futureEvents: Parameters<typeof futureDatedConsentItem>[0];
@@ -235,31 +235,44 @@ function identitySummary(
 }
 
 /**
- * The derived consent state per legacy id, for the identity items' side-by-side payload. A
- * merged-away row has no state of its own, so it reads the state of the patient it now belongs
- * to — which is the state a reviewer would act on (ADR-0008 item 2).
+ * The derived consent states per legacy id, for the identity items' side-by-side payload. A
+ * merged-away row has no state of its own, so it reads the states of the patient it now belongs
+ * to — which is what a reviewer would act on (ADR-0008 item 2).
+ *
+ * Keyed by consent type as well as by patient: `consent_states` holds one row per patient **and**
+ * type (ADR-0011 item 16), so collapsing them to one state per patient would show whichever type
+ * the database returned last (ADR-0012 item 3).
  */
 async function consentStatesByLegacyId(
   db: Queryable,
   patientIds: ReadonlyMap<string, string>,
-): Promise<ReadonlyMap<string, string>> {
+): Promise<ReadonlyMap<string, ReadonlyMap<string, string>>> {
   const states = await db
-    .select({ patientId: consentStates.patientId, state: consentStates.state })
+    .select({
+      patientId: consentStates.patientId,
+      type: consentStates.type,
+      state: consentStates.state,
+    })
     .from(consentStates);
-  const byPatient = new Map(states.map((row) => [row.patientId, row.state]));
+  const byPatient = new Map<string, Map<string, string>>();
+  for (const row of states) {
+    const byType = byPatient.get(row.patientId) ?? new Map<string, string>();
+    byType.set(row.type, row.state);
+    byPatient.set(row.patientId, byType);
+  }
   const survivors = await db
     .select({ legacyId: patientLegacyIds.legacyId, patientId: patientLegacyIds.patientId })
     .from(patientLegacyIds);
-  const byLegacyId = new Map<string, string>();
+  const byLegacyId = new Map<string, ReadonlyMap<string, string>>();
   for (const alias of survivors) {
-    const state = byPatient.get(alias.patientId);
-    if (state !== undefined) byLegacyId.set(alias.legacyId, state);
+    const byType = byPatient.get(alias.patientId);
+    if (byType !== undefined) byLegacyId.set(alias.legacyId, byType);
   }
   // A row merged away this run resolves through the alias table to its survivor, so the map
   // above already answers for it; a row whose patient has no state is left out.
   for (const [legacyId, patientId] of patientIds) {
-    const state = byPatient.get(patientId);
-    if (state !== undefined && !byLegacyId.has(legacyId)) byLegacyId.set(legacyId, state);
+    const byType = byPatient.get(patientId);
+    if (byType !== undefined && !byLegacyId.has(legacyId)) byLegacyId.set(legacyId, byType);
   }
   return byLegacyId;
 }
