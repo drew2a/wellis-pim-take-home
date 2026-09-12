@@ -78,6 +78,26 @@ describe('row items from patient flags', () => {
     expect(new Set(items.map((i) => i.dedupeKey)).size).toBe(items.length);
   });
 
+  // bsn is the one identifier in this set. review_items.payload is jsonb, which the console's
+  // column-level masking cannot reach into, and dedupe_key is the idempotency key (R-A15): a
+  // later "bsn retention: drop" must not have to rewrite keys and re-open every resolved item.
+  it('masks the bsn in the payload and digests it in the dedupe key', () => {
+    const bsnItems = items.filter((i) => i.field === 'bsn');
+    const raws = data.patients.flatMap((p) =>
+      p.flags
+        .filter((f) => f.kind === 'bsn_invalid' || f.kind === 'bsn_malformed')
+        .map((f) => f.raw),
+    );
+    expect(bsnItems).toHaveLength(17);
+    expect(raws).toHaveLength(17);
+    for (const item of bsnItems) {
+      expect((item.payload as { raw_masked: string }).raw_masked).toMatch(/^\*{6}\d{3}$/);
+      expect(item.dedupeKey).toMatch(/\|sha256:[0-9a-f]{64}$/);
+    }
+    const serialised = JSON.stringify(bsnItems);
+    for (const raw of raws) expect(serialised).not.toContain(raw);
+  });
+
   it('carries the proposal only on the internal-space items', () => {
     const withProposal = items.filter((i) => i.proposedResolution !== null);
     expect(withProposal).toHaveLength(10);

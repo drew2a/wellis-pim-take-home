@@ -10,6 +10,7 @@ import type { MappedPatient } from '../mapper/patient';
 import type { Flag } from '../mapper/types';
 import type { HumanOwnedConflict } from '../canonical/human-owned';
 import type { ChangedRawRow, RepeatedRawRow } from '../raw/load';
+import { sha256Hex } from '../source/hash';
 import { dedupeKey, type ReviewItemDraft } from './items';
 
 export interface Ids {
@@ -29,6 +30,28 @@ const rowItem = (
   ...draft,
 });
 
+/**
+ * All but the last three characters, for an identifier that must not be readable in a payload.
+ * `review_items.payload` is jsonb, so the console's column-level masking cannot reach into it,
+ * and bsn retention is still an open vocabulary item ("bsn retention: keep, mask or drop").
+ * The full value stays in `legacy_patients_raw.bsn` and `patients.bsn`; the console reveals it
+ * from there, under the masking that applies to a column.
+ */
+function mask(value: string): string {
+  if (value.length <= 3) return '*'.repeat(value.length);
+  return '*'.repeat(value.length - 3) + value.slice(-3);
+}
+
+/**
+ * A raw value reduced to a digest, for a dedupe_key that must not carry the value itself.
+ * `dedupe_key` is the idempotency key (R-A15), so it can never be rewritten without re-opening
+ * every resolved item — which is exactly what dropping bsn would otherwise require. The digest
+ * is as deterministic per raw value as the value was.
+ */
+function digest(value: string): string {
+  return `sha256:${sha256Hex(new TextEncoder().encode(value))}`;
+}
+
 // ---------------------------------------------------------------------------------------------
 // Row-level items from patient flags
 // ---------------------------------------------------------------------------------------------
@@ -38,8 +61,8 @@ export function patientFlagItems(patient: MappedPatient, ids: Ids): ReviewItemDr
   const entity = `legacy_patient:${patient.legacyId}`;
   const items: ReviewItemDraft[] = [];
   for (const flag of patient.flags) {
-    const key = (rule: string): string =>
-      dedupeKey(['data_quality', 'row', entity, flag.field, rule, flag.raw]);
+    const key = (rule: string, raw: string = flag.raw): string =>
+      dedupeKey(['data_quality', 'row', entity, flag.field, rule, raw]);
     switch (flag.kind) {
       case 'email_placeholder':
         items.push(
@@ -114,11 +137,15 @@ export function patientFlagItems(patient: MappedPatient, ids: Ids): ReviewItemDr
           rowItem({
             type: 'data_quality',
             title: 'bsn fails the elfproef',
-            payload: { legacy_id: patient.legacyId, raw: flag.raw, bsn_check: 'invalid' },
+            payload: {
+              legacy_id: patient.legacyId,
+              raw_masked: mask(flag.raw),
+              bsn_check: 'invalid',
+            },
             patientId,
             intakeId: null,
             field: 'bsn',
-            dedupeKey: key('ELFPROEF'),
+            dedupeKey: key('ELFPROEF', digest(flag.raw)),
           }),
         );
         break;
@@ -127,11 +154,11 @@ export function patientFlagItems(patient: MappedPatient, ids: Ids): ReviewItemDr
           rowItem({
             type: 'data_quality',
             title: 'bsn is not nine digits',
-            payload: { legacy_id: patient.legacyId, raw: flag.raw, canonical: null },
+            payload: { legacy_id: patient.legacyId, raw_masked: mask(flag.raw), canonical: null },
             patientId,
             intakeId: null,
             field: 'bsn',
-            dedupeKey: key('BSN_MALFORMED_TO_NULL'),
+            dedupeKey: key('BSN_MALFORMED_TO_NULL', digest(flag.raw)),
           }),
         );
         break;
@@ -400,16 +427,6 @@ export function confirmationItems(
 // ---------------------------------------------------------------------------------------------
 // Bookkeeping items of ADR-0004
 // ---------------------------------------------------------------------------------------------
-
-/**
- * All but the last three characters, for an identifier that must not be readable in a payload.
- * `review_items.payload` is jsonb, so the console's column-level masking cannot reach into it,
- * and bsn retention is still an open vocabulary item ("bsn retention: keep, mask or drop").
- */
-function mask(value: string): string {
-  if (value.length <= 3) return '*'.repeat(value.length);
-  return '*'.repeat(value.length - 3) + value.slice(-3);
-}
 
 const MASKED_SOURCE_COLUMNS = new Set(['bsn']);
 
