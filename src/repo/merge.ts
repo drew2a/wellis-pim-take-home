@@ -61,7 +61,11 @@ type PatientRow = typeof patients.$inferSelect;
 
 /** The marker that links a survivor's audit entry to the merge it records, for unmerge to find. */
 const MERGED_FROM = 'merged_from';
-const MERGED_INTO = 'merged_into';
+/**
+ * The loser's `merged_into`, as a change. Exported because it is also the field a human owns once
+ * they have unmerged a pair, which is what stops the importer merging it again (ADR-0012 item 2).
+ */
+export const MERGED_INTO = 'merged_into';
 /** One change per repointed alias row: legacy id X stopped resolving to the loser. */
 const ALIAS = 'patient_id';
 
@@ -157,7 +161,7 @@ export async function mergePatients(db: Queryable, request: MergeRequest): Promi
       .where(inArray(patientLegacyIds.legacyId, repointedLegacyIds));
   }
 
-  await writeEntries(db, request, [
+  await writeEntries(db, request, await mergeOccurrence(db, loserId, survivorId), [
     {
       entityId: loserId,
       fromState: 'independent',
@@ -222,7 +226,7 @@ export async function unmergePatient(
       .where(inArray(patientLegacyIds.legacyId, repointedLegacyIds));
   }
 
-  await writeEntries(db, request, [
+  await writeEntries(db, request, await unmergeOccurrence(db, loserId, survivorId), [
     {
       entityId: loserId,
       fromState: 'merged',
@@ -338,9 +342,55 @@ interface EntryDraft {
   readonly changes: AuditChange[];
 }
 
+/**
+ * The occurrence of this merge: how many times this loser has already been merged into this
+ * survivor. A pair can be merged, unmerged by a reviewer and merged again, and the second merge's
+ * five audit fields are byte-identical to the first's whenever the actor and the survivor rule
+ * are — so without this the second merge's entries collide with the first's, `onConflictDoNothing`
+ * drops them, and a real transition goes unaudited while `merged_into` and the alias rows are
+ * rewritten (R-B20, `CLAUDE.md` §5, ADR-0012 item 1).
+ */
+async function mergeOccurrence(
+  db: Queryable,
+  loserId: string,
+  survivorId: string,
+): Promise<number> {
+  return countEntries(
+    db,
+    loserId,
+    (change) => change.field === MERGED_INTO && change.to === survivorId,
+  );
+}
+
+/** The same count for the reverse transition, which repeats for the same reason. */
+async function unmergeOccurrence(
+  db: Queryable,
+  loserId: string,
+  survivorId: string,
+): Promise<number> {
+  return countEntries(
+    db,
+    loserId,
+    (change) => change.field === MERGED_INTO && change.from === survivorId && change.to === null,
+  );
+}
+
+async function countEntries(
+  db: Queryable,
+  entityId: string,
+  matches: (change: AuditChange) => boolean,
+): Promise<number> {
+  const entries = await db
+    .select({ changes: auditEntries.changes })
+    .from(auditEntries)
+    .where(eq(auditEntries.entityId, entityId));
+  return entries.filter((entry) => (entry.changes ?? []).some(matches)).length;
+}
+
 async function writeEntries(
   db: Queryable,
   request: { actor: string; reviewItemId?: string | null },
+  occurrence: number,
   drafts: readonly EntryDraft[],
 ): Promise<void> {
   await db
@@ -362,6 +412,7 @@ async function writeEntries(
           draft.fromState,
           draft.toState,
           draft.reason,
+          occurrence,
         ),
       })),
     )

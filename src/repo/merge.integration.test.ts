@@ -166,6 +166,45 @@ describe('mergePatients / unmergePatient (ADR-0006)', () => {
     expect(states[0]).toMatchObject({ patientId: survivor, state: 'revoked' });
   });
 
+  // ADR-0012 item 1: the five fields the dedupe key was built from are byte-identical for the
+  // second merge of one pair, so without the occurrence both its entries were dropped and a real
+  // transition went unaudited while `merged_into` and the alias rows were rewritten (R-B20).
+  it('audits a second merge of the same pair after a reviewer took the first one back', async () => {
+    const survivor = await insertPatient('recSurvivor', { city: null });
+    const loser = await insertPatient('recLoser', { city: 'Delft' });
+    const unmerge = () =>
+      unmergePatient(database.db, {
+        loserId: loser,
+        actor: 'dr. reviewer',
+        reason: 'not the same person after all',
+        declaredConsentTypes: TYPES,
+      });
+    await merge(survivor, loser);
+    await unmerge();
+
+    const again = await merge(survivor, loser);
+
+    expect(again.merged).toBe(true);
+    // Two merges and one unmerge on the loser, two absorb/release pairs on the survivor.
+    const merges = (await auditFor(loser)).filter((entry) => entry.toState === 'merged');
+    expect(merges).toHaveLength(2);
+    expect(new Set(merges.map((entry) => entry.dedupeKey)).size).toBe(2);
+    expect(merges.every((entry) => entry.actor === IMPORTER_ACTOR)).toBe(true);
+    expect(await auditFor(survivor)).toHaveLength(3);
+
+    // And the trail still describes the merge in force: the second unmerge releases the city the
+    // second merge took, rather than matching the first merge's entry.
+    const released = await unmerge();
+    expect(released.released).toEqual([
+      { field: 'city', from: null, to: 'Delft', source_legacy_id: 'recLoser' },
+    ]);
+    const [survivorRow] = await database.db
+      .select()
+      .from(patients)
+      .where(eq(patients.id, survivor));
+    expect(survivorRow?.city).toBeNull();
+  });
+
   it('is idempotent: merging the same pair again writes nothing', async () => {
     const survivor = await insertPatient('recSurvivor', { city: null });
     const loser = await insertPatient('recLoser', { city: 'Delft' });
@@ -257,6 +296,35 @@ describe('mergePatients / unmergePatient (ADR-0006)', () => {
       // Each human decision is a new event and must never collide (ADR-0008 item 1).
       expect(unmerged?.dedupeKey).toBeNull();
       expect(await auditFor(survivor)).toHaveLength(2);
+    });
+
+    // A survivor can be merged away after it absorbed someone (merge B into A, then A into C), so
+    // the states belong to the end of the chain and never to a patient that no longer survives.
+    it('writes the released states for the end of the survivor chain', async () => {
+      const first = await insertPatient('recFirst');
+      const second = await insertPatient('recSecond');
+      const third = await insertPatient('recThird');
+      await database.db.insert(consentEvents).values({
+        ...rows.consentEventRow(),
+        patientId: second,
+        sourceLine: 1,
+      });
+      await merge(first, second);
+      await merge(third, first);
+
+      await unmergePatient(database.db, {
+        loserId: second,
+        actor: 'dr. reviewer',
+        reason: 'not the same person after all',
+        declaredConsentTypes: TYPES,
+      });
+
+      const states = await database.db.select().from(consentStates);
+      // `third` is the survivor of the chain and `second` is independent again; `first` is merged
+      // away and holds none.
+      expect(states.map((state) => state.patientId).sort()).toEqual([second, third].sort());
+      expect(states.find((state) => state.patientId === second)?.state).toBe('granted');
+      expect(states.find((state) => state.patientId === third)?.state).toBe('no_record');
     });
 
     it('refuses a patient that was never merged', async () => {
