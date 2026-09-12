@@ -76,8 +76,9 @@ duplicate patients) and the report files are not part of this command yet.
 no I/O, no database and no clock, holding no threshold or term of its own. Thresholds, the two
 clinical term lists, the weight-related list and the precedence statement all come from
 `rules/v1.json`, which the schema validates at load, so the ruleset version stored with an
-evaluation is enough to reproduce it. The same function evaluates a new intake and, at import,
-every legacy one.
+evaluation is enough to reproduce it. One function is meant to serve both callers — the Part B
+intake flow and the import-time history audit — but neither calls it yet: on this branch the
+engine and the matcher stand alone, and wiring them in is the detectors branch's work.
 
 Every rule is evaluated — nothing short-circuits — and precedence resolves afterwards: age under
 18 rejects outright, while any other reject yields to a flag so that a human decides.
@@ -85,14 +86,16 @@ ASSIGNMENT.md §3B gives six rules and no precedence; this is QUESTIONS.md Q1's 
 default, recorded in ADR-0010, and it lives in the ruleset file, so changing it is configuration.
 Each matched rule contributes one reason string in a five-prefix grammar — rejected, flagged, not
 evaluated, note, cleared — and the result carries the age, the metrics, the unrounded BMI and the
-matched terms, so an evaluation explains itself. A missing weight or height never clears a
-patient silently: the BMI rules do not fire and a line records which metric was missing.
+matched terms, so an evaluation explains itself. A missing age, weight or height never clears a
+patient silently: the rule that needed it does not fire, a line records what was missing, and an
+evaluation that matched no rule is `not_evaluable` rather than cleared — a fourth outcome, which
+the state machine does not take, alongside the three the intake states are named after.
 
 Free text can add a flag but never clear one: the GLP-1 and thyroid-cancer/pancreatitis lists
 also read the intake's free-text answer, while the weight-related list — the only one that
 suppresses a flag — reads the structured answer only. Matching is split, tokenise, contiguous
 run, never a bare substring, so `hypothyreoidie` is not thyroid cancer and `levothyroxine` is not
-a GLP-1. Over the legacy export the engine reproduces the counts ADR-0005 was accepted with.
+a GLP-1. Over the legacy export the matcher reproduces the counts ADR-0005 was accepted with.
 
 ## Deploy
 
