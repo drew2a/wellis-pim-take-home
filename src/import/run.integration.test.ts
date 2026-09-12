@@ -212,6 +212,8 @@ describe('npm run import', () => {
       alreadyMerged: 0,
       // ADR-0011 item 9: all 28 pairs are identical on every person field.
       gainedFields: 0,
+      // ADR-0012 item 2: nobody has unmerged anything in this database.
+      humanDecided: 0,
     });
 
     const [merged] = await database.sql<{ n: string }[]>`

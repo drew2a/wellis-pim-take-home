@@ -63,6 +63,7 @@ export function formatSummary(s: ImportSummary): string {
     line('merged this run / already merged', `${s.identity.merged} / ${s.identity.alreadyMerged}`),
   );
   out.push(line('fields a survivor took from its loser', s.identity.gainedFields));
+  out.push(line('tier-1 pairs a human has already decided', s.identity.humanDecided));
   out.push(line('consent_states rows written', s.consentStatesWritten));
   out.push('');
   out.push('shadow evaluation (ADR-0005: nothing applied, the legacy state stands)');

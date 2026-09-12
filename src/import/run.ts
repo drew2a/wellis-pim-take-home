@@ -119,6 +119,8 @@ export interface ImportSummary {
     readonly merged: number;
     readonly alreadyMerged: number;
     readonly gainedFields: number;
+    /** Tier-1 pairs a human has already decided on, which the importer leaves alone. */
+    readonly humanDecided: number;
   };
   /** Derived `consent_states` rows, one per surviving patient and declared type. */
   readonly consentStatesWritten: number;
@@ -389,12 +391,11 @@ export async function runImport(db: Queryable, options: ImportOptions): Promise<
         ...data.consents.flatMap((c) => c.records),
       ];
 
-      const patients = await loadPatients(
-        tx,
-        runId,
-        data.patients,
-        await humanOwnedFields(tx, 'patient'),
-      );
+      // Read once and used twice: the canonical load refuses to rewrite a human-owned field, and
+      // the tier-1 merges refuse to re-merge a pair whose `merged_into` a human owns (ADR-0012
+      // item 2). Nothing between the two writes a human entry, so one read answers both.
+      const patientHumanOwned = await humanOwnedFields(tx, 'patient');
+      const patients = await loadPatients(tx, runId, data.patients, patientHumanOwned);
       const intakes = await loadIntakes(
         tx,
         runId,
@@ -411,7 +412,13 @@ export async function runImport(db: Queryable, options: ImportOptions): Promise<
       // derived for, and the identity items carry that state as context (ADR-0006).
       const groups = candidateGroups(identityRows(data.patients, data.intakes));
       const declaredConsentTypes = [...CONSENT_TYPES];
-      const merges = await mergeTier1Groups(tx, groups, patients.ids, declaredConsentTypes);
+      const merges = await mergeTier1Groups(
+        tx,
+        groups,
+        patients.ids,
+        declaredConsentTypes,
+        patientHumanOwned,
+      );
       const consentStatesWritten = await recomputeConsentStates(tx, {
         declaredTypes: declaredConsentTypes,
       });
