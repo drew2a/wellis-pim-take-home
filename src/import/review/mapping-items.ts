@@ -10,6 +10,8 @@ import type { MappedPatient } from '../mapper/patient';
 import type { Flag } from '../mapper/types';
 import type { HumanOwnedConflict } from '../canonical/human-owned';
 import type { ChangedRawRow, RepeatedRawRow } from '../raw/load';
+import { maskIdentifier as mask } from '@/repo/mask';
+
 import { sha256Hex } from '../source/hash';
 import { dedupeKey, type ReviewItemDraft } from './items';
 
@@ -29,18 +31,6 @@ const rowItem = (
   proposedResolution: null,
   ...draft,
 });
-
-/**
- * All but the last three characters, for an identifier that must not be readable in a payload.
- * `review_items.payload` is jsonb, so the console's column-level masking cannot reach into it,
- * and bsn retention is still an open vocabulary item ("bsn retention: keep, mask or drop").
- * The full value stays in `legacy_patients_raw.bsn` and `patients.bsn`; the console reveals it
- * from there, under the masking that applies to a column.
- */
-function mask(value: string): string {
-  if (value.length <= 3) return '*'.repeat(value.length);
-  return '*'.repeat(value.length - 3) + value.slice(-3);
-}
 
 /**
  * A raw value reduced to a digest, for a dedupe_key that must not carry the value itself.

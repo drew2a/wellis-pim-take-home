@@ -7,6 +7,7 @@ import { auditEntries, intakes } from '@/db/schema';
 
 import { LEGACY_IMPORT_ACTOR } from '../actors';
 import type { Queryable } from '@/db/queryable';
+import { auditDedupeKey } from '@/repo/audit';
 import type { CanonicalIntake, MappedIntake } from '../mapper/intake';
 import { INTAKE_COLUMNS, diffAgainstStored } from './columns';
 import type { HumanOwned, HumanOwnedConflict } from './human-owned';
@@ -28,17 +29,6 @@ const CHUNK = 500;
 
 export function legacyOutcomeReason(outcomeRaw: string): string {
   return 'legacy outcome `' + outcomeRaw + '`';
-}
-
-/** ADR-0008 item 1: deterministic from the five fields, so a re-run finds its own entry. */
-export function auditDedupeKey(
-  entityType: string,
-  entityId: string,
-  fromState: string | null,
-  toState: string | null,
-  reason: string,
-): string {
-  return [entityType, entityId, fromState ?? '', toState ?? '', reason].join('|');
 }
 
 export async function loadIntakes(
