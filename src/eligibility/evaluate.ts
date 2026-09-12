@@ -1,0 +1,156 @@
+// The deterministic eligibility engine (§3B, R-B5 to R-B12). Pure: no I/O, no database, no clock,
+// and no threshold or term of its own — every value comes from the ruleset it is handed, so the
+// stored `rulesetVersion` is enough to reproduce an evaluation (ADR-0010).
+import type { RejectRule, Rules } from '@/rules/schema';
+
+import { matchTerms, type TermMatch } from './terms';
+import type { EligibilityInput, EligibilityOutcome, EligibilityResult } from './types';
+
+/** A reject that fired, with its reason text so the resolution line can quote it. */
+interface Reject {
+  readonly rule: RejectRule;
+  readonly text: string;
+}
+
+function positiveFinite(value: number | null, field: string): number | null {
+  if (value === null) return null;
+  if (!Number.isFinite(value) || value <= 0) {
+    throw new Error(`${field} must be a positive finite number: ${value}`);
+  }
+  return value;
+}
+
+function wholeYears(value: number | null): number | null {
+  if (value === null) return null;
+  if (!Number.isInteger(value) || value < 0) {
+    throw new Error(`ageYears must be a whole number of years, not negative: ${value}`);
+  }
+  return value;
+}
+
+/**
+ * One decimal, widened until the value shown still satisfies the comparison the reason states.
+ * Without this, a BMI of 26.99 would be explained as "BMI 27.0 below 27" — display rounding must
+ * not make an explanation contradict the rule it explains (Q2).
+ */
+function formatBmi(bmi: number, holds: (shown: number) => boolean): string {
+  for (let digits = 1; digits <= 4; digits += 1) {
+    const shown = bmi.toFixed(digits);
+    if (holds(Number(shown))) return shown;
+  }
+  return String(bmi);
+}
+
+const quote = (matches: readonly TermMatch[]): string =>
+  matches.map((match) => match.text).join('; ');
+
+function missingMetrics(weightKg: number | null, heightCm: number | null): string | null {
+  if (weightKg === null && heightCm === null) return 'weight and height';
+  if (weightKg === null) return 'weight';
+  if (heightCm === null) return 'height';
+  return null;
+}
+
+export function evaluate(input: EligibilityInput, rules: Rules): EligibilityResult {
+  const ageYears = wholeYears(input.ageYears);
+  const weightKg = positiveFinite(input.weightKg, 'weightKg');
+  const heightCm = positiveFinite(input.heightCm, 'heightCm');
+  const bmi = weightKg === null || heightCm === null ? null : weightKg / (heightCm / 100) ** 2;
+
+  // The two clinical lists only ever add a flag, so they read the free-text answer as well. The
+  // weight-related list can suppress a flag, so it reads the structured answer only (ADR-0005).
+  const glp1 = matchTerms(input.medications, rules.glp1_terms);
+  const flagConditions = matchTerms(
+    [...input.conditions, ...input.conditionsOther],
+    rules.flag_condition_terms,
+  );
+  const weightRelated = matchTerms(input.conditions, rules.weight_related_condition_terms);
+
+  // Every rule is evaluated; nothing short-circuits, so every match contributes its reason (Q1).
+  const reasons: string[] = [];
+  const rejects: Reject[] = [];
+  let flagged = false;
+
+  const missing = missingMetrics(weightKg, heightCm);
+  const band = rules.bmi.flag_band;
+
+  if (ageYears === null) {
+    reasons.push('age not evaluated: date of birth missing');
+  } else if (ageYears < rules.age.minimum_years) {
+    const text = `age ${ageYears} at submission`;
+    rejects.push({ rule: 'age_below_minimum', text });
+    reasons.push(`rejected: ${text}`);
+  }
+
+  if (bmi === null) {
+    reasons.push(`BMI not evaluated: ${missing} missing`);
+  } else if (bmi < rules.bmi.reject_below) {
+    const shown = formatBmi(bmi, (value) => value < rules.bmi.reject_below);
+    const text = `BMI ${shown} below ${rules.bmi.reject_below}`;
+    rejects.push({ rule: 'bmi_below_minimum', text });
+    reasons.push(`rejected: ${text}`);
+  } else if (inBand(bmi, band)) {
+    const shown = formatBmi(bmi, (value) => inBand(value, band));
+    if (weightRelated.length === 0) {
+      flagged = true;
+      reasons.push(`flagged: BMI ${shown} with no weight-related condition`);
+    } else {
+      reasons.push(
+        `note: BMI ${shown} in the ${band.min}–${band.max} band, ` +
+          `weight-related condition present (${quote(weightRelated)})`,
+      );
+    }
+  }
+
+  if (glp1.length > 0) {
+    flagged = true;
+    reasons.push(`flagged: current GLP-1 medication (${quote(glp1)})`);
+  }
+
+  if (flagConditions.length > 0) {
+    flagged = true;
+    reasons.push(
+      `flagged: self-reported history of thyroid cancer / pancreatitis (${quote(flagConditions)})`,
+    );
+  }
+
+  const outcome = resolve(rejects, flagged, rules, reasons);
+  return {
+    outcome,
+    reasons,
+    inputs: { ageYears, weightKg, heightCm, bmi, glp1, flagConditions, weightRelated },
+    rulesetVersion: rules.version,
+  };
+}
+
+const inBand = (bmi: number, band: Rules['bmi']['flag_band']): boolean =>
+  (band.min_inclusive ? bmi >= band.min : bmi > band.min) &&
+  (band.max_inclusive ? bmi <= band.max : bmi < band.max);
+
+/**
+ * Q1's default, read from the ruleset: an absolute reject wins outright, any other reject yields
+ * to a flag so that a human decides, and a yielding reject keeps its reason and gains a line
+ * saying why the outcome is not a rejection. Appends the resolution or clearing line to `reasons`.
+ */
+function resolve(
+  rejects: readonly Reject[],
+  flagged: boolean,
+  rules: Rules,
+  reasons: string[],
+): EligibilityOutcome {
+  const { absolute_rejects, flag_preempts_reject } = rules.precedence;
+  const absolute = rejects.some((reject) => absolute_rejects.includes(reject.rule));
+
+  if (absolute) return 'auto_rejected';
+  if (rejects.length > 0 && flagged && flag_preempts_reject) {
+    for (const reject of rejects) {
+      reasons.push(`flagged: ${reject.text}, but a flag rule also matched; a human decides`);
+    }
+    return 'auto_flagged';
+  }
+  if (rejects.length > 0) return 'auto_rejected';
+  if (flagged) return 'auto_flagged';
+
+  reasons.push('cleared: no rejecting or flagging rule matched');
+  return 'auto_cleared';
+}
