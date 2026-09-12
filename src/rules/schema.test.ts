@@ -75,6 +75,12 @@ describe('rules/v1.json', () => {
     expect(() => parseRules(copy)).toThrow(/rules file is invalid/);
   });
 
+  it('fails when a term has no letter or digit, because it would match every segment', () => {
+    const copy = structuredClone(source) as Record<string, unknown>;
+    copy.glp1_terms = ['-'];
+    expect(() => parseRules(copy)).toThrow(/rules file is invalid/);
+  });
+
   it('fails when a bound is out of order', () => {
     const copy = structuredClone(source) as { plausibility: { weight_kg: unknown } };
     copy.plausibility.weight_kg = { min: 300, max: 30 };

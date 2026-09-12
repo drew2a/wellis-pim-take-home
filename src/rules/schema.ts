@@ -9,12 +9,16 @@ const bounds = z
   .refine((b) => b.min < b.max, { message: 'min must be below max' });
 
 // Matching lowercases the input and looks for the term on word boundaries (ADR-0005), so a term
-// with an uppercase letter could never match; refusing it here is cheaper than a silent miss.
+// with an uppercase letter could never match; refusing it here is cheaper than a silent miss. A
+// term without a letter or a digit is worse than useless: matching keeps letters and digits and
+// makes every other character a boundary, so `-` tokenises to nothing and would match every
+// segment. Both are caught at load, before a single row is read (`CLAUDE.md` §2).
 const term = z
   .string()
   .trim()
   .min(1)
-  .refine((t) => t === t.toLowerCase(), { message: 'terms are lowercase' });
+  .refine((t) => t === t.toLowerCase(), { message: 'terms are lowercase' })
+  .refine((t) => /[\p{L}\p{N}]/u.test(t), { message: 'terms need a letter or a digit' });
 const termList = z.array(term).nonempty();
 
 // The rules the engine can name in a precedence statement: the two that reject (ADR-0010). A

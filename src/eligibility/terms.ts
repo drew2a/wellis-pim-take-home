@@ -46,8 +46,8 @@ function containsRun(haystack: readonly string[], needle: readonly string[]): bo
 export function matchTerms(values: readonly string[], terms: readonly string[]): TermMatch[] {
   const needles = terms.map((term) => {
     const tokens = tokenise(term);
-    // A term of pure punctuation would match every segment. The ruleset schema cannot see this,
-    // so the matcher refuses it rather than flagging the whole export (CLAUDE.md §2).
+    // Unreachable through `loadRules`: the ruleset schema rejects a term without a letter or a
+    // digit at load. Kept as an assertion, because such a term would match every segment.
     if (tokens.length === 0) throw new Error(`ruleset term has no letters or digits: ${term}`);
     return { term, tokens };
   });
