@@ -1,10 +1,10 @@
 // Review items that need more than one file (findings: dob, signup_date; ADR-0006 orphans):
 // a dob whose alternative reading flips minor/adult at one of the patient's intakes, a patient
 // whose whole record sits in the future, and an orphan intake with its look-alike context.
+import { ageInYears } from '@/eligibility/age';
 import type { Rules } from '@/rules/schema';
 
 import type { MappedConsentEvent } from '../mapper/consent-event';
-import { ageInYears } from '../mapper/dates';
 import type { MappedIntake } from '../mapper/intake';
 import type { MappedPatient } from '../mapper/patient';
 import { dedupeKey, type ReviewItemDraft } from './items';

@@ -1,6 +1,8 @@
 // Dates under the separator convention (ADR-0005, H-1): `9999-99-99` is Y-M-D, `99-99-9999` is
 // D-M-Y, `99/99/9999` is M-D-Y. Anything else is unreadable and stored null with a flag, never
 // guessed. "Impossible" is relative to the run's --as-of date (ADR-0009).
+import { ageInYears } from '@/eligibility/age';
+
 import { mapped, unchanged, type Flag, type Mapped, type RecordDraft } from './types';
 
 export type DateShape = 'iso' | 'dash' | 'slash';
@@ -55,15 +57,6 @@ export function alternativeReading(raw: string): string | null {
   const [y, m, d] = read.iso.split('-').map(Number) as [number, number, number];
   const swapped = isoIfValid(y, d, m);
   return swapped === null || swapped === read.iso ? null : swapped;
-}
-
-/** Whole years between two ISO dates, as a birthday count. */
-export function ageInYears(dobIso: string, atIso: string): number {
-  const [dy, dm, dd] = dobIso.split('-').map(Number) as [number, number, number];
-  const [ay, am, ad] = atIso.split('-').map(Number) as [number, number, number];
-  let years = ay - dy;
-  if (am < dm || (am === dm && ad < dd)) years -= 1;
-  return years;
 }
 
 export interface DateContext {
