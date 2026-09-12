@@ -47,6 +47,42 @@ export function dedupeKey(parts: readonly (string | null)[]): string {
   return parts.map((p) => (p ?? '').replaceAll('\\', '\\\\').replaceAll('|', '\\|')).join('|');
 }
 
+/** Position of the rule in a dedupe key, the one part the report groups items by. */
+const RULE_PART = 4;
+
+/** The inverse of `dedupeKey`: the parts, with the escaping undone. */
+export function dedupeParts(key: string): string[] {
+  const parts: string[] = [];
+  let current = '';
+  for (let i = 0; i < key.length; i += 1) {
+    const char = key.charAt(i);
+    if (char === '\\') {
+      current += key.charAt(i + 1);
+      i += 1;
+    } else if (char === '|') {
+      parts.push(current);
+      current = '';
+    } else {
+      current += char;
+    }
+  }
+  parts.push(current);
+  return parts;
+}
+
+/**
+ * The rule a stored item was raised by. The rule is not a column: `dedupe_key` is the only place
+ * it is written down (ADR-0004), and the import report groups by it, so it is read back here
+ * rather than re-derived from a title, which carries per-row text.
+ */
+export function ruleOf(dedupeKeyValue: string): string {
+  const rule = dedupeParts(dedupeKeyValue)[RULE_PART];
+  if (rule === undefined || rule === '') {
+    throw new Error(`review item dedupe key names no rule: ${dedupeKeyValue}`);
+  }
+  return rule;
+}
+
 const CHUNK = 200;
 
 /** Returns the number of items this run created; the rest already existed. */

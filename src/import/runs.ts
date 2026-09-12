@@ -39,3 +39,16 @@ export async function startRun(db: Queryable, options: RunOptions): Promise<numb
 export async function finishRun(db: Queryable, runId: number): Promise<void> {
   await db.update(importRuns).set({ finishedAt: new Date() }).where(eq(importRuns.id, runId));
 }
+
+/**
+ * The link between a run and the report it produced (ADR-0011 item 14): the report itself carries
+ * no run id, so this column is where "which run wrote this file" is recorded. Null stays null for
+ * a dry run, which prints the report and writes no file.
+ */
+export async function recordReportPath(
+  db: Queryable,
+  runId: number,
+  reportPath: string,
+): Promise<void> {
+  await db.update(importRuns).set({ reportPath }).where(eq(importRuns.id, runId));
+}

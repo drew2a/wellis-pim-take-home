@@ -18,7 +18,7 @@ import {
   shiftedPatientItems,
   shiftedPatients,
 } from './cross-file';
-import { dedupeKey } from './items';
+import { dedupeKey, dedupeParts, ruleOf } from './items';
 import {
   confirmationItems,
   consentFlagItems,
@@ -61,6 +61,21 @@ describe('dedupeKey', () => {
     expect(dedupeKey(['a', null, 'b'])).toBe('a||b');
     expect(dedupeKey(['x|y', 'z'])).toBe('x\\|y|z');
     expect(dedupeKey(['x|y', 'z'])).not.toBe(dedupeKey(['x', 'y|z']));
+  });
+
+  // The import report groups stored items by rule, which lives nowhere but the key.
+  it('round-trips through dedupeParts, escaping included', () => {
+    const parts = ['data_quality', 'row', 'legacy_patient:rec|1', 'we\\ight', 'RULE', ''];
+    expect(dedupeParts(dedupeKey(parts))).toEqual(parts);
+    expect(dedupeParts(dedupeKey(['a', null, 'b']))).toEqual(['a', '', 'b']);
+  });
+
+  it('reads the rule out of a key and refuses one that names none', () => {
+    expect(
+      ruleOf(dedupeKey(['consent', 'row', 'legacy_patient:rec1', 'x', 'CONSENT_CONFLICT', 'y'])),
+    ).toBe('CONSENT_CONFLICT');
+    expect(() => ruleOf(dedupeKey(['a', 'b', 'c', 'd', null, 'f']))).toThrow(/names no rule/u);
+    expect(() => ruleOf('a|b|c')).toThrow(/names no rule/u);
   });
 });
 
