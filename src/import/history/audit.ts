@@ -5,7 +5,7 @@
 // our rules, not an open question about that patient: it is a shadow evaluation the console can
 // browse and a figure in the import report. Items exist only where the legacy process **could not
 // see** the problem — a GLP-1 medication or a flag condition buried in free text — or where it is
-// **a legal one**: an approved or pending intake from someone under 18.
+// **a legal one**: an intake from someone under 18 whose outcome is not a rejection.
 import { ageInYears } from '@/eligibility/age';
 import { evaluate } from '@/eligibility/evaluate';
 import type { EligibilityResult, MatchedRule } from '@/eligibility/types';
@@ -49,10 +49,7 @@ export function evaluateHistory(
       legacyOutcome: intake.canonical.outcome,
       result: evaluate(
         {
-          // Age at submission (Q4). Neither date is guaranteed: 5 patients have no usable date of
-          // birth and 3 intakes no usable submission date, and the engine reads that as an age it
-          // cannot judge rather than as a patient who passed the age rule.
-          ageYears: dob === null || submittedAt === null ? null : ageInYears(dob, submittedAt),
+          ageYears: ageAt(dob, submittedAt),
           weightKg: intake.canonical.weightKg === null ? null : Number(intake.canonical.weightKg),
           heightCm: intake.canonical.heightCm,
           medications:
@@ -67,8 +64,29 @@ export function evaluateHistory(
   });
 }
 
-/** The legacy outcomes for which a minor's intake is a legal question rather than history. */
-const OPEN_OUTCOMES = new Set(['approved', 'pending']);
+/**
+ * Age at submission (Q4), or null where the two dates cannot produce one the rules can judge.
+ * Neither date is guaranteed: 5 patients have no usable date of birth and 3 intakes no usable
+ * submission date. A submission that precedes the date of birth is unusable in the same way — it
+ * yields a negative age, which the engine refuses (`wholeYears`), and the history audit runs
+ * inside the run transaction, so one such row would abort the whole import instead of producing
+ * an evaluation. All three read as an age the rules could not judge rather than as a patient who
+ * passed the age rule (ADR-0012 item 4).
+ */
+function ageAt(dob: string | null, submittedAt: string | null): number | null {
+  // ISO dates compare lexicographically, which is why both columns are dates and not parsed values.
+  if (dob === null || submittedAt === null || submittedAt < dob) return null;
+  return ageInYears(dob, submittedAt);
+}
+
+/**
+ * The legacy outcomes for which a minor's intake is a legal question rather than history.
+ * `unknown` is one of them: the spelling could not be read, so the intake sits in `legacy_pending`,
+ * the one non-terminal legacy state (ADR-0009 item 8), and nobody can say what the legacy process
+ * decided — which is at least as open as a `pending` one. Leaving it out failed open on the single
+ * class ADR-0005 queues for legal reasons (ADR-0012 item 5).
+ */
+const OPEN_OUTCOMES = new Set(['approved', 'pending', 'unknown']);
 
 interface ItemShape {
   readonly title: string;
@@ -110,7 +128,7 @@ export function clinicalHistoryItems(
     }
     const age = evaluation.result.inputs.ageYears;
     // The 12 rejected minors are a report figure: the legacy process saw the age and said no.
-    // The 58 approved or pending ones are a legal question that is still open today.
+    // The other 58 are a legal question that is still open today.
     if (
       age !== null &&
       age < rules.age.minimum_years &&

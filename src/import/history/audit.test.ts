@@ -122,4 +122,121 @@ describe('the items the history audit raises', () => {
   it('raises one item per intake and rule, so a re-run finds its own', () => {
     expect(new Set(items.map((item) => item.dedupeKey)).size).toBe(items.length);
   });
+
+  // ADR-0012 item 5: an unreadable outcome puts the intake in `legacy_pending`, the one
+  // non-terminal legacy state, so a minor's intake is at least as open as a `pending` one.
+  // This export has 9 unreadable outcomes and none of them belongs to a minor, so the item is
+  // reproduced on a synthetic row rather than found in the file.
+  it('queues a minor whose outcome spelling could not be read', () => {
+    const outcomes = ['approved', 'pending', 'unknown', 'rejected'] as const;
+    const minors = outcomes.map((outcome, index) =>
+      evaluation(`INT-minor-${outcome}`, outcome, index),
+    );
+
+    const raised = clinicalHistoryItems(minors, ids, rules).map((item) => item.title);
+
+    expect(raised).toEqual([
+      'intake from a patient aged 15, legacy outcome approved',
+      'intake from a patient aged 15, legacy outcome pending',
+      'intake from a patient aged 15, legacy outcome unknown',
+    ]);
+  });
+});
+
+/** A shadow evaluation of a 15-year-old, the one input the minor item reads. */
+function evaluation(
+  intakeId: string,
+  legacyOutcome: string,
+  index: number,
+): (typeof evaluations)[number] {
+  const intake = mapIntake(
+    byHeader(INTAKES_HEADER, [
+      intakeId,
+      `recMinor-${index}`,
+      '2024-06-01',
+      'v2',
+      '80',
+      '170',
+      '',
+      '',
+      '0',
+      '',
+      '',
+    ]),
+    context,
+  );
+  const patient = mapPatient(
+    byHeader(PATIENTS_HEADER, [
+      `recMinor-${index}`,
+      'Minor Patient',
+      `minor${index}@example.com`,
+      '2009-01-01',
+      'F',
+      '',
+      '',
+      'Utrecht',
+      '80',
+      'kg',
+      '170',
+      'active',
+      '2024-01-01',
+      'website',
+    ]),
+    context,
+  );
+  const [only] = evaluateHistory([intake], [patient], rules);
+  const shadow = only as (typeof evaluations)[number];
+  expect(shadow.result.inputs.ageYears).toBe(15);
+  return { ...shadow, legacyOutcome };
+}
+
+// ADR-0012 item 4: the engine refuses a negative age, and the history audit runs inside the run
+// transaction, so a submission that precedes the date of birth would abort the whole import.
+describe('an intake submitted before its patient was born', () => {
+  it('is not evaluable rather than an error that fails the run', () => {
+    const patient = mapPatient(
+      byHeader(PATIENTS_HEADER, [
+        'recUnborn',
+        'Unborn Patient',
+        'unborn@example.com',
+        '2024-01-01',
+        'F',
+        '',
+        '',
+        'Utrecht',
+        '80',
+        'kg',
+        '170',
+        'active',
+        '2024-01-01',
+        'website',
+      ]),
+      context,
+    );
+    const intake = mapIntake(
+      byHeader(INTAKES_HEADER, [
+        'INT-unborn',
+        'recUnborn',
+        '2020-06-01',
+        'v2',
+        // A BMI clear of every band, so age is the only rule that could not run.
+        '95',
+        '170',
+        '',
+        '',
+        '0',
+        'approved',
+        '',
+      ]),
+      context,
+    );
+
+    const [result] = evaluateHistory([intake], [patient], rules);
+
+    expect(result?.result.outcome).toBe('not_evaluable');
+    expect(result?.result.inputs.ageYears).toBeNull();
+    // The engine is handed a null age and says so in its own words; it is the caller's job to
+    // decide that these two dates cannot produce an age (ADR-0012 item 4).
+    expect(result?.result.matched).toEqual([]);
+  });
 });
