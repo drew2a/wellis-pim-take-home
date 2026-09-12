@@ -2,7 +2,7 @@
 // terminal legacy state outside the Part B state machine (ADR-0005); the audit entry for it is
 // written by the canonical load, not here.
 import type { IntakeColumn } from '../source/layout';
-import { mapDate } from './dates';
+import { alternativeReading, mapDate } from './dates';
 import { mapConditionReport, mapMedicationReport, type HistoryReport } from './history-report';
 import { mapAlcoholUnits, mapHeight, mapIntakeWeight } from './numbers';
 import { collect, emptyToNull, type MappingContext } from './patient';
@@ -42,6 +42,12 @@ export interface MappedIntake {
   readonly canonical: CanonicalIntake;
   readonly records: readonly RecordDraft[];
   readonly flags: readonly Flag[];
+  /**
+   * The submission date the convention would give if it were wrong, as `dobAlternative` is for a
+   * patient. The duplicate-intake detector compares dates on any shared plausible reading, which
+   * is what makes the fifth same-day pair of ADR-0006 visible (data-profile P-27).
+   */
+  readonly submittedAtAlternative: string | null;
 }
 
 // An unseen outcome spelling is `unknown` until its vocabulary item is resolved; the intake sits
@@ -82,5 +88,6 @@ export function mapIntake(raw: RawIntake, context: MappingContext): MappedIntake
     },
     records,
     flags,
+    submittedAtAlternative: alternativeReading(raw.submitted_at),
   };
 }
