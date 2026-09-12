@@ -71,6 +71,8 @@ const report: ImportReport = {
       intakesBeforeFirstGrant: 71,
       patientsWithAnIntakeBeforeFirstGrant: 70,
       intakesAfterRevocationWithNoLaterGrant: 83,
+      intakesExcludedForAnUnreadableDate: 3,
+      patientsExcludedForAnUnreadableDate: 2,
     },
     futureDatedEvents: [{ key: 'revoked', rows: 66 }],
   },

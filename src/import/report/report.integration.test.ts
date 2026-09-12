@@ -258,6 +258,21 @@ describe('the import report', () => {
     expect(timing.patientsWithAnIntakeBeforeFirstGrant).toBeLessThanOrEqual(
       timing.intakesBeforeFirstGrant,
     );
+    // ADR-0005 carries 71 intakes over 70 patients, read off the raw dates in the profiling
+    // session. The canonical comparison cannot see the three intakes whose submission date the
+    // mapper nulled as impossible, and those three belong to two patients: 68 + 3 and 68 + 2.
+    expect(timing.intakesBeforeFirstGrant + timing.intakesExcludedForAnUnreadableDate).toBe(71);
+    expect(
+      timing.patientsWithAnIntakeBeforeFirstGrant + timing.patientsExcludedForAnUnreadableDate,
+    ).toBe(70);
+    expect(timing.intakesExcludedForAnUnreadableDate).toBe(
+      await scalar(database.sql`
+        select count(*)::text as n from intakes i
+        where i.submitted_at is null and exists (
+          select 1 from consent_events e
+          where e.patient_id = i.patient_id and e.action = 'granted')
+      `),
+    );
     // ADR-0005 carries 83 for the second figure, from the profiling session, and it reproduces.
     expect(timing.intakesAfterRevocationWithNoLaterGrant).toBe(83);
     expect(timing.intakesAfterRevocationWithNoLaterGrant).toBe(

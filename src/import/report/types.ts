@@ -119,6 +119,13 @@ export interface ConsentTiming {
   readonly intakesBeforeFirstGrant: number;
   readonly patientsWithAnIntakeBeforeFirstGrant: number;
   readonly intakesAfterRevocationWithNoLaterGrant: number;
+  /**
+   * Intakes the comparison could not include, and the patients they belong to: the mapper nulled
+   * their submission date as impossible, so the canonical row has no date to compare. They are
+   * the difference between these figures and the profiling session's, which read the raw dates.
+   */
+  readonly intakesExcludedForAnUnreadableDate: number;
+  readonly patientsExcludedForAnUnreadableDate: number;
 }
 
 export interface Consent {

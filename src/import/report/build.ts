@@ -124,11 +124,12 @@ async function whatCameIn(
       { name: 'intakes.csv', bytes: run.intakesBytes, sha256: run.intakesSha256 },
       { name: 'consents.jsonl', bytes: run.consentsBytes, sha256: run.consentsSha256 },
     ],
-    rawRows: tally([
-      ['legacy_patients_raw', count(c.rawPatients)],
-      ['legacy_intakes_raw', count(c.rawIntakes)],
-      ['legacy_consent_events_raw', count(c.rawConsentEvents)],
-    ]),
+    // In file order rather than sorted: this table sits under the files table and answers it.
+    rawRows: [
+      { key: 'legacy_patients_raw', rows: count(c.rawPatients) },
+      { key: 'legacy_intakes_raw', rows: count(c.rawIntakes) },
+      { key: 'legacy_consent_events_raw', rows: count(c.rawConsentEvents) },
+    ],
     repeatedKeys: itemsWithRule(items, 'SOURCE_KEY_REPEATED'),
     changedSinceEarlierRun: itemsWithRule(items, 'SOURCE_ROW_CHANGED'),
     patients: {
@@ -450,7 +451,13 @@ async function consent(
           : [{ key: `${own.state} -> ${after}`, n: 1 }];
       }),
     );
-  const timing = await one<{ before: number; patients: number; after: number }>(
+  const timing = await one<{
+    before: number;
+    patients: number;
+    after: number;
+    excludedIntakes: number;
+    excludedPatients: number;
+  }>(
     db,
     sql`with grants as (
           select patient_id, min(at) as first_grant from consent_events
@@ -473,6 +480,11 @@ async function consent(
         )
         select (select count(*) from before)::int as before,
                (select count(distinct patient_id) from before)::int as patients,
+               (select count(*) from intakes i join grants g on g.patient_id = i.patient_id
+                where i.submitted_at is null)::int as "excludedIntakes",
+               (select count(distinct i.patient_id) from intakes i
+                join grants g on g.patient_id = i.patient_id
+                where i.submitted_at is null)::int as "excludedPatients",
                (select count(*) from intakes i join still_revoked r on r.patient_id = i.patient_id
                 where i.submitted_at is not null
                   and i.submitted_at > (r.last_revoke at time zone 'Europe/Amsterdam')::date
@@ -500,6 +512,8 @@ async function consent(
       intakesBeforeFirstGrant: count(timing.before),
       patientsWithAnIntakeBeforeFirstGrant: count(timing.patients),
       intakesAfterRevocationWithNoLaterGrant: count(timing.after),
+      intakesExcludedForAnUnreadableDate: count(timing.excludedIntakes),
+      patientsExcludedForAnUnreadableDate: count(timing.excludedPatients),
     },
     futureDatedEvents: tallyOf(future.map((r) => ({ key: r.action, n: count(r.n) }))),
   };
@@ -662,7 +676,7 @@ async function notInExportNotes(
         'recorded anywhere, and `2.0` sits beside `v2` with nothing to tell them apart',
       numbers: {
         intakesWithNoLabel: count(c.noVersionLabel),
-        intakesLabelled2point0: cleanedRows('VERSION_LABEL_ASSUMED_V2'),
+        intakesLabelled2Point0: cleanedRows('VERSION_LABEL_ASSUMED_V2'),
       },
       evidence: 'P-19',
       notCovered: 'the notes say only that "labelling discipline varied"',
@@ -761,7 +775,7 @@ async function notInExportNotes(
         patientsWithNoRecord: consentState('no_record') + consentState('unknown_pre_log'),
         eventsBefore2023: count(c.before2023),
         patientsWithNoEventSince2023: count(c.noEventSince2023),
-        v1EventsAfter2024: count(c.v1Stragglers),
+        eventsStillLabelledV1After2024: count(c.v1Stragglers),
       },
       evidence: 'P-30, P-31, P-32',
       notCovered:

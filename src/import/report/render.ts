@@ -24,6 +24,13 @@ const number = (value: number): string => String(value);
 
 const inline = (value: unknown): string => `\`${JSON.stringify(value)}\``;
 
+/** `intakesWithNoLabel` -> `intakes with no label`: the JSON keys are camelCase, prose is not. */
+const words = (key: string): string =>
+  key
+    .replace(/(?<char>[a-z0-9])(?<upper>[A-Z])/gu, '$<char> $<upper>')
+    .replace(/(?<letter>[a-z])(?<digit>\d)/gu, '$<letter> $<digit>')
+    .toLowerCase();
+
 function tallyTable(title: string, entries: readonly Tally[], unit = 'rows'): string[] {
   if (entries.length === 0) return [`${title}: none.`, ''];
   return [
@@ -291,16 +298,18 @@ function shadow(report: ImportReport): string[] {
       s.itemsRaised.map((item) => [`\`${item.rule}\``, item.legacyOutcome, number(item.intakes)]),
     ),
     '',
-    `An outcome spelling nobody could read counts as open for a minor's intake: this export has ` +
-      `${carveOut.unreadableOutcomes} unreadable outcomes and ${carveOut.minorsAmongThem} of ` +
-      'them belongs to a minor.',
+    "An outcome spelling nobody could read counts as open for a minor's intake, because nobody " +
+      'can say what the legacy process decided. This export has ' +
+      `${carveOut.unreadableOutcomes} such spellings, of which ` +
+      `${carveOut.minorsAmongThem} belong to a minor: the guard covers nothing here and the ` +
+      'count of queued minors is unaffected.',
     '',
   ];
 }
 
 function finding(entry: UnexpectedFinding): string[] {
   const numbers = Object.entries(entry.numbers)
-    .map(([key, value]) => `${key} **${value}**`)
+    .map(([key, value]) => `${words(key)} **${value}**`)
     .join(', ');
   return [`- ${entry.finding} — ${numbers}. _${entry.notCovered}_ (${entry.evidence})`];
 }
