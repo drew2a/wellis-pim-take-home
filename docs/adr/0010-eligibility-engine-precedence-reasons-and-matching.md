@@ -60,8 +60,11 @@ interface EligibilityInput {
 }
 ```
 
-- **`ageYears` is computed by the caller** at the ruleset's reference date (`submitted_at`, Q4) with
-  `ageInYears` from `src/eligibility/age.ts`; the rule itself sees a number. A 29 February birthday
+- **`ageYears` is computed by the caller** at the reference date (`submitted_at`, Q4) with
+  `ageInYears` from `src/eligibility/age.ts`; the rule itself sees a number. The reference date is
+  therefore a convention of the callers, not a ruleset field: the ruleset holds `minimum_years` and
+  nothing else, because a `reference` key the engine never reads could be changed without changing
+  any evaluation, which is worse than not having it. A 29 February birthday
   falls out of the calendar comparison: born 2008-02-29 is 17 on 2026-02-28 and 18 on 2026-03-01.
 - **All three numbers are nullable** because unusable values exist in this export: 5 patients have
   a future `dob` (canonical null) and the plausibility detector nulls 6 intake weights and 6 intake

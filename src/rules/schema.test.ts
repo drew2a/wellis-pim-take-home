@@ -29,7 +29,6 @@ describe('rules/v1.json', () => {
     expect(rules.plausibility.height_cm).toEqual({ min: 100, max: 230 });
     expect(rules.weight_divergence.tolerance).toEqual({ min: 0.9, max: 1.1 });
     expect(rules.age.minimum_years).toBe(18);
-    expect(rules.age.reference).toBe('submitted_at');
     // Q2 default: 27.0 <= BMI <= 30.0 flags, unrounded.
     expect(rules.bmi).toEqual({
       reject_below: 27,

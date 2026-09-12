@@ -31,11 +31,10 @@ export const rulesSchema = z.object({
   version: z.literal('v1'),
   plausibility: z.object({ weight_kg: bounds, height_cm: bounds }),
   weight_divergence: z.object({ tolerance: bounds }),
-  age: z.object({
-    minimum_years: z.number().int().positive(),
-    // Q4 default: age is measured at submission (QUESTIONS.md).
-    reference: z.literal('submitted_at'),
-  }),
+  // Only the threshold: the reference date (Q4: submission) is the caller's, because the engine
+  // is handed whole years and never a date. A `reference` field here would be read by nothing and
+  // could be changed without changing a single evaluation (ADR-0010).
+  age: z.object({ minimum_years: z.number().int().positive() }),
   // The BMI thresholds are cross-validated for the same reason as `bounds`: each number is
   // individually plausible while the pair is not. The engine rejects below `reject_below` before
   // it considers the band (ADR-0010), so a `reject_below` at or above the top of the band makes

@@ -14,7 +14,8 @@ export type EligibilityOutcome =
 
 export interface EligibilityInput {
   /**
-   * Whole years at the ruleset's reference date, measured by the caller with `ageInYears`; null
+   * Whole years at the reference date (Q4: submission), measured by the caller with `ageInYears`;
+   * null
    * when the date of birth is unusable (5 patients in this export have a future one).
    */
   readonly ageYears: number | null;
