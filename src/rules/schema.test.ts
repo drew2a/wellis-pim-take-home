@@ -87,6 +87,26 @@ describe('rules/v1.json', () => {
     expect(() => parseRules(copy)).toThrow(/rules file is invalid/);
   });
 
+  it('fails when the flag band is out of order', () => {
+    const copy = structuredClone(source) as { bmi: { flag_band: Record<string, unknown> } };
+    copy.bmi.flag_band = { ...copy.bmi.flag_band, min: 30, max: 27 };
+    expect(() => parseRules(copy)).toThrow(/rules file is invalid/);
+  });
+
+  // The engine rejects before it considers the band, so this ruleset would reject every patient
+  // between 27 and 30 rather than flag them, with no other test failing (ADR-0010).
+  it('fails when reject_below would make the flag band unreachable', () => {
+    const copy = structuredClone(source) as { bmi: { reject_below: number } };
+    copy.bmi.reject_below = 30;
+    expect(() => parseRules(copy)).toThrow(/rules file is invalid/);
+  });
+
+  it.each([0, -18, 17.5])('fails when the minimum age is %s', (minimum) => {
+    const copy = structuredClone(source) as { age: { minimum_years: number } };
+    copy.age.minimum_years = minimum;
+    expect(() => parseRules(copy)).toThrow(/rules file is invalid/);
+  });
+
   it('fails when absolute_rejects names a rule that is not a reject rule', () => {
     const copy = structuredClone(source) as { precedence: { absolute_rejects: unknown } };
     copy.precedence.absolute_rejects = ['glp1_medication'];

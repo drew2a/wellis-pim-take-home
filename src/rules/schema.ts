@@ -36,17 +36,27 @@ export const rulesSchema = z.object({
     // Q4 default: age is measured at submission (QUESTIONS.md).
     reference: z.literal('submitted_at'),
   }),
-  bmi: z.object({
-    reject_below: z.number().positive(),
-    flag_band: z.object({
-      min: z.number().positive(),
-      max: z.number().positive(),
-      min_inclusive: z.boolean(),
-      max_inclusive: z.boolean(),
+  // The BMI thresholds are cross-validated for the same reason as `bounds`: each number is
+  // individually plausible while the pair is not. The engine rejects below `reject_below` before
+  // it considers the band (ADR-0010), so a `reject_below` at or above the top of the band makes
+  // the band unreachable and every patient the band exists for would be rejected instead.
+  bmi: z
+    .object({
+      reject_below: z.number().positive(),
+      flag_band: z
+        .object({
+          min: z.number().positive(),
+          max: z.number().positive(),
+          min_inclusive: z.boolean(),
+          max_inclusive: z.boolean(),
+        })
+        .refine((b) => b.min < b.max, { message: 'min must be below max' }),
+      // Q2 default: thresholds apply to the unrounded value; rounding is for display only.
+      rounding: z.literal('none'),
+    })
+    .refine((b) => b.reject_below < b.flag_band.max, {
+      message: 'reject_below must be below the top of the flag band, or the band is unreachable',
     }),
-    // Q2 default: thresholds apply to the unrounded value; rounding is for display only.
-    rounding: z.literal('none'),
-  }),
   // Q1 default (ADR-0010): collect every match, then resolve. Required, so a ruleset that states
   // no precedence fails at load rather than falling back to a default buried in the engine.
   precedence: z.object({
