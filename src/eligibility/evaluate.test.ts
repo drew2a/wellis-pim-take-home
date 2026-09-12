@@ -192,6 +192,63 @@ describe('flag conditions', () => {
   });
 });
 
+describe('matched rules', () => {
+  // The history audit and the import report count per rule, and asking the engine is the only
+  // way to count without a second implementation of the thresholds (ADR-0011 item 21).
+  it('names every rule that fired, in rule order', () => {
+    const result = evaluate(
+      {
+        ageYears: 16,
+        weightKg: 60,
+        heightCm: 170,
+        medications: ['Ozempic 0,5 mg'],
+        conditions: ['pancreatitis 2022'],
+        conditionsOther: [],
+      },
+      rules,
+    );
+
+    expect(result.matched).toEqual([
+      'age_below_minimum',
+      'bmi_below_minimum',
+      'glp1_medication',
+      'flag_condition',
+    ]);
+  });
+
+  it('names the band rule only when no weight-related condition suppresses it', () => {
+    const input = {
+      ageYears: 40,
+      weightKg: 80,
+      heightCm: 170,
+      medications: [],
+      conditionsOther: [],
+    };
+
+    expect(evaluate({ ...input, conditions: [] }, rules).matched).toEqual([
+      'bmi_band_without_condition',
+    ]);
+    expect(evaluate({ ...input, conditions: ['hoge bloeddruk'] }, rules).matched).toEqual([]);
+  });
+
+  it('is empty when nothing fired', () => {
+    const result = evaluate(
+      {
+        ageYears: 40,
+        weightKg: 100,
+        heightCm: 170,
+        medications: [],
+        conditions: [],
+        conditionsOther: [],
+      },
+      rules,
+    );
+
+    expect(result.matched).toEqual([]);
+    expect(result.outcome).toBe('auto_cleared');
+  });
+});
+
 describe('precedence (Q1 default: collect every match, then resolve)', () => {
   it('lets a flag pre-empt the BMI reject, naming the conflict', () => {
     expect(evaluateWith({ weightKg: 96.4, medications: ['ozempic'] })).toMatchObject({

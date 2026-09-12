@@ -122,3 +122,24 @@ export const auditEntryRow = (): Insert<'auditEntries'> => ({
   toState: 'legacy_approved',
   reason: 'legacy outcome',
 });
+
+export const eligibilityEvaluationRow = (
+  intakeId: string,
+  overrides: Partial<Insert<'eligibilityEvaluations'>> = {},
+): Insert<'eligibilityEvaluations'> => ({
+  intakeId,
+  rulesetVersion: 'v1',
+  engineOutcome: 'auto_cleared',
+  reasons: ['cleared: no rejecting or flagging rule matched'],
+  inputs: {
+    ageYears: 40,
+    weightKg: 90,
+    heightCm: 170,
+    bmi: 31.14186851211073,
+    glp1: [],
+    flagConditions: [],
+    weightRelated: [],
+  },
+  shadow: true,
+  ...overrides,
+});

@@ -6,7 +6,8 @@ import { eq, inArray } from 'drizzle-orm';
 import { auditEntries, intakes } from '@/db/schema';
 
 import { LEGACY_IMPORT_ACTOR } from '../actors';
-import type { Queryable } from '../db';
+import type { Queryable } from '@/db/queryable';
+import { auditDedupeKey } from '@/repo/audit';
 import type { CanonicalIntake, MappedIntake } from '../mapper/intake';
 import { INTAKE_COLUMNS, diffAgainstStored } from './columns';
 import type { HumanOwned, HumanOwnedConflict } from './human-owned';
@@ -28,17 +29,6 @@ const CHUNK = 500;
 
 export function legacyOutcomeReason(outcomeRaw: string): string {
   return 'legacy outcome `' + outcomeRaw + '`';
-}
-
-/** ADR-0008 item 1: deterministic from the five fields, so a re-run finds its own entry. */
-export function auditDedupeKey(
-  entityType: string,
-  entityId: string,
-  fromState: string | null,
-  toState: string | null,
-  reason: string,
-): string {
-  return [entityType, entityId, fromState ?? '', toState ?? '', reason].join('|');
 }
 
 export async function loadIntakes(
@@ -112,11 +102,14 @@ export async function loadIntakes(
       for (const c of own) {
         conflicts.push({ entityType: 'intake', entityId: id, naturalKey: m.intakeId, ...c });
       }
-      // The patient link follows the alias table. An orphan a human attached keeps its link:
-      // the alias table has no entry for it, so nothing here would overwrite the attachment.
+      // The patient link is filled when it is null and never rewritten (ADR-0011 item 4). A
+      // legacy patient that appears in a later export resolves its own orphans, which is a fact;
+      // but after a merge the alias returns the survivor, and rewriting the link would move rows
+      // the first run placed, so the two runs would differ in values while agreeing in counts.
+      // Reading a patient's records goes through membership, which finds them either way.
       const patientId = patientIds.get(m.legacyPatientId) ?? null;
       const patch: Partial<CanonicalIntake> & { patientId?: string } = { ...changes };
-      if (patientId !== null && row.patientId !== patientId) patch.patientId = patientId;
+      if (patientId !== null && row.patientId === null) patch.patientId = patientId;
       if (Object.keys(patch).length > 0) {
         await db.update(intakes).set(patch).where(eq(intakes.id, id));
         updated += 1;

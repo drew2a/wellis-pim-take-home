@@ -5,7 +5,7 @@ import { sql } from 'drizzle-orm';
 
 import { consentEvents } from '@/db/schema';
 
-import type { Queryable } from '../db';
+import type { Queryable } from '@/db/queryable';
 import type { MappedConsentEvent } from '../mapper/consent-event';
 import { insertNormalisationRecords } from './records';
 

@@ -145,6 +145,7 @@ erDiagram
     date signup_date "null"
     text source "null"
     uuid merged_into FK "null"
+    text created_from_legacy_id UK "null"
     integer created_by_run FK "null"
   }
   patient_legacy_ids["patient_legacy_ids — canonical"] {
@@ -244,8 +245,9 @@ erDiagram
     uuid id PK
     uuid intake_id FK
     text ruleset_version
-    outcome outcome "enum"
+    engine_outcome engine_outcome "enum"
     jsonb reasons
+    jsonb inputs
     boolean shadow
     timestamptz evaluated_at
     integer import_run_id FK "null"
@@ -277,6 +279,7 @@ erDiagram
 | `bsn_check` | `valid`, `invalid`, `absent` |
 | `consent_action` | `granted`, `revoked` |
 | `consent_state` | `granted`, `revoked`, `no_record`, `unknown_pre_log`, `conflict` |
+| `engine_outcome` | `auto_rejected`, `auto_flagged`, `auto_cleared`, `not_evaluable` |
 | `history_report` | `none_reported`, `not_answered`, `reported` |
 | `intake_state` | `legacy_approved`, `legacy_rejected`, `legacy_pending`, `legacy_expired`, `draft`, `submitted`, `auto_cleared`, `auto_flagged`, `auto_rejected`, `in_review`, `approved`, `rejected` |
 | `outcome` | `approved`, `rejected`, `pending`, `unknown` |

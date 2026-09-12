@@ -26,6 +26,8 @@ const TABLES = [
   'patient_legacy_ids',
   'intakes',
   'consent_events',
+  'consent_states',
+  'eligibility_evaluations',
   'normalisation_records',
   'review_items',
   'audit_entries',
@@ -119,12 +121,143 @@ describe('npm run import', () => {
     );
 
     expect(first.reviewItems).toEqual({
-      'data_quality/row': 11 + 10 + 5 + 17 + 6 + 3,
+      // The mapping's 52, plus the 10 plausibility items ADR-0009 item 2 owed. The weight
+      // divergence detector adds none over this export (ADR-0011 item 19).
+      'data_quality/row': 11 + 10 + 5 + 17 + 6 + 3 + 10,
       'orphan_intake/row': 21,
-      'vocabulary/vocabulary': 5,
+      // The mapping's 5, plus the unit-less weights, the lbs non-reconciliation and the
+      // future-dated consent events.
+      'vocabulary/vocabulary': 5 + 3,
+      'identity_conflict/row': 3 + 39,
+      'duplicate_intake/row': 5,
+      'consent/row': 83,
+      'clinical_history/row': 42 + 15 + 58,
     });
-    expect(first.reviewItemsInserted).toBe(52 + 21 + 5);
+    expect(first.reviewItemsInserted).toBe(62 + 21 + 8 + 42 + 5 + 83 + 115);
     expect(await itemCounts()).toEqual(first.reviewItems);
+  });
+
+  // ADR-0005's consent items, over the surviving patients rather than the legacy rows.
+  it('raises a consent item only where the state and the status cannot both be right', async () => {
+    const rows = await database.sql<{ title: string; n: string }[]>`
+      select title, count(*)::text as n from review_items where type = 'consent'
+      group by 1 order by 1
+    `;
+    const byTitle = Object.fromEntries(rows.map((r) => [r.title, Number(r.n)]));
+
+    expect(byTitle['consent log contradicts itself']).toBe(7);
+    expect(byTitle['consent revoked while the patient is active']).toBe(19);
+    // ADR-0005 counts 73 patients without a record whose status is active or paused, over the
+    // 2466 legacy rows; 16 of them are duplicate rows this run merged away, and a merged row is
+    // not a second person to chase for consent.
+    const noRecord = Object.entries(byTitle)
+      .filter(([title]) => title.startsWith('no consent record'))
+      .reduce((n, [, count]) => n + count, 0);
+    expect(noRecord).toBe(73 - 16);
+
+    // Churned and prospect patients raise none: there is nothing to stop.
+    const [wrongStatus] = await database.sql<{ n: string }[]>`
+      select count(*)::text as n from review_items i join patients p on p.id = i.patient_id
+      where i.type = 'consent' and p.status in ('churned', 'prospect')
+        and i.title not like 'consent log contradicts%'
+    `;
+    expect(Number(wrongStatus?.n)).toBe(0);
+  });
+
+  // ADR-0005: every legacy intake gets a shadow evaluation and no legacy state changes.
+  it('evaluates every legacy intake in shadow and applies nothing', async () => {
+    expect(first.shadow.evaluated).toBe(2917);
+    expect(first.shadow.written).toBe(2917);
+    expect(first.shadow.ruleHits).toEqual({
+      age_below_minimum: 70,
+      bmi_below_minimum: 191,
+      bmi_band_without_condition: 283,
+      glp1_medication: 42,
+      flag_condition: 15,
+    });
+
+    const [stored] = await database.sql<{ n: string; shadow: string }[]>`
+      select count(*)::text as n, count(*) filter (where shadow)::text as shadow
+      from eligibility_evaluations
+    `;
+    expect(Number(stored?.n)).toBe(2917);
+    expect(Number(stored?.shadow)).toBe(2917);
+    // One row per intake, and every intake has one.
+    const [unevaluated] = await database.sql<{ n: string }[]>`
+      select count(*)::text as n from intakes i
+      where not exists (select 1 from eligibility_evaluations e where e.intake_id = i.id)
+    `;
+    expect(Number(unevaluated?.n)).toBe(0);
+
+    // Nothing was applied: every legacy intake still carries the state its outcome gave it.
+    const [applied] = await database.sql<{ n: string }[]>`
+      select count(*)::text as n from intakes where state::text not like 'legacy_%'
+    `;
+    expect(Number(applied?.n)).toBe(0);
+    const outcomes = Object.values(first.shadow.outcomes).reduce((a, b) => a + b, 0);
+    expect(outcomes).toBe(2917);
+    expect(first.shadow.outcomes.not_evaluable).toBeGreaterThan(0);
+  });
+
+  // The reproducibility item deferred from the `feature/legacy-importer` review: the importer,
+  // not a one-off script, produces the identity counts ADR-0006 was accepted with.
+  it('reproduces the duplicate-patient tiers of ADR-0006 and merges tier 1', async () => {
+    expect(first.identity).toEqual({
+      groups: 70,
+      rows: 140,
+      tier1: 28,
+      tier2: 3,
+      tier3: 39,
+      merged: 28,
+      alreadyMerged: 0,
+      // ADR-0011 item 9: all 28 pairs are identical on every person field.
+      gainedFields: 0,
+      // ADR-0012 item 2: nobody has unmerged anything in this database.
+      humanDecided: 0,
+    });
+
+    const [merged] = await database.sql<{ n: string }[]>`
+      select count(*)::text as n from patients where merged_into is not null
+    `;
+    expect(Number(merged?.n)).toBe(28);
+    // Nothing is dropped: the losing rows stay, and every legacy id still resolves.
+    const [aliases] = await database.sql<{ n: string }[]>`
+      select count(*)::text as n from patient_legacy_ids
+    `;
+    expect(Number(aliases?.n)).toBe(2466);
+    const [orphaned] = await database.sql<{ n: string }[]>`
+      select count(*)::text as n from patient_legacy_ids a
+      join patients p on p.id = a.patient_id where p.merged_into is not null
+    `;
+    expect(Number(orphaned?.n)).toBe(0);
+  });
+
+  // ADR-0005's consent states, over the 2466 legacy rows and over the surviving patients.
+  it('derives a consent state for every surviving patient', async () => {
+    expect(first.consentStatesWritten).toBe(2466 - 28);
+
+    const rows = await database.sql<{ state: string; n: string }[]>`
+      select state, count(*)::text as n from consent_states group by 1 order by 1
+    `;
+    const states = Object.fromEntries(rows.map((r) => [r.state, Number(r.n)]));
+    // ADR-0005's counts are over the 2466 legacy rows; these are over the 2438 surviving
+    // patients, and the difference is exactly the 28 merged rows: 23 of them held `no_record`
+    // and 5 `unknown_pre_log` -- a duplicate row that never appeared in the consent log. No
+    // survivor's state changes, because the union of a patient's events gains nothing.
+    expect(states).toEqual({
+      granted: 2091,
+      revoked: 269,
+      conflict: 7,
+      no_record: 74 - 23,
+      unknown_pre_log: 25 - 5,
+    });
+    expect(Object.values(states).reduce((a, b) => a + b, 0)).toBe(2466 - 28);
+    // Every state belongs to a surviving patient, and every survivor has exactly one.
+    const [merged] = await database.sql<{ n: string }[]>`
+      select count(*)::text as n from consent_states s
+      join patients p on p.id = s.patient_id where p.merged_into is not null
+    `;
+    expect(Number(merged?.n)).toBe(0);
   });
 
   it('changes nothing but import_runs on a second run (R-A15, R-A16)', async () => {
@@ -147,6 +280,13 @@ describe('npm run import', () => {
       auditEntriesInserted: 0,
     });
     expect(second.canonical.consentEvents).toEqual({ inserted: 0, skipped: 0 });
+    // The merges are found, not repeated: the alias table already resolves both ids of a pair
+    // to the survivor (ADR-0006).
+    expect(second.identity).toEqual({ ...first.identity, merged: 0, alreadyMerged: 28 });
+    expect(second.consentStatesWritten).toBe(first.consentStatesWritten);
+    // A shadow row is derived, so the second run rewrites the same 2917 rows rather than adding
+    // a second verdict per intake (ADR-0011 item 2).
+    expect(second.shadow).toEqual(first.shadow);
   });
 
   it('writes only its import_runs row on a dry run (ADR-0009 item 6)', async () => {

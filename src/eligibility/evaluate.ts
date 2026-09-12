@@ -4,7 +4,7 @@
 import type { RejectRule, Rules } from '@/rules/schema';
 
 import { matchTerms, type TermMatch } from './terms';
-import type { EligibilityInput, EligibilityOutcome, EligibilityResult } from './types';
+import type { EligibilityInput, EligibilityOutcome, EligibilityResult, MatchedRule } from './types';
 
 /** A reject that fired, with its reason text so the resolution line can quote it. */
 interface Reject {
@@ -74,6 +74,7 @@ export function evaluate(input: EligibilityInput, rules: Rules): EligibilityResu
 
   // Every rule is evaluated; nothing short-circuits, so every match contributes its reason (Q1).
   const reasons: string[] = [];
+  const matched: MatchedRule[] = [];
   const rejects: Reject[] = [];
   let flagged = false;
 
@@ -85,6 +86,7 @@ export function evaluate(input: EligibilityInput, rules: Rules): EligibilityResu
   } else if (ageYears < rules.age.minimum_years) {
     const text = `age ${ageYears} at submission`;
     rejects.push({ rule: 'age_below_minimum', text });
+    matched.push('age_below_minimum');
     reasons.push(`rejected: ${text}`);
   }
 
@@ -94,11 +96,13 @@ export function evaluate(input: EligibilityInput, rules: Rules): EligibilityResu
     const shown = formatBmi(bmi, (value) => value < rules.bmi.reject_below);
     const text = `BMI ${shown} below ${rules.bmi.reject_below}`;
     rejects.push({ rule: 'bmi_below_minimum', text });
+    matched.push('bmi_below_minimum');
     reasons.push(`rejected: ${text}`);
   } else if (inBand(bmi, band)) {
     const shown = formatBmi(bmi, (value) => inBand(value, band));
     if (weightRelated.length === 0) {
       flagged = true;
+      matched.push('bmi_band_without_condition');
       reasons.push(`flagged: BMI ${shown} with no weight-related condition`);
     } else {
       reasons.push(
@@ -110,11 +114,13 @@ export function evaluate(input: EligibilityInput, rules: Rules): EligibilityResu
 
   if (glp1.length > 0) {
     flagged = true;
+    matched.push('glp1_medication');
     reasons.push(`flagged: current GLP-1 medication (${quote(glp1)})`);
   }
 
   if (flagConditions.length > 0) {
     flagged = true;
+    matched.push('flag_condition');
     reasons.push(
       `flagged: self-reported history of thyroid cancer / pancreatitis (${quote(flagConditions)})`,
     );
@@ -127,6 +133,7 @@ export function evaluate(input: EligibilityInput, rules: Rules): EligibilityResu
   return {
     outcome,
     reasons,
+    matched,
     inputs: { ageYears, weightKg, heightCm, bmi, glp1, flagConditions, weightRelated },
     rulesetVersion: rules.version,
   };

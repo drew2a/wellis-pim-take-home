@@ -98,7 +98,8 @@ identity and non-contradictory on everything else*. That exception is deliberate
 ### Duplicate intakes
 
 - 5 (patient, submission day) pairs, 3 with consecutive `intake_id`s, weights 1 to 3 kg apart,
-  outcomes disagreeing in 3. Both intakes are stored with their legacy outcome and state; neither
+  outcomes disagreeing in 2 (by canonical outcome; 4 pairs differ in raw spelling, where
+  `afgewezen`/`rejected` and `goedgekeurd`/`Approved` are one meaning in two languages). Both intakes are stored with their legacy outcome and state; neither
   is the outcome of record until a reviewer decides.
 - One `review_items` row per pair, type `duplicate_intake`, both intakes side by side, no proposed
   resolution. Listed under quarantined and under unexpected findings.

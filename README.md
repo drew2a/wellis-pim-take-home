@@ -58,7 +58,9 @@ npm run import -- --as-of 2026-09-08 --dry-run  # same run, rolled back; only it
 
 One run reads the three files, stores every row byte-faithfully in the `legacy_*_raw` tables,
 maps them into the canonical tables by the rules of ADR-0005, writes a normalisation record for
-every value that differs from raw, and raises review items for what the mapping cannot decide.
+every value that differs from raw, merges the duplicate patient records that are literally
+identical, derives each patient's consent state, evaluates every legacy intake against the current
+ruleset in shadow, and raises review items for everything it cannot decide safely.
 Everything after the `import_runs` row happens in one transaction: a run that fails writes
 nothing else. `--as-of` is the reference date for every "future" judgement (a birth date after
 it is impossible) and is stored on the run so it is reproducible; it is required, never the
@@ -67,8 +69,39 @@ scope. Those printed numbers are the only source for any figure quoted about the
 typed by hand. Running the command twice changes no table but `import_runs`
 (`src/import/run.integration.test.ts`). The rule set the importer applies lives in
 `rules/v1.json`; the codes and their evidence in `src/import/mapper/rule-codes.ts`; the
-conventions in ADR-0009. Detector items (plausibility, weight divergence, consent state,
-duplicate patients) and the report files are not part of this command yet.
+conventions in ADR-0009 and ADR-0011. The report files are not part of this command yet.
+
+### What one run over `legacy_export/` does
+
+| | |
+|---|---|
+| raw rows stored | 2466 patients, 2917 intakes, 2643 consent events |
+| normalisation records | 13856 over 19 rule codes |
+| duplicate-patient candidates | 70 groups, all pairs: 28 tier 1, 3 tier 2, 39 tier 3 |
+| merged by the importer | 28 pairs, 0 fields taken from a loser, every legacy id still resolving |
+| consent states derived | 2438, one per surviving patient |
+| shadow evaluations | 2917, one per legacy intake: 2304 cleared, 331 flagged, 254 rejected, 28 not evaluable |
+| review items raised | 336 |
+
+Every number above is printed by the command; none is typed by hand. Two consecutive runs change
+no table but `import_runs`, merges, derived states and shadow evaluations included.
+
+**Identity.** Four exact keys — canonical email, bsn, E.164 phone, folded name with date of birth —
+group the candidates, and only a group that is literally identical on identity and non-contradictory
+on everything else is merged (`CLAUDE.md` §5's one exception). A merge writes `merged_into` and the
+alias rows and nothing else: `consent_events` can never be updated (ADR-0007), so a patient's
+records are read through the membership function of `src/repo/membership.ts`, which walks
+`merged_into`. That makes every merge reversible by writing the same two things back, which
+`unmergePatient` does; there is no console for it yet.
+
+**Shadow evaluation.** Every legacy intake is evaluated with the ruleset the console would apply
+today, stored in `eligibility_evaluations` with `shadow = true`, and **nothing is applied** — each
+intake keeps the state its legacy outcome gave it. Queueing those disagreements would be wrong: the
+doctor who approved a 2024 intake saw its BMI. They are report figures instead (191 below 27, 283
+in the band without a weight-related condition, 70 under 18). Items are raised only where the
+legacy process could not see the problem — a GLP-1 medication (42) or a thyroid-cancer or
+pancreatitis history (15) buried in free text — or where it is a legal one: 58 approved or pending
+intakes from someone under 18.
 
 ## Eligibility
 
@@ -76,9 +109,8 @@ duplicate patients) and the report files are not part of this command yet.
 no I/O, no database and no clock, holding no threshold or term of its own. Thresholds, the two
 clinical term lists, the weight-related list and the precedence statement all come from
 `rules/v1.json`, which the schema validates at load, so the ruleset version stored with an
-evaluation is enough to reproduce it. One function is meant to serve both callers — the Part B
-intake flow and the import-time history audit — but neither calls it yet: on this branch the
-engine and the matcher stand alone, and wiring them in is the detectors branch's work.
+evaluation is enough to reproduce it. One function serves both callers — the Part B intake flow, which has yet to be
+built, and the import-time history audit, which calls it over every legacy intake.
 
 Every rule is evaluated — nothing short-circuits — and precedence resolves afterwards: age under
 18 rejects outright, while any other reject yields to a flag so that a human decides.
