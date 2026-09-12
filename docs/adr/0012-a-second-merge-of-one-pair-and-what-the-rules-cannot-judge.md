@@ -1,6 +1,6 @@
 # ADR-0012: A second merge of one pair, a human's unmerge, and what the rules cannot judge
 
-- **Status:** approved
+- **Status:** accepted
 - **Date:** 2026-09-12
 - **Deciders:** Andrei Andreev
 - **Requirements:** R-A7, R-A10, R-A15, R-A16, R-A17, R-B20, R-C4 · **Amends:** ADR-0006 (what the
