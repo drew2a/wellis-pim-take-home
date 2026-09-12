@@ -51,6 +51,20 @@ export function formatSummary(s: ImportSummary): string {
   out.push(line('consent wall times in the fall-back hour', s.consentTime.ambiguous));
   out.push(line('consent wall times in the spring gap', s.consentTime.nonexistent));
   out.push('');
+  out.push('duplicate-patient candidates (ADR-0006)');
+  out.push(line('groups / rows', `${s.identity.groups} / ${s.identity.rows}`));
+  out.push(
+    line(
+      'tier 1 (auto-merged) / tier 2 / tier 3',
+      `${s.identity.tier1} / ${s.identity.tier2} / ${s.identity.tier3}`,
+    ),
+  );
+  out.push(
+    line('merged this run / already merged', `${s.identity.merged} / ${s.identity.alreadyMerged}`),
+  );
+  out.push(line('fields a survivor took from its loser', s.identity.gainedFields));
+  out.push(line('consent_states rows written', s.consentStatesWritten));
+  out.push('');
   out.push('review items (type/scope, over the whole export)');
   for (const [key, n] of sortedEntries(s.reviewItems)) out.push(line(key, n));
   out.push(line('review items inserted this run', s.reviewItemsInserted));

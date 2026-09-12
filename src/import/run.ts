@@ -3,6 +3,9 @@
 // nothing. A dry run rolls that transaction back after the counts are known; its import_runs row
 // is committed on its own so the run is on record.
 import type { Rules } from '@/rules/schema';
+import { consentStates, patientLegacyIds } from '@/db/schema';
+
+import { recomputeConsentStates } from '@/consent/states';
 
 import { loadConsentEvents } from './canonical/consent-events';
 import { humanOwnedFields } from './canonical/human-owned';
@@ -12,6 +15,11 @@ import type { Queryable } from '@/db/queryable';
 import { mapConsentEvent, type MappedConsentEvent } from './mapper/consent-event';
 import { mapIntake, type MappedIntake } from './mapper/intake';
 import { mapPatient, type MappedPatient } from './mapper/patient';
+import { candidateGroups, type CandidateGroup } from './identity/candidates';
+import { identityConflictItems } from './identity/items';
+import { mergeTier1Groups, type Tier1MergeResult } from './identity/merge-tier1';
+import { identityRows } from './identity/rows';
+import { CONSENT_TYPES } from './mapper/vocabulary';
 import type { RuleCode } from './mapper/rule-codes';
 import {
   loadRawConsentEvents,
@@ -88,6 +96,19 @@ export interface ImportSummary {
     readonly consentEvents: Counts & { readonly skipped: number };
   };
   readonly consentTime: { readonly ambiguous: number; readonly nonexistent: number };
+  /** Duplicate-patient candidates and what the importer did with them (ADR-0006). */
+  readonly identity: {
+    readonly groups: number;
+    readonly rows: number;
+    readonly tier1: number;
+    readonly tier2: number;
+    readonly tier3: number;
+    readonly merged: number;
+    readonly alreadyMerged: number;
+    readonly gainedFields: number;
+  };
+  /** Derived `consent_states` rows, one per surviving patient and declared type. */
+  readonly consentStatesWritten: number;
   /** Items the mapping raises for this export, `type/scope`, the same on every run. */
   readonly reviewItems: Readonly<Record<string, number>>;
   readonly reviewItemsInserted: number;
@@ -112,15 +133,30 @@ interface Mapped {
   readonly consents: readonly MappedConsentEvent[];
 }
 
-function buildReviewItems(
-  data: Mapped,
-  ids: Ids,
-  rules: Rules,
-  orphans: readonly MappedIntake[],
-  changedRows: readonly ChangedRawRow[],
-  repeats: readonly RepeatedRawRow[],
-  conflicts: Parameters<typeof humanOwnedConflictItems>[0],
-): ReviewItemDraft[] {
+interface ItemInputs {
+  readonly data: Mapped;
+  readonly ids: Ids;
+  readonly rules: Rules;
+  readonly orphans: readonly MappedIntake[];
+  readonly changedRows: readonly ChangedRawRow[];
+  readonly repeats: readonly RepeatedRawRow[];
+  readonly conflicts: Parameters<typeof humanOwnedConflictItems>[0];
+  readonly groups: readonly CandidateGroup[];
+  /** legacy id -> the derived consent state, as context on an identity item (ADR-0006). */
+  readonly consentStates: ReadonlyMap<string, string>;
+}
+
+function buildReviewItems({
+  data,
+  ids,
+  rules,
+  orphans,
+  changedRows,
+  repeats,
+  conflicts,
+  groups,
+  consentStates,
+}: ItemInputs): ReviewItemDraft[] {
   const shifted = shiftedPatients(data.patients);
   return [
     ...changedSourceRowItems(changedRows, ids),
@@ -134,7 +170,53 @@ function buildReviewItems(
     ...shiftedPatientItems(data, ids),
     ...orphanItems(orphans, data, ids),
     ...humanOwnedConflictItems(conflicts),
+    ...identityConflictItems(groups, { patientIds: ids.patients, consentStates }),
   ];
+}
+
+function identitySummary(
+  groups: readonly CandidateGroup[],
+  merges: Tier1MergeResult,
+): ImportSummary['identity'] {
+  const byTier = (tier: number): number => groups.filter((group) => group.tier === tier).length;
+  return {
+    groups: groups.length,
+    rows: groups.reduce((n, group) => n + group.members.length, 0),
+    tier1: byTier(1),
+    tier2: byTier(2),
+    tier3: byTier(3),
+    ...merges,
+  };
+}
+
+/**
+ * The derived consent state per legacy id, for the identity items' side-by-side payload. A
+ * merged-away row has no state of its own, so it reads the state of the patient it now belongs
+ * to — which is the state a reviewer would act on (ADR-0008 item 2).
+ */
+async function consentStatesByLegacyId(
+  db: Queryable,
+  patientIds: ReadonlyMap<string, string>,
+): Promise<ReadonlyMap<string, string>> {
+  const states = await db
+    .select({ patientId: consentStates.patientId, state: consentStates.state })
+    .from(consentStates);
+  const byPatient = new Map(states.map((row) => [row.patientId, row.state]));
+  const survivors = await db
+    .select({ legacyId: patientLegacyIds.legacyId, patientId: patientLegacyIds.patientId })
+    .from(patientLegacyIds);
+  const byLegacyId = new Map<string, string>();
+  for (const alias of survivors) {
+    const state = byPatient.get(alias.patientId);
+    if (state !== undefined) byLegacyId.set(alias.legacyId, state);
+  }
+  // A row merged away this run resolves through the alias table to its survivor, so the map
+  // above already answers for it; a row whose patient has no state is left out.
+  for (const [legacyId, patientId] of patientIds) {
+    const state = byPatient.get(patientId);
+    if (state !== undefined && !byLegacyId.has(legacyId)) byLegacyId.set(legacyId, state);
+  }
+  return byLegacyId;
 }
 
 export async function runImport(db: Queryable, options: ImportOptions): Promise<ImportSummary> {
@@ -184,17 +266,29 @@ export async function runImport(db: Queryable, options: ImportOptions): Promise<
 
       const ids: Ids = { patients: patients.ids, intakes: intakes.ids };
       const conflicts = [...patients.conflicts, ...intakes.conflicts];
-      const items = buildReviewItems(
+
+      // Identity before the derived rows: a tier-1 merge changes which patient a consent state is
+      // derived for, and the identity items carry that state as context (ADR-0006).
+      const groups = candidateGroups(identityRows(data.patients, data.intakes));
+      const declaredConsentTypes = [...CONSENT_TYPES];
+      const merges = await mergeTier1Groups(tx, groups, patients.ids, declaredConsentTypes);
+      const consentStatesWritten = await recomputeConsentStates(tx, {
+        declaredTypes: declaredConsentTypes,
+      });
+
+      const items = buildReviewItems({
         data,
         ids,
-        options.rules,
-        intakes.orphans,
-        [...rawPatients.changed, ...rawIntakes.changed, ...rawConsents.changed],
+        rules: options.rules,
+        orphans: intakes.orphans,
+        changedRows: [...rawPatients.changed, ...rawIntakes.changed, ...rawConsents.changed],
         // consents.jsonl is keyed by line number, which the parser counts, so it cannot repeat
         // a key (ADR-0004); only the two CSV files can.
-        [...rawPatients.repeats, ...rawIntakes.repeats],
+        repeats: [...rawPatients.repeats, ...rawIntakes.repeats],
         conflicts,
-      );
+        groups,
+        consentStates: await consentStatesByLegacyId(tx, patients.ids),
+      });
       const reviewItemsInserted = await insertReviewItems(tx, runId, items);
 
       const rawCounts = (r: {
@@ -237,6 +331,8 @@ export async function runImport(db: Queryable, options: ImportOptions): Promise<
           ambiguous: allRecords.filter((r) => r.detail?.ambiguous === true).length,
           nonexistent: allRecords.filter((r) => r.detail?.nonexistent === true).length,
         },
+        identity: identitySummary(groups, merges),
+        consentStatesWritten,
         reviewItems: tally(items.map((i) => `${i.type}/${i.scope}`)),
         reviewItemsInserted,
         humanOwnedConflicts: conflicts.length,

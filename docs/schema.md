@@ -145,6 +145,7 @@ erDiagram
     date signup_date "null"
     text source "null"
     uuid merged_into FK "null"
+    text created_from_legacy_id UK "null"
     integer created_by_run FK "null"
   }
   patient_legacy_ids["patient_legacy_ids — canonical"] {

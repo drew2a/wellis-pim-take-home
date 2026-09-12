@@ -219,6 +219,11 @@ export const patients = pgTable(
     source: text('source'),
     // A merged patient stays and points at the survivor (ADR-0004, ADR-0006).
     mergedInto: uuid('merged_into').references((): AnyPgColumn => patients.id),
+    // The legacy row this canonical row was built from; null for a patient the new flow created.
+    // It never changes, which is what `patient_legacy_ids` cannot promise: a merge repoints the
+    // alias, so after one the alias answers "whose records are these now" and this column answers
+    // "which exported row is this" — the question a re-run of the importer asks (ADR-0011 item 18).
+    createdFromLegacyId: text('created_from_legacy_id').unique(),
     // Null for patients created by the new intake flow (Part B).
     createdByRun: importRunRef('created_by_run'),
   },

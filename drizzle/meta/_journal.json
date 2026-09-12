@@ -36,6 +36,13 @@
       "when": 1789211449647,
       "tag": "0004_drop_evaluation_legacy_outcome",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1789214209013,
+      "tag": "0005_patient_created_from_legacy_id",
+      "breakpoints": true
     }
   ]
 }
