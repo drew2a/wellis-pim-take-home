@@ -128,7 +128,10 @@ same array.
 | 10 | `cleared: no rejecting or flagging rule matched` | |
 
 Lines 7 and 8 are ADR-0005's wording verbatim; the history audit's items quote the same strings.
-`{bmi}` is the value to one decimal — display rounding, never comparison. `{threshold}`, `{min}`
+`{bmi}` is the value to one decimal, widened to more decimals only when one decimal would
+contradict the comparison the line states: a BMI of 26.99 must not be explained as
+`BMI 27.0 below 27`, which is what plain one-decimal rounding produces at that boundary. The
+rounding is display only and never enters a comparison (Q2). `{threshold}`, `{min}`
 and `{max}` are the ruleset's numbers rendered plainly (`27`, not `27.0`). `{texts}` is the
 matching segments as typed, joined by `; `. Line 10 is appended whenever the outcome is
 `auto_cleared`, so an evaluation whose only other line is a `not evaluated` note still explains its
@@ -184,7 +187,8 @@ One matcher, `src/eligibility/terms.ts`, used by the engine and by the history a
 ### Confirmation
 
 - Unit tests per rule at its boundaries (BMI 26.99 / 27.00 / 30.00 / 30.01; age 17 years 364 days
-  and 18 years 0 days; a 29 February birthday), every reason string asserted verbatim.
+  and 18 years 0 days; a 29 February birthday), every reason string asserted verbatim, the 26.99
+  case pinning that the explanation does not round itself into a contradiction.
 - Unit tests for precedence: GLP-1 with BMI 24 → `auto_flagged` with both reasons and the
   resolution line; age 16 with a GLP-1 → `auto_rejected` with both reasons and no resolution line.
 - Unit tests for the matcher's positive and negative cases above, a `;`-separated list, a comma
