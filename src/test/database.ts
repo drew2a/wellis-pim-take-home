@@ -1,3 +1,4 @@
+import { getTableName, is, Table } from 'drizzle-orm';
 import { drizzle, type PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import { migrate } from 'drizzle-orm/postgres-js/migrator';
 import { basename } from 'node:path';
@@ -14,6 +15,12 @@ export interface TestDatabase {
   readonly sql: postgres.Sql;
   /** Applies every migration under `drizzle/`, the same files `npm run db:migrate` applies. */
   migrate(): Promise<void>;
+  /**
+   * Empties every table, evidence tables included, so a test file can share one migrated
+   * database across cases. Only a fixture may do this: the append-only trigger of ADR-0007 is
+   * switched off for the length of one transaction, and no code under `src/` does that.
+   */
+  truncateAll(): Promise<void>;
   /** Closes the connection pool and drops the database. */
   drop(): Promise<void>;
 }
@@ -72,10 +79,25 @@ export async function createTestDatabase(): Promise<TestDatabase> {
   const sql = postgres(url.href, { max: 3 });
   const db = drizzle(sql, { schema });
 
+  // Every table the schema declares, so a table added later is reset without editing a list.
+  const names: string[] = [];
+  for (const value of Object.values(schema)) {
+    if (is(value, Table)) names.push(`"${getTableName(value)}"`);
+  }
+  const tableNames = names.join(', ');
+
   return {
     db,
     sql,
     migrate: () => migrate(db, { migrationsFolder: 'drizzle' }),
+    truncateAll: async () => {
+      await sql.begin(async (tx) => {
+        // `set local` so the setting dies with the transaction: the connection goes back to a
+        // pool, and a leaked `replica` would silently disable every trigger a later test relies on.
+        await tx.unsafe('set local session_replication_role = replica');
+        await tx.unsafe(`truncate table ${tableNames} restart identity cascade`);
+      });
+    },
     drop: async () => {
       await sql.end();
       await withMaintenanceConnection(maintenanceUrl, (admin) =>

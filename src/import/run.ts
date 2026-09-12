@@ -8,7 +8,7 @@ import { loadConsentEvents } from './canonical/consent-events';
 import { humanOwnedFields } from './canonical/human-owned';
 import { loadIntakes } from './canonical/intakes';
 import { loadPatients } from './canonical/patients';
-import type { Queryable } from './db';
+import type { Queryable } from '@/db/queryable';
 import { mapConsentEvent, type MappedConsentEvent } from './mapper/consent-event';
 import { mapIntake, type MappedIntake } from './mapper/intake';
 import { mapPatient, type MappedPatient } from './mapper/patient';

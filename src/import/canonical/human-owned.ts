@@ -7,7 +7,7 @@ import { and, eq, notInArray } from 'drizzle-orm';
 import { auditEntries } from '@/db/schema';
 
 import { SYSTEM_ACTORS } from '../actors';
-import type { Queryable } from '../db';
+import type { Queryable } from '@/db/queryable';
 
 export type CanonicalEntityType = 'patient' | 'intake';
 

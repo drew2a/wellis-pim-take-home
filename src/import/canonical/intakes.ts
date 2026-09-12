@@ -6,7 +6,7 @@ import { eq, inArray } from 'drizzle-orm';
 import { auditEntries, intakes } from '@/db/schema';
 
 import { LEGACY_IMPORT_ACTOR } from '../actors';
-import type { Queryable } from '../db';
+import type { Queryable } from '@/db/queryable';
 import type { CanonicalIntake, MappedIntake } from '../mapper/intake';
 import { INTAKE_COLUMNS, diffAgainstStored } from './columns';
 import type { HumanOwned, HumanOwnedConflict } from './human-owned';

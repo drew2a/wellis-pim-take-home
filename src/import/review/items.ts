@@ -4,7 +4,7 @@
 // ON CONFLICT DO NOTHING on that key.
 import { reviewItems } from '@/db/schema';
 
-import type { Queryable } from '../db';
+import type { Queryable } from '@/db/queryable';
 
 export type ReviewItemType =
   | 'data_quality'

@@ -6,7 +6,7 @@ import { randomUUID } from 'node:crypto';
 
 import { patientLegacyIds, patients } from '@/db/schema';
 
-import type { Queryable } from '../db';
+import type { Queryable } from '@/db/queryable';
 import type { CanonicalPatient, MappedPatient } from '../mapper/patient';
 import { PATIENT_COLUMNS, diffAgainstStored } from './columns';
 import type { HumanOwned, HumanOwnedConflict } from './human-owned';

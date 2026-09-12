@@ -11,7 +11,7 @@ import { inArray } from 'drizzle-orm';
 
 import { legacyConsentEventsRaw, legacyIntakesRaw, legacyPatientsRaw } from '@/db/schema';
 
-import type { Queryable } from '../db';
+import type { Queryable } from '@/db/queryable';
 import type { CsvRecord } from '../source/csv';
 import { sha256Hex } from '../source/hash';
 import type { ConsentLine, JsonlRecord } from '../source/jsonl';

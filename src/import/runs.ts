@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 
 import { importRuns } from '@/db/schema';
 
-import type { Queryable } from './db';
+import type { Queryable } from '@/db/queryable';
 import type { ExportFiles } from './source/files';
 import { IMPORTER_VERSION } from './version';
 

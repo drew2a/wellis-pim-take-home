@@ -4,7 +4,7 @@
 // item 3). Evidence is the rule's static P-n / H-n reference merged with the per-row detail.
 import { normalisationRecords } from '@/db/schema';
 
-import type { Queryable } from '../db';
+import type { Queryable } from '@/db/queryable';
 import { RULE_CODES } from '../mapper/rule-codes';
 import type { RecordDraft } from '../mapper/types';
 import { IMPORTER_VERSION } from '../version';
