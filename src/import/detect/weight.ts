@@ -183,8 +183,14 @@ export function divergenceItems(
 
 /**
  * One vocabulary item, not one per row: that `lbs` rows do not reconcile with their own intakes is
- * a single finding about a unit spelling, and 49 identical items would be 49 copies of one
+ * a single finding about a unit spelling, and 30 identical items would be 30 copies of one
  * question (`CLAUDE.md` §5).
+ *
+ * The headline counts **patients**, because `rows` lists patients: a patient is listed only when
+ * every comparable intake of theirs diverges, which is what `divergences` means, while the intake
+ * figures count every intake outside the tolerance including those of patients the list leaves
+ * out. Both pairs stay in the payload (ADR-0011 item 19 quotes both), but the title and its
+ * evidence now say the same thing.
  */
 export function lbsReconciliationItem(
   rows: readonly WeightRow[],
@@ -209,7 +215,7 @@ export function lbsReconciliationItem(
   return {
     type: 'vocabulary',
     scope: 'vocabulary',
-    title: `weight_unit \`lbs\`: ${intakesOutside} of ${intakesCompared} intakes do not reconcile after conversion`,
+    title: `weight_unit \`lbs\`: ${diverging.length} of ${comparable.length} patients do not reconcile after conversion`,
     reason:
       'converted with 0.45359237 the signup weight leaves the tolerance the kg rows support; ' +
       'either the unit label or the intake weight is wrong for these rows',

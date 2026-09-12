@@ -226,28 +226,34 @@ export interface Survivor {
  * ADR-0006's survivor rule, in order: the row with intakes; if both or neither, the later signup;
  * if equal, the lower legacy id. A row the export gave no readable signup date counts as the
  * earlier one — the dated row is the one we can place.
+ *
+ * The clauses narrow rather than decide one at a time, which is what makes the rule work for a
+ * group of three: if any row has intakes the survivor is chosen among **those** rows, so a row
+ * with none can never win over a row with some. Every group in this export is a pair, where the
+ * two readings agree; this is the rule ADR-0006 states, applied at any size.
  */
 export function survivorOfGroup(members: readonly IdentityRow[]): Survivor {
   const withIntakes = members.filter((row) => row.intakeCount > 0);
-  const rule =
-    withIntakes.length === 1
-      ? 'survivor is the only row with intakes'
-      : sameSignup(members)
-        ? 'survivor has the lower legacy id'
-        : 'survivor signed up later';
-  const survivor =
-    withIntakes.length === 1
-      ? (withIntakes[0] as IdentityRow)
-      : [...members].sort(byLaterSignupThenLowerId)[0];
+  const candidates = withIntakes.length > 0 ? withIntakes : members;
+  const [survivor, runnerUp] = [...candidates].sort(byLaterSignupThenLowerId);
+  if (survivor === undefined) throw new Error('a candidate group has no members');
   return {
-    survivor: survivor as IdentityRow,
-    losers: members.filter((row) => row.legacyId !== (survivor as IdentityRow).legacyId),
-    rule,
+    survivor,
+    losers: members.filter((row) => row !== survivor),
+    rule: ruleFor(survivor, runnerUp),
   };
 }
 
-const sameSignup = (members: readonly IdentityRow[]): boolean =>
-  new Set(members.map((row) => row.signupDate ?? '')).size === 1;
+/**
+ * The clause that actually decided it, for the merge's audit reason: naming the signup date when
+ * the lower legacy id broke a tie would describe a rule that did not run.
+ */
+function ruleFor(survivor: IdentityRow, runnerUp: IdentityRow | undefined): string {
+  if (runnerUp === undefined) return 'survivor is the only row with intakes';
+  if ((survivor.signupDate ?? '') !== (runnerUp.signupDate ?? ''))
+    return 'survivor signed up later';
+  return 'survivor has the lower legacy id';
+}
 
 function byLaterSignupThenLowerId(a: IdentityRow, b: IdentityRow): number {
   const [left, right] = [a.signupDate ?? '', b.signupDate ?? ''];

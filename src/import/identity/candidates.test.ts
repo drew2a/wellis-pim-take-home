@@ -200,4 +200,50 @@ describe('the survivor rule (ADR-0006)', () => {
 
     expect(survivorOfGroup(pair).survivor.legacyId).toBe('recB');
   });
+
+  // Every group in this export is a pair, where "the row with intakes" and "the later signup"
+  // cannot disagree. In a group of three they can: the clauses narrow rather than decide one at a
+  // time, so a row with no intakes must never win over rows that have them (ADR-0006).
+  describe('a group of three', () => {
+    it('never lets a row with no intakes beat rows that have them', () => {
+      const group = [
+        row({ legacyId: 'recA', intakeCount: 2, signupDate: '2024-01-01' }),
+        row({ legacyId: 'recB', intakeCount: 1, signupDate: '2024-06-01' }),
+        // The latest signup of the three, and nothing to show for it.
+        row({ legacyId: 'recC', intakeCount: 0, signupDate: '2025-01-01' }),
+      ];
+
+      const { survivor, losers, rule } = survivorOfGroup(group);
+
+      expect(survivor.legacyId).toBe('recB');
+      expect(losers.map((l) => l.legacyId).sort()).toEqual(['recA', 'recC']);
+      // The signup date decided it, among the two rows the intake clause left standing.
+      expect(rule).toBe('survivor signed up later');
+    });
+
+    it('falls back to every row when none of the three has an intake', () => {
+      const group = [
+        row({ legacyId: 'recA', signupDate: '2024-01-01' }),
+        row({ legacyId: 'recB', signupDate: '2025-01-01' }),
+        row({ legacyId: 'recC', signupDate: '2023-01-01' }),
+      ];
+
+      expect(survivorOfGroup(group).survivor.legacyId).toBe('recB');
+    });
+  });
+
+  // The reason is quoted in the merge's audit entry, so it must name the clause that ran: saying
+  // "signed up later" where the tie-break decided describes a rule that did not.
+  it('names the tie-break when the tie-break decided, not the signup', () => {
+    const group = [
+      row({ legacyId: 'recC', intakeCount: 1, signupDate: '2025-01-01' }),
+      row({ legacyId: 'recB', intakeCount: 1, signupDate: '2025-01-01' }),
+      row({ legacyId: 'recA', intakeCount: 1, signupDate: '2023-01-01' }),
+    ];
+
+    const { survivor, rule } = survivorOfGroup(group);
+
+    expect(survivor.legacyId).toBe('recB');
+    expect(rule).toBe('survivor has the lower legacy id');
+  });
 });

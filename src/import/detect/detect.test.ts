@@ -244,6 +244,19 @@ describe('the weight detectors over this export', () => {
     });
     expect(item).toMatchObject({ type: 'vocabulary', scope: 'vocabulary' });
   });
+
+  // The headline is what a reviewer reads first, so it must count the same thing the evidence
+  // below it lists: `rows` holds one entry per patient whose every intake diverges.
+  it('headlines the figure its own evidence list shows', () => {
+    const item = lbsReconciliationItem(weightRows, rules, ids);
+    const payload = item?.payload as { rows: unknown[]; patients_compared: number };
+
+    expect(item?.title).toBe(
+      `weight_unit \`lbs\`: ${payload.rows.length} of ${payload.patients_compared} ` +
+        'patients do not reconcile after conversion',
+    );
+    expect(payload.rows).toHaveLength(30);
+  });
 });
 
 describe('the divergence tolerance', () => {
