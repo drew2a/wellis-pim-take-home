@@ -49,8 +49,8 @@ describe('age under 18', () => {
 
   it('does not evaluate the rule when the age is unknown, and says so', () => {
     expect(evaluateWith({ ageYears: null })).toMatchObject({
-      outcome: 'auto_cleared',
-      reasons: ['age not evaluated: date of birth missing', CLEAR_LINE],
+      outcome: 'not_evaluable',
+      reasons: ['age not evaluated: date of birth missing'],
     });
   });
 });
@@ -139,16 +139,12 @@ describe('BMI', () => {
 
   it('does not evaluate the rules when a metric is missing, and says which', () => {
     expect(evaluateWith({ weightKg: null })).toMatchObject({
-      outcome: 'auto_cleared',
-      reasons: ['BMI not evaluated: weight missing', CLEAR_LINE],
+      outcome: 'not_evaluable',
+      reasons: ['BMI not evaluated: weight missing'],
     });
-    expect(evaluateWith({ heightCm: null }).reasons).toEqual([
-      'BMI not evaluated: height missing',
-      CLEAR_LINE,
-    ]);
+    expect(evaluateWith({ heightCm: null }).reasons).toEqual(['BMI not evaluated: height missing']);
     expect(evaluateWith({ weightKg: null, heightCm: null }).reasons).toEqual([
       'BMI not evaluated: weight and height missing',
-      CLEAR_LINE,
     ]);
   });
 });
@@ -248,6 +244,36 @@ describe('precedence (Q1 default: collect every match, then resolve)', () => {
       outcome: 'auto_rejected',
       reasons: ['rejected: BMI 24.1 below 27', 'flagged: current GLP-1 medication (ozempic)'],
     });
+  });
+});
+
+describe('a missing input (ADR-0010: it removes the clearing, nothing else)', () => {
+  it('rejects when an absolute reject fired on the inputs that are present', () => {
+    expect(evaluateWith({ ageYears: 16, weightKg: null })).toMatchObject({
+      outcome: 'auto_rejected',
+      reasons: ['rejected: age 16 at submission', 'BMI not evaluated: weight missing'],
+    });
+  });
+
+  it('flags when a flag rule fired on the inputs that are present', () => {
+    expect(evaluateWith({ heightCm: null, medications: ['ozempic'] })).toMatchObject({
+      outcome: 'auto_flagged',
+      reasons: ['BMI not evaluated: height missing', 'flagged: current GLP-1 medication (ozempic)'],
+    });
+  });
+
+  it.each([
+    ['the age', { ageYears: null }],
+    ['the weight', { weightKg: null }],
+    ['the height', { heightCm: null }],
+  ])('is not evaluable, never cleared, when no rule fired and %s is missing', (_label, patch) => {
+    const result = evaluateWith(patch);
+    expect(result.outcome).toBe('not_evaluable');
+    expect(result.reasons).not.toContain(CLEAR_LINE);
+  });
+
+  it('clears only when every rule could run', () => {
+    expect(evaluateWith({}).outcome).toBe('auto_cleared');
   });
 });
 

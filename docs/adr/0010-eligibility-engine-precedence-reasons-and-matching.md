@@ -85,9 +85,26 @@ interface EligibilityInput {
   sees null.
 
 The result is `{ outcome, reasons, inputs, rulesetVersion }`, where `outcome` is
-`auto_rejected | auto_flagged | auto_cleared` and `inputs` carries the age, the weight, the height,
-the unrounded BMI and the matched terms with the text that matched them, so an evaluation explains
-itself without re-running.
+`auto_rejected | auto_flagged | auto_cleared | not_evaluable` and `inputs` carries the age, the
+weight, the height, the unrounded BMI and the matched terms with the text that matched them, so an
+evaluation explains itself without re-running.
+
+### Missing inputs: `not_evaluable`
+
+A missing input **can only remove the possibility of clearing; it never cancels a rule that fired
+on the inputs that are present.** Age 16 with no weight is still `auto_rejected`; a GLP-1
+medication with no height is still `auto_flagged`. Only when no rule matched and one of age,
+weight or height was missing is the outcome `not_evaluable` — never `auto_cleared`, because the
+engine cannot tell "every rule passed" from "a rule could not run" with a single cleared verdict,
+and a caller that switches on `outcome` would clear a patient nobody evaluated (`CLAUDE.md` §5).
+The `not evaluated` reason lines are unchanged: they are what such an evaluation explains itself
+with, and no clearing line is appended.
+
+`not_evaluable` is an engine outcome, not an intake state: **the state machine maps only the three
+`auto_*` outcomes** (R-B13's `intake_state` is unchanged). It cannot reach the state machine —
+the Part B form validates age, weight and height before `evaluate` runs, so a submitted intake
+always has them — and where it does occur, at import over legacy rows that are missing a value, the
+history audit stores it in the shadow evaluation and the import report counts it.
 
 ### Precedence, in the ruleset
 
@@ -107,7 +124,8 @@ Resolution:
 | a non-absolute reject (BMI) **and** a flag | `auto_flagged`, with the resolution line |
 | reject rule(s) only | `auto_rejected` |
 | flag rule(s) only | `auto_flagged` |
-| none | `auto_cleared` |
+| none, and age, weight and height were all present | `auto_cleared` |
+| none, and any of age, weight or height was missing | `not_evaluable` |
 
 ### Reason grammar
 
@@ -144,8 +162,9 @@ outcome (R-B9). Line 9 does not replace the reject reason it resolves: line 3 st
 and line 9 says why the outcome is not `auto_rejected`.
 
 A missing weight or height therefore never clears a patient silently: the BMI rules do not fire,
-line 6 records why, and the caller decides what that means for state — a validation error in the
-Part B form, a recorded fact in the history audit's shadow row.
+line 6 records why, and the outcome is `not_evaluable` unless another rule matched. The caller
+decides what that means — a validation error in the Part B form, a recorded fact in the history
+audit's shadow row.
 
 ### Term matching
 
@@ -183,8 +202,8 @@ One matcher, `src/eligibility/terms.ts`, used by the engine and by the history a
 - Follow-up, **the detectors branch amends `eligibility_evaluations`** (ADR-0004, ADR-0005): today
   the table stores the verdict in the legacy `outcome` vocabulary and has no column for the inputs
   the engine saw, so a stored evaluation is not explainable from its own row. It needs an
-  engine-outcome column in the `auto_*` vocabulary and an `inputs` jsonb column, decided in the ADR
-  that governs that branch.
+  engine-outcome column in the engine's own vocabulary — the three `auto_*` outcomes and
+  `not_evaluable` — and an `inputs` jsonb column, decided in the ADR that governs that branch.
 - Neutral: `ageInYears` moves from `src/import/mapper/dates.ts` to `src/eligibility/age.ts` and the
   importer imports it from there, keeping the dependency pointing at the leaf — the importer
   already depends on the engine for the shadow evaluation.
@@ -198,6 +217,9 @@ One matcher, `src/eligibility/terms.ts`, used by the engine and by the history a
   case pinning that the explanation does not round itself into a contradiction.
 - Unit tests for precedence: GLP-1 with BMI 24 → `auto_flagged` with both reasons and the
   resolution line; age 16 with a GLP-1 → `auto_rejected` with both reasons and no resolution line.
+- One unit test per outcome for a missing input: age 16 with no weight → `auto_rejected`; a GLP-1
+  with no height → `auto_flagged`; no rule matched with any of the three missing → `not_evaluable`
+  and no clearing line; everything present and nothing matched → `auto_cleared`.
 - Unit tests for the matcher's positive and negative cases above, a `;`-separated list, a comma
   that is a decimal and a comma that is a separator, and a dose in each notation seen in the export.
 - A test asserting that a ruleset without `precedence` fails at load, before `evaluate` runs.

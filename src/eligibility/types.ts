@@ -1,7 +1,16 @@
 import type { TermMatch } from './terms';
 
-/** The engine's verdict (§3B, R-B6); the state machine maps it onto an intake state. */
-export type EligibilityOutcome = 'auto_rejected' | 'auto_flagged' | 'auto_cleared';
+/**
+ * The engine's verdict (§3B, R-B6). A missing input can only remove the possibility of clearing,
+ * never cancel a rule that fired on the inputs that are present, so an evaluation that matched no
+ * rule while an input was missing is `not_evaluable` rather than `auto_cleared` (ADR-0010).
+ *
+ * The state machine maps the three `auto_*` outcomes onto an intake state; `not_evaluable` never
+ * enters it. The Part B form validates its inputs before `evaluate` runs, and at import the
+ * history audit stores the outcome in a shadow row and counts it in the report.
+ */
+export type EligibilityOutcome =
+  'auto_rejected' | 'auto_flagged' | 'auto_cleared' | 'not_evaluable';
 
 export interface EligibilityInput {
   /**

@@ -120,7 +120,10 @@ export function evaluate(input: EligibilityInput, rules: Rules): EligibilityResu
     );
   }
 
-  const outcome = resolve(rejects, flagged, rules, reasons);
+  // The age rule and the BMI rules each need an input that can be missing; when one is, that rule
+  // did not run, and the evaluation cannot end in a clearing (ADR-0010).
+  const unevaluated = ageYears === null || bmi === null;
+  const outcome = resolve(rejects, flagged, unevaluated, rules, reasons);
   return {
     outcome,
     reasons,
@@ -136,11 +139,13 @@ const inBand = (bmi: number, band: Rules['bmi']['flag_band']): boolean =>
 /**
  * Q1's default, read from the ruleset: an absolute reject wins outright, any other reject yields
  * to a flag so that a human decides, and a yielding reject keeps its reason and gains a line
- * saying why the outcome is not a rejection. Appends the resolution or clearing line to `reasons`.
+ * saying why the outcome is not a rejection. A rule that could not run removes the clearing but
+ * changes nothing else. Appends the resolution or clearing line to `reasons`.
  */
 function resolve(
   rejects: readonly Reject[],
   flagged: boolean,
+  unevaluated: boolean,
   rules: Rules,
   reasons: string[],
 ): EligibilityOutcome {
@@ -156,6 +161,9 @@ function resolve(
   }
   if (rejects.length > 0) return 'auto_rejected';
   if (flagged) return 'auto_flagged';
+  // Nothing matched, but not every rule ran: the `not evaluated` lines already say which, and the
+  // outcome must not read as a clearing to a caller that switches on it (`CLAUDE.md` §5).
+  if (unevaluated) return 'not_evaluable';
 
   reasons.push('cleared: no rejecting or flagging rule matched');
   return 'auto_cleared';
