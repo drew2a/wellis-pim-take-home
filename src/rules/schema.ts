@@ -17,6 +17,12 @@ const term = z
   .refine((t) => t === t.toLowerCase(), { message: 'terms are lowercase' });
 const termList = z.array(term).nonempty();
 
+// The rules the engine can name in a precedence statement: the two that reject (ADR-0010). A
+// ruleset marks one absolute — age under 18 is a legal gate a reviewer cannot resolve in the
+// patient's favour — and leaves the rest to yield to a flag.
+export const REJECT_RULES = ['age_below_minimum', 'bmi_below_minimum'] as const;
+export type RejectRule = (typeof REJECT_RULES)[number];
+
 export const rulesSchema = z.object({
   version: z.literal('v1'),
   plausibility: z.object({ weight_kg: bounds, height_cm: bounds }),
@@ -36,6 +42,12 @@ export const rulesSchema = z.object({
     }),
     // Q2 default: thresholds apply to the unrounded value; rounding is for display only.
     rounding: z.literal('none'),
+  }),
+  // Q1 default (ADR-0010): collect every match, then resolve. Required, so a ruleset that states
+  // no precedence fails at load rather than falling back to a default buried in the engine.
+  precedence: z.object({
+    absolute_rejects: z.array(z.enum(REJECT_RULES)),
+    flag_preempts_reject: z.boolean(),
   }),
   glp1_terms: termList,
   flag_condition_terms: termList,

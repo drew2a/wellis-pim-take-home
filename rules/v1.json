@@ -16,6 +16,10 @@
     "flag_band": { "min": 27, "max": 30, "min_inclusive": true, "max_inclusive": true },
     "rounding": "none"
   },
+  "precedence": {
+    "absolute_rejects": ["age_below_minimum"],
+    "flag_preempts_reject": true
+  },
   "glp1_terms": [
     "semaglutide",
     "ozempic",
