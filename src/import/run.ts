@@ -60,6 +60,8 @@ import {
   unseenValueItems,
   type Ids,
 } from './review/mapping-items';
+import { buildReport } from './report/build';
+import type { ImportReport } from './report/types';
 import { finishRun, startRun } from './runs';
 import { parseCsv } from './source/csv';
 import { readExportFiles, type ExportFile } from './source/files';
@@ -136,6 +138,12 @@ export interface ImportSummary {
   readonly reviewItems: Readonly<Record<string, number>>;
   readonly reviewItemsInserted: number;
   readonly humanOwnedConflicts: number;
+  /**
+   * The import report (R-A18), counted inside this run's transaction. A dry run therefore reports
+   * the database it would have left behind and still writes nothing: built after the rollback, it
+   * would count an empty database. Rendering it to `reports/` is the CLI's job (ADR-0011 item 14).
+   */
+  readonly report: ImportReport;
 }
 
 class DryRunRollback extends Error {
@@ -448,6 +456,17 @@ export async function runImport(db: Queryable, options: ImportOptions): Promise<
       });
       const reviewItemsInserted = await insertReviewItems(tx, runId, items);
 
+      const ruleHits = tally(evaluations.flatMap((evaluation) => evaluation.result.matched));
+      const report = await buildReport(tx, {
+        runId,
+        asOf: options.asOf,
+        rules: options.rules,
+        ruleHits,
+        candidateGroupSizes: groups.map((group) => group.members.length),
+        tier1HumanDecided: merges.humanDecided,
+        declaredConsentTypes,
+      });
+
       const rawCounts = (r: {
         inserted: number;
         unchanged: number;
@@ -494,11 +513,12 @@ export async function runImport(db: Queryable, options: ImportOptions): Promise<
           evaluated: evaluations.length,
           written: shadow.written,
           outcomes: shadow.outcomes,
-          ruleHits: tally(evaluations.flatMap((evaluation) => evaluation.result.matched)),
+          ruleHits,
         },
         reviewItems: tally(items.map((i) => `${i.type}/${i.scope}`)),
         reviewItemsInserted,
         humanOwnedConflicts: conflicts.length,
+        report,
       };
       if (options.dryRun) throw new DryRunRollback(result);
       return result;

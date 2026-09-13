@@ -185,6 +185,42 @@ instead and names two cells as hard disagreements (auto_rejected where legacy ap
 auto_cleared where legacy rejected), which is one named predicate the report and any later query
 share.
 
+## The import report (2026-09-12, `feature/import-report`)
+
+The last piece of Part A, and the seam the detectors branch proposed: everything that writes rows
+there, the report here. The agent read the ADRs, proposed building the report from queries against
+the loaded database, and found three things the plan had to answer before any of it was written.
+
+- **A report built after the run cannot describe a dry run.** The dry run's transaction is rolled
+  back, so a report counted afterwards would print zeros as if they were true. The report is built
+  as the last step *inside* the run's transaction instead, and the CLI — not the importer — writes
+  the files. That is ADR-0013 item 1.
+- **Two figures are not a count of any column**, and the agent said so instead of inventing a
+  query for them: the rules that fired (`eligibility_evaluations` stores the verdict and the
+  inputs, not `matched`, and ADR-0011 item 21 forbids re-deriving them from the thresholds) and
+  the consent state of a row a merge took away. Both come from the code that owns them — the
+  engine and the consent derivation — and each is cross-checked in the integration test from the
+  other side, which is where a second implementation belongs.
+- **`review_items` has no `rule` column.** The agent proposed reading the rule back out of
+  `dedupe_key` with the exact inverse of the function that wrote it, rather than adding a column
+  for the report's convenience. A schema change would have been a graded decision and a stop.
+
+What the tests found, in order:
+
+- **The 28 consent states a merge removes are not the losers' states.** `run.integration.test.ts`
+  explained them as 23 `no_record` and 5 `unknown_pre_log` rows that never appeared in the log.
+  They are not: the losers hold 14 `granted`, 10 `no_record` and 4 `revoked`, and because a merge
+  moves no event, 18 survivors that had no record of their own gain one. The report now carries
+  both state tables and the move between them, and that third table is the interesting one: for 18
+  patients the consent record was on the row we were about to stop looking at.
+- **ADR-0012's "9 unreadable outcomes" is zero.** Every one of the 13 raw outcome spellings is in
+  the mapping table, which `export-counts.test.ts` already asserted. The decision stands as a
+  guard for the next export; the count was corrected under the lifecycle's trivial-fix rule.
+- **ADR-0005's 71 intakes before a first grant reproduce as 68 + 3.** The canonical comparison
+  cannot see the three intakes whose submission date the mapper nulled as impossible, and those
+  three belong to two patients — which is also ADR-0005's 70 patients as 68 + 2. Both readings are
+  in the report with the definition each counted under, rather than one of them quietly winning.
+
 ## What I would do differently
 
 _To be filled at the end._

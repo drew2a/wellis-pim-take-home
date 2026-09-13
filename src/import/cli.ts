@@ -9,7 +9,10 @@ import { getDb } from '@/db/client';
 import { loadRules } from '@/rules/load';
 
 import { formatSummary } from './report/counts';
+import { writeReport } from './report/files';
+import { renderMarkdown } from './report/render';
 import { runImport } from './run';
+import { recordReportPath } from './runs';
 
 const isoDate = z
   .string()
@@ -63,6 +66,15 @@ async function main(): Promise<void> {
       rules: loadRules(),
     });
     console.log(formatSummary(summary));
+    // A dry run prints the report it would have written and writes nothing, so the files in
+    // `reports/` are only ever produced by a run that committed (ADR-0009 item 6).
+    if (args.dryRun) {
+      console.log(`\n${renderMarkdown(summary.report)}`);
+    } else {
+      const written = writeReport(summary.report);
+      await recordReportPath(db, summary.runId, written.json);
+      console.log(`\nreport written to ${written.json} and ${written.markdown}`);
+    }
   } finally {
     await db.$client.end();
   }

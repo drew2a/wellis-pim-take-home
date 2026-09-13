@@ -1,0 +1,1087 @@
+{
+  "asOf": "2026-09-08",
+  "importerVersion": "1.0.0",
+  "rulesetVersion": "v1",
+  "whatCameIn": {
+    "files": [
+      {
+        "name": "patients.csv",
+        "bytes": 337327,
+        "sha256": "6aba831ad75a0cc0eea27fd0722a93998105375b529980fe66f470e9a5546e72"
+      },
+      {
+        "name": "intakes.csv",
+        "bytes": 275640,
+        "sha256": "780799bb684f0f5375fe8df8f3ef4062a80ef532953612fa43a9ce88bc82a8c3"
+      },
+      {
+        "name": "consents.jsonl",
+        "bytes": 362091,
+        "sha256": "b569f2441df3cd19287f984843bff31e979f192a49dd207c12e2abedd3e8931b"
+      }
+    ],
+    "rawRows": [
+      {
+        "key": "legacy_patients_raw",
+        "rows": 2466
+      },
+      {
+        "key": "legacy_intakes_raw",
+        "rows": 2917
+      },
+      {
+        "key": "legacy_consent_events_raw",
+        "rows": 2643
+      }
+    ],
+    "repeatedKeys": 0,
+    "changedSinceEarlierRun": 0,
+    "patients": {
+      "legacyRows": 2466,
+      "surviving": 2438,
+      "mergedAway": 28,
+      "legacyIdsResolving": 2466
+    },
+    "intakes": {
+      "rows": 2917,
+      "orphans": 21
+    },
+    "consentEvents": {
+      "rows": 2643,
+      "withoutPatient": 0
+    }
+  },
+  "whatWasCleaned": {
+    "records": 13856,
+    "byRule": [
+      {
+        "rule": "DATE_IMPOSSIBLE_TO_NULL",
+        "rows": 11,
+        "blanked": 11,
+        "fields": [
+          {
+            "key": "dob",
+            "rows": 5
+          },
+          {
+            "key": "signup_date",
+            "rows": 3
+          },
+          {
+            "key": "submitted_at",
+            "rows": 3
+          }
+        ],
+        "evidence": {
+          "profile": [
+            "P-4",
+            "P-13",
+            "P-18",
+            "P-35"
+          ]
+        }
+      },
+      {
+        "rule": "DATE_ORDER_FROM_SEPARATOR",
+        "rows": 1698,
+        "blanked": 0,
+        "fields": [
+          {
+            "key": "dob",
+            "rows": 638
+          },
+          {
+            "key": "signup_date",
+            "rows": 647
+          },
+          {
+            "key": "submitted_at",
+            "rows": 413
+          }
+        ],
+        "evidence": {
+          "hypothesis": "H-1",
+          "convention": {
+            "9999-99-99": "Y-M-D",
+            "99-99-9999": "D-M-Y",
+            "99/99/9999": "M-D-Y"
+          },
+          "unambiguous": {
+            "dob": 1479,
+            "signup_date": 1499,
+            "submitted_at": 1804
+          },
+          "counterexamples": 0
+        }
+      },
+      {
+        "rule": "EMAIL_INTERNAL_SPACE_TO_NULL",
+        "rows": 10,
+        "blanked": 10,
+        "fields": [
+          {
+            "key": "email",
+            "rows": 10
+          }
+        ],
+        "evidence": {
+          "profile": "P-3",
+          "internalSpace": 10
+        }
+      },
+      {
+        "rule": "EMAIL_LOWERCASE",
+        "rows": 28,
+        "blanked": 0,
+        "fields": [
+          {
+            "key": "email",
+            "rows": 28
+          }
+        ],
+        "evidence": {
+          "profile": "P-3"
+        }
+      },
+      {
+        "rule": "EMAIL_PLACEHOLDER_TO_NULL",
+        "rows": 11,
+        "blanked": 11,
+        "fields": [
+          {
+            "key": "email",
+            "rows": 11
+          }
+        ],
+        "evidence": {
+          "profile": "P-3",
+          "placeholders": 11
+        }
+      },
+      {
+        "rule": "IMPLAUSIBLE_TO_NULL",
+        "rows": 22,
+        "blanked": 22,
+        "fields": [
+          {
+            "key": "height_cm",
+            "rows": 11
+          },
+          {
+            "key": "weight_kg",
+            "rows": 11
+          }
+        ],
+        "evidence": {
+          "profile": [
+            "P-9",
+            "P-11",
+            "P-20",
+            "P-21"
+          ],
+          "hypothesis": "H-3"
+        }
+      },
+      {
+        "rule": "NON_NUMERIC_TO_NULL",
+        "rows": 272,
+        "blanked": 272,
+        "fields": [
+          {
+            "key": "alcohol_units_week",
+            "rows": 272
+          }
+        ],
+        "evidence": {
+          "profile": "P-24"
+        }
+      },
+      {
+        "rule": "OUTCOME_OK_ASSUMED_APPROVED",
+        "rows": 441,
+        "blanked": 0,
+        "fields": [
+          {
+            "key": "outcome",
+            "rows": 441
+          }
+        ],
+        "evidence": {
+          "profile": "P-25",
+          "hypothesis": "H-4",
+          "inference": "OK appears in every year alongside approved; rejected and pending have their own spellings"
+        }
+      },
+      {
+        "rule": "PHONE_E164_NL_MOBILE",
+        "rows": 1259,
+        "blanked": 0,
+        "fields": [
+          {
+            "key": "phone",
+            "rows": 1259
+          }
+        ],
+        "evidence": {
+          "profile": "P-7",
+          "forms": [
+            "06-99999999",
+            "0699999999"
+          ]
+        }
+      },
+      {
+        "rule": "TIMESTAMP_ZONE_ASSUMED",
+        "rows": 2643,
+        "blanked": 0,
+        "fields": [
+          {
+            "key": "at",
+            "rows": 2643
+          }
+        ],
+        "evidence": {
+          "profile": "P-31",
+          "zone": "Europe/Amsterdam",
+          "inference": "every event between 07:00 and 22:59 local, none at night"
+        }
+      },
+      {
+        "rule": "VERSION_LABEL_ASSUMED_V2",
+        "rows": 394,
+        "blanked": 0,
+        "fields": [
+          {
+            "key": "questionnaire_version",
+            "rows": 394
+          }
+        ],
+        "evidence": {
+          "profile": "P-19",
+          "inference": "2.0 read as questionnaire v2"
+        }
+      },
+      {
+        "rule": "VOCAB_NONE_CONDITION",
+        "rows": 348,
+        "blanked": 0,
+        "fields": [
+          {
+            "key": "condition_report",
+            "rows": 348
+          }
+        ],
+        "evidence": {
+          "profile": "P-23"
+        }
+      },
+      {
+        "rule": "VOCAB_NONE_MEDICATION",
+        "rows": 815,
+        "blanked": 0,
+        "fields": [
+          {
+            "key": "medication_report",
+            "rows": 815
+          }
+        ],
+        "evidence": {
+          "profile": "P-22"
+        }
+      },
+      {
+        "rule": "VOCAB_OUTCOME",
+        "rows": 1836,
+        "blanked": 0,
+        "fields": [
+          {
+            "key": "outcome",
+            "rows": 1836
+          }
+        ],
+        "evidence": {
+          "profile": "P-25",
+          "hypothesis": "H-4"
+        }
+      },
+      {
+        "rule": "VOCAB_SEX",
+        "rows": 1976,
+        "blanked": 0,
+        "fields": [
+          {
+            "key": "sex",
+            "rows": 1976
+          }
+        ],
+        "evidence": {
+          "profile": "P-5",
+          "hypothesis": "H-4"
+        }
+      },
+      {
+        "rule": "VOCAB_STATUS",
+        "rows": 1917,
+        "blanked": 0,
+        "fields": [
+          {
+            "key": "status",
+            "rows": 1917
+          }
+        ],
+        "evidence": {
+          "profile": "P-12",
+          "hypothesis": "H-4",
+          "meaningLevel": {
+            "cancelled": "churned",
+            "on hold": "paused",
+            "new": "prospect",
+            "lead": "prospect"
+          }
+        }
+      },
+      {
+        "rule": "WEIGHT_LBS_TO_KG",
+        "rows": 55,
+        "blanked": 0,
+        "fields": [
+          {
+            "key": "weight_kg",
+            "rows": 55
+          }
+        ],
+        "evidence": {
+          "profile": [
+            "P-9",
+            "P-10"
+          ],
+          "hypothesis": "H-2",
+          "factor": 0.45359237
+        }
+      },
+      {
+        "rule": "WEIGHT_UNIT_MISSING_TO_NULL",
+        "rows": 18,
+        "blanked": 18,
+        "fields": [
+          {
+            "key": "weight_kg",
+            "rows": 18
+          }
+        ],
+        "evidence": {
+          "profile": "P-10",
+          "hypothesis": "H-2",
+          "rows": 18
+        }
+      },
+      {
+        "rule": "WHITESPACE_TRIM",
+        "rows": 102,
+        "blanked": 0,
+        "fields": [
+          {
+            "key": "email",
+            "rows": 30
+          },
+          {
+            "key": "full_name",
+            "rows": 72
+          }
+        ],
+        "evidence": {
+          "profile": [
+            "P-2",
+            "P-3"
+          ]
+        }
+      }
+    ],
+    "daylightSaving": {
+      "ambiguous": 0,
+      "nonexistent": 0
+    }
+  },
+  "whatWasQuarantined": {
+    "items": 336,
+    "byStatus": [
+      {
+        "key": "open",
+        "rows": 336
+      }
+    ],
+    "byTypeAndScope": [
+      {
+        "type": "clinical_history",
+        "scope": "row",
+        "items": 115
+      },
+      {
+        "type": "consent",
+        "scope": "row",
+        "items": 83
+      },
+      {
+        "type": "data_quality",
+        "scope": "row",
+        "items": 62
+      },
+      {
+        "type": "duplicate_intake",
+        "scope": "row",
+        "items": 5
+      },
+      {
+        "type": "identity_conflict",
+        "scope": "row",
+        "items": 42
+      },
+      {
+        "type": "orphan_intake",
+        "scope": "row",
+        "items": 21
+      },
+      {
+        "type": "vocabulary",
+        "scope": "vocabulary",
+        "items": 8
+      }
+    ],
+    "byRule": [
+      {
+        "type": "clinical_history",
+        "scope": "row",
+        "rule": "HISTORY_FLAG_CONDITION",
+        "items": 15
+      },
+      {
+        "type": "clinical_history",
+        "scope": "row",
+        "rule": "HISTORY_GLP1_MEDICATION",
+        "items": 42
+      },
+      {
+        "type": "clinical_history",
+        "scope": "row",
+        "rule": "HISTORY_MINOR_NOT_REJECTED",
+        "items": 58
+      },
+      {
+        "type": "consent",
+        "scope": "row",
+        "rule": "CONSENT_CONFLICT",
+        "items": 7
+      },
+      {
+        "type": "consent",
+        "scope": "row",
+        "rule": "CONSENT_NO_RECORD_WHILE_ACTIVE",
+        "items": 57
+      },
+      {
+        "type": "consent",
+        "scope": "row",
+        "rule": "CONSENT_REVOKED_WHILE_ACTIVE",
+        "items": 19
+      },
+      {
+        "type": "data_quality",
+        "scope": "row",
+        "rule": "DATE_IMPOSSIBLE_TO_NULL",
+        "items": 8
+      },
+      {
+        "type": "data_quality",
+        "scope": "row",
+        "rule": "DOB_READING_FLIPS_MINOR",
+        "items": 6
+      },
+      {
+        "type": "data_quality",
+        "scope": "row",
+        "rule": "ELFPROEF",
+        "items": 17
+      },
+      {
+        "type": "data_quality",
+        "scope": "row",
+        "rule": "EMAIL_INTERNAL_SPACE_TO_NULL",
+        "items": 10
+      },
+      {
+        "type": "data_quality",
+        "scope": "row",
+        "rule": "EMAIL_PLACEHOLDER_TO_NULL",
+        "items": 11
+      },
+      {
+        "type": "data_quality",
+        "scope": "row",
+        "rule": "IMPLAUSIBLE_TO_NULL",
+        "items": 10
+      },
+      {
+        "type": "duplicate_intake",
+        "scope": "row",
+        "rule": "SAME_DAY_INTAKES",
+        "items": 5
+      },
+      {
+        "type": "identity_conflict",
+        "scope": "row",
+        "rule": "IDENTITY_TIER_2",
+        "items": 3
+      },
+      {
+        "type": "identity_conflict",
+        "scope": "row",
+        "rule": "IDENTITY_TIER_3",
+        "items": 39
+      },
+      {
+        "type": "orphan_intake",
+        "scope": "row",
+        "rule": "ORPHAN",
+        "items": 21
+      },
+      {
+        "type": "vocabulary",
+        "scope": "vocabulary",
+        "rule": "BSN_RETENTION",
+        "items": 1
+      },
+      {
+        "type": "vocabulary",
+        "scope": "vocabulary",
+        "rule": "CONSENT_EVENT_IN_THE_FUTURE",
+        "items": 1
+      },
+      {
+        "type": "vocabulary",
+        "scope": "vocabulary",
+        "rule": "DATE_ORDER_FROM_SEPARATOR",
+        "items": 1
+      },
+      {
+        "type": "vocabulary",
+        "scope": "vocabulary",
+        "rule": "NON_NUMERIC_TO_NULL",
+        "items": 1
+      },
+      {
+        "type": "vocabulary",
+        "scope": "vocabulary",
+        "rule": "OUTCOME_OK_ASSUMED_APPROVED",
+        "items": 1
+      },
+      {
+        "type": "vocabulary",
+        "scope": "vocabulary",
+        "rule": "VERSION_LABEL_ASSUMED_V2",
+        "items": 1
+      },
+      {
+        "type": "vocabulary",
+        "scope": "vocabulary",
+        "rule": "WEIGHT_LBS_DO_NOT_RECONCILE",
+        "items": 1
+      },
+      {
+        "type": "vocabulary",
+        "scope": "vocabulary",
+        "rule": "WEIGHT_UNIT_MISSING_TO_NULL",
+        "items": 1
+      }
+    ]
+  },
+  "rulesApplied": [
+    {
+      "statement": "The separator says the order: `9999-99-99` is Y-M-D, `99-99-9999` D-M-Y, `99/99/9999` M-D-Y",
+      "rule": "DATE_ORDER_FROM_SEPARATOR",
+      "rows": 1698,
+      "evidence": {
+        "hypothesis": "H-1",
+        "convention": {
+          "9999-99-99": "Y-M-D",
+          "99-99-9999": "D-M-Y",
+          "99/99/9999": "M-D-Y"
+        },
+        "unambiguous": {
+          "dob": 1479,
+          "signup_date": 1499,
+          "submitted_at": 1804
+        },
+        "counterexamples": 0
+      }
+    },
+    {
+      "statement": "The outcome spelling `OK` means approved",
+      "rule": "OUTCOME_OK_ASSUMED_APPROVED",
+      "rows": 441,
+      "evidence": {
+        "profile": "P-25",
+        "hypothesis": "H-4",
+        "inference": "OK appears in every year alongside approved; rejected and pending have their own spellings"
+      }
+    },
+    {
+      "statement": "The questionnaire label `2.0` means v2",
+      "rule": "VERSION_LABEL_ASSUMED_V2",
+      "rows": 394,
+      "evidence": {
+        "profile": "P-19",
+        "inference": "2.0 read as questionnaire v2"
+      }
+    },
+    {
+      "statement": "A weight with no unit is stored as null, never converted: reading it as pounds is a proposal on one vocabulary item, applied only by a human",
+      "rule": "WEIGHT_UNIT_MISSING_TO_NULL",
+      "rows": 18,
+      "evidence": {
+        "profile": "P-10",
+        "hypothesis": "H-2",
+        "rows": 18
+      }
+    },
+    {
+      "statement": "Legacy consent times are Europe/Amsterdam wall time, converted to an instant",
+      "rule": "TIMESTAMP_ZONE_ASSUMED",
+      "rows": 2643,
+      "evidence": {
+        "profile": "P-31",
+        "zone": "Europe/Amsterdam",
+        "inference": "every event between 07:00 and 22:59 local, none at night"
+      }
+    },
+    {
+      "statement": "An intake weight is in kilograms: intakes.csv carries no unit column, and the values sit where the patient rows in `kg` sit",
+      "rule": null,
+      "rows": 2911,
+      "evidence": {
+        "profile": [
+          "P-20",
+          "P-9"
+        ],
+        "hypothesis": "H-2"
+      }
+    },
+    {
+      "statement": "Signup weight and intake weight may legitimately differ; the divergence tolerance is derived from the `kg` rows and only a ratio outside it is a question",
+      "rule": null,
+      "rows": null,
+      "evidence": {
+        "tolerance": {
+          "min": 0.9,
+          "max": 1.1
+        },
+        "profile": "P-20",
+        "hypothesis": "H-2"
+      }
+    }
+  ],
+  "identity": {
+    "candidates": 70,
+    "groupSizes": [
+      {
+        "key": "2",
+        "rows": 70
+      }
+    ],
+    "tier1Merged": 28,
+    "tier2": 3,
+    "tier3": 39,
+    "tier1HumanDecided": 0,
+    "survivorRule": [
+      {
+        "key": "survivor has the lower legacy id",
+        "rows": 19
+      },
+      {
+        "key": "survivor is the only row with intakes",
+        "rows": 9
+      }
+    ],
+    "fieldsGainedFromLosers": 0
+  },
+  "consent": {
+    "statesPerPatient": [
+      {
+        "key": "conflict",
+        "rows": 7
+      },
+      {
+        "key": "granted",
+        "rows": 2091
+      },
+      {
+        "key": "no_record",
+        "rows": 51
+      },
+      {
+        "key": "revoked",
+        "rows": 269
+      },
+      {
+        "key": "unknown_pre_log",
+        "rows": 20
+      }
+    ],
+    "statesPerLegacyRow": [
+      {
+        "key": "conflict",
+        "rows": 7
+      },
+      {
+        "key": "granted",
+        "rows": 2091
+      },
+      {
+        "key": "no_record",
+        "rows": 74
+      },
+      {
+        "key": "revoked",
+        "rows": 269
+      },
+      {
+        "key": "unknown_pre_log",
+        "rows": 25
+      }
+    ],
+    "statesOfMergedAwayRows": [
+      {
+        "key": "granted",
+        "rows": 14
+      },
+      {
+        "key": "no_record",
+        "rows": 10
+      },
+      {
+        "key": "revoked",
+        "rows": 4
+      }
+    ],
+    "statesChangedByMerge": [
+      {
+        "key": "no_record -> granted",
+        "rows": 9
+      },
+      {
+        "key": "no_record -> revoked",
+        "rows": 4
+      },
+      {
+        "key": "unknown_pre_log -> granted",
+        "rows": 5
+      }
+    ],
+    "itemsPerPatient": [
+      {
+        "key": "CONSENT_CONFLICT",
+        "rows": 7
+      },
+      {
+        "key": "CONSENT_NO_RECORD_WHILE_ACTIVE",
+        "rows": 57
+      },
+      {
+        "key": "CONSENT_REVOKED_WHILE_ACTIVE",
+        "rows": 19
+      }
+    ],
+    "itemsPerLegacyRow": [
+      {
+        "key": "CONSENT_CONFLICT",
+        "rows": 7
+      },
+      {
+        "key": "CONSENT_NO_RECORD_WHILE_ACTIVE",
+        "rows": 73
+      },
+      {
+        "key": "CONSENT_REVOKED_WHILE_ACTIVE",
+        "rows": 19
+      }
+    ],
+    "timing": {
+      "intakesBeforeFirstGrant": 68,
+      "patientsWithAnIntakeBeforeFirstGrant": 68,
+      "intakesAfterRevocationWithNoLaterGrant": 83,
+      "intakesExcludedForAnUnreadableDate": 3,
+      "patientsExcludedForAnUnreadableDate": 2
+    },
+    "futureDatedEvents": [
+      {
+        "key": "granted",
+        "rows": 3
+      },
+      {
+        "key": "revoked",
+        "rows": 66
+      }
+    ]
+  },
+  "shadowEvaluation": {
+    "evaluations": 2917,
+    "matrix": [
+      {
+        "engineOutcome": "auto_cleared",
+        "legacyOutcome": "approved",
+        "intakes": 1642
+      },
+      {
+        "engineOutcome": "auto_cleared",
+        "legacyOutcome": "pending",
+        "intakes": 256
+      },
+      {
+        "engineOutcome": "auto_cleared",
+        "legacyOutcome": "rejected",
+        "intakes": 406
+      },
+      {
+        "engineOutcome": "auto_flagged",
+        "legacyOutcome": "approved",
+        "intakes": 222
+      },
+      {
+        "engineOutcome": "auto_flagged",
+        "legacyOutcome": "pending",
+        "intakes": 38
+      },
+      {
+        "engineOutcome": "auto_flagged",
+        "legacyOutcome": "rejected",
+        "intakes": 71
+      },
+      {
+        "engineOutcome": "auto_rejected",
+        "legacyOutcome": "approved",
+        "intakes": 186
+      },
+      {
+        "engineOutcome": "auto_rejected",
+        "legacyOutcome": "pending",
+        "intakes": 35
+      },
+      {
+        "engineOutcome": "auto_rejected",
+        "legacyOutcome": "rejected",
+        "intakes": 33
+      },
+      {
+        "engineOutcome": "not_evaluable",
+        "legacyOutcome": "approved",
+        "intakes": 18
+      },
+      {
+        "engineOutcome": "not_evaluable",
+        "legacyOutcome": "pending",
+        "intakes": 3
+      },
+      {
+        "engineOutcome": "not_evaluable",
+        "legacyOutcome": "rejected",
+        "intakes": 7
+      }
+    ],
+    "hardDisagreements": {
+      "autoRejectedWhereLegacyApproved": 186,
+      "autoClearedWhereLegacyRejected": 406
+    },
+    "notEvaluable": 28,
+    "ruleHits": [
+      {
+        "key": "age_below_minimum",
+        "rows": 70
+      },
+      {
+        "key": "bmi_band_without_condition",
+        "rows": 283
+      },
+      {
+        "key": "bmi_below_minimum",
+        "rows": 191
+      },
+      {
+        "key": "flag_condition",
+        "rows": 15
+      },
+      {
+        "key": "glp1_medication",
+        "rows": 42
+      }
+    ],
+    "itemsRaised": [
+      {
+        "rule": "HISTORY_FLAG_CONDITION",
+        "legacyOutcome": "approved",
+        "intakes": 10
+      },
+      {
+        "rule": "HISTORY_FLAG_CONDITION",
+        "legacyOutcome": "pending",
+        "intakes": 2
+      },
+      {
+        "rule": "HISTORY_FLAG_CONDITION",
+        "legacyOutcome": "rejected",
+        "intakes": 3
+      },
+      {
+        "rule": "HISTORY_GLP1_MEDICATION",
+        "legacyOutcome": "approved",
+        "intakes": 28
+      },
+      {
+        "rule": "HISTORY_GLP1_MEDICATION",
+        "legacyOutcome": "pending",
+        "intakes": 7
+      },
+      {
+        "rule": "HISTORY_GLP1_MEDICATION",
+        "legacyOutcome": "rejected",
+        "intakes": 7
+      },
+      {
+        "rule": "HISTORY_MINOR_NOT_REJECTED",
+        "legacyOutcome": "approved",
+        "intakes": 48
+      },
+      {
+        "rule": "HISTORY_MINOR_NOT_REJECTED",
+        "legacyOutcome": "pending",
+        "intakes": 10
+      }
+    ],
+    "unreadableOutcomeCarveOut": {
+      "unreadableOutcomes": 0,
+      "minorsAmongThem": 0
+    }
+  },
+  "notInExportNotes": [
+    {
+      "finding": "`source` carries a sixth funnel the notes do not name: `referral`",
+      "numbers": {
+        "patients": 389
+      },
+      "evidence": "P-14",
+      "notCovered": "the notes list `typeform`, `website`, campaign tags and `import` and stop there"
+    },
+    {
+      "finding": "`OK` is not a spelling of approved but an inference over medical decisions; it has its own rule code and a confirmation item, so a \"no\" identifies every row to remap",
+      "numbers": {
+        "intakes": 441
+      },
+      "evidence": "P-25",
+      "notCovered": "the notes say outcomes are \"spelled many ways\", which `OK` is not"
+    },
+    {
+      "finding": "Intakes with no questionnaire label at all: the ruleset that evaluated them is not recorded anywhere, and `2.0` sits beside `v2` with nothing to tell them apart",
+      "numbers": {
+        "intakesWithNoLabel": 410,
+        "intakesLabelled2Point0": 394
+      },
+      "evidence": "P-19",
+      "notCovered": "the notes say only that \"labelling discipline varied\""
+    },
+    {
+      "finding": "Whole patient records dated in 2062 — decades into the future, consistently across all three files; their dates of birth are normal, so it is the row that moved, not a digit",
+      "numbers": {
+        "patientRows": 3,
+        "intakeRows": 3,
+        "consentEvents": 3
+      },
+      "evidence": "P-13, P-18, P-31",
+      "notCovered": "the notes warn about date *ordering*, not about dates that are impossible"
+    },
+    {
+      "finding": "Consent events dated after the run's --as-of (2026-09-08), revocations included",
+      "numbers": {
+        "events": 69,
+        "granted": 3,
+        "revoked": 66
+      },
+      "evidence": "P-31",
+      "notCovered": "the notes question the log only *before* 2023"
+    },
+    {
+      "finding": "Valid BSNs carried by more than one patient row. Where the two rows were identical on identity the importer merged them and the value now belongs to one patient; the rest are an identity collision on a national identifier, not a formatting problem",
+      "numbers": {
+        "bsnValues": 30,
+        "valuesResolvedByTier1Merge": 9,
+        "rowsThoseMergesCovered": 18,
+        "valuesStillOnMoreThanOneSurvivingPatient": 21,
+        "survivingPatientsSharingThem": 42
+      },
+      "evidence": "P-6, P-34",
+      "notCovered": "the notes say BSNs were \"never validated\", which is a claim about their shape"
+    },
+    {
+      "finding": "The weights left without a unit are not a leftover: read as kilograms most are outside any plausible adult range, read as pounds they are ordinary. Stored null, asked once",
+      "numbers": {
+        "patients": 18,
+        "above200AsKilograms": 11
+      },
+      "evidence": "P-10, H-2",
+      "notCovered": "the notes promise the unit was backfilled \"where obvious\" and say no more"
+    },
+    {
+      "finding": "Free-text history names contraindications on intakes the legacy process approved: GLP-1 medication, and thyroid cancer or pancreatitis",
+      "numbers": {
+        "glp1Intakes": 42,
+        "glp1Approved": 28,
+        "flagConditionIntakes": 15,
+        "flagConditionApproved": 10
+      },
+      "evidence": "P-22, P-23",
+      "notCovered": "the notes describe both columns as free text that was never normalised, and say nothing about what is in them"
+    },
+    {
+      "finding": "Intakes from patients under 18 at submission, most of them not rejected — a legal question rather than a disagreement about the rules",
+      "numbers": {
+        "intakes": 70,
+        "approvedOrPending": 58,
+        "rejected": 12
+      },
+      "evidence": "P-4, H-1",
+      "notCovered": "the notes say nothing about age"
+    },
+    {
+      "finding": "One patient submitting two intakes on one day, which no rule in the export forbids",
+      "numbers": {
+        "pairs": 5
+      },
+      "evidence": "P-27",
+      "notCovered": "the notes warn about people signing up twice, which is a duplicate *patient*, not a duplicate submission"
+    },
+    {
+      "finding": "The consent log is not in time order: read as an append-only file, last line wins, it reports a different state for these patients than their timestamps do",
+      "numbers": {
+        "patients": 131
+      },
+      "evidence": "P-33",
+      "notCovered": "the notes call the file append-only, which is what makes the order look safe"
+    },
+    {
+      "finding": "Patients with no consent event at all, and `v1` consent-text versions still appearing after the first `v2` event (2024-01-01): silence before 2023 cannot be told from a lost record",
+      "numbers": {
+        "patientsWithNoRecord": 99,
+        "eventsBefore2023": 477,
+        "patientsWithNoEventSince2023": 432,
+        "eventsStillLabelledV1AfterIt": 64
+      },
+      "evidence": "P-30, P-31, P-32",
+      "notCovered": "the notes say the log is \"believed complete from 2023 onwards\" and leave the rest open"
+    },
+    {
+      "finding": "A reviewer note saying \"twijfel, toch akkoord\" (\"doubt, approved anyway\") on intakes whose recorded outcome is a rejection: the note and the outcome disagree",
+      "numbers": {
+        "intakes": 73
+      },
+      "evidence": "P-26",
+      "notCovered": "the notes describe `reviewer_note` as free text and nothing more"
+    }
+  ]
+}
