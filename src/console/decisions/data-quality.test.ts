@@ -121,9 +121,10 @@ describe('setting a value by hand', () => {
     ).toThrow(/no row/);
   });
 
-  // The 11 unreadable submission dates: the item names the intake **and** its patient, and only
-  // the intake has the column. Correcting the patient is not a thing the server can do, and
-  // before ADR-0026 item 2 the screen offered it anyway.
+  // An unreadable submission date: the item names the intake **and** its patient, and only the
+  // intake has the column. Correcting the patient is not a thing the server can do, and the screen
+  // offered it anyway. This export raises no such item, so this test is what covers the branch
+  // (ADR-0026 item 1).
   it('corrects submitted_at on the intake, though the item names a patient too', () => {
     const decision = decideDataQuality(
       item({ patientId: PATIENT, intakeId: INTAKE, field: 'submitted_at' }),

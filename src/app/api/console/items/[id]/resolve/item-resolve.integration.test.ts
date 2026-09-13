@@ -562,9 +562,10 @@ describe('resolving a data_quality item', () => {
     expect(closed?.status).toBe('dismissed');
   });
 
-  // One of the 11 unreadable submission dates. The item names the intake **and** the patient, and
-  // only the intake has the column: routing it to the patient made the correction impossible and
-  // answered every attempt with a 400 naming a column nobody could see (ADR-0026 item 1).
+  // An unreadable submission date. The item names the intake **and** the patient, and only the
+  // intake has the column: routing it to the patient made the correction impossible and answered
+  // every attempt with a 400 naming a column nobody could see (ADR-0026 item 1). No item in this
+  // export takes that shape, which is why nothing but this test reaches it.
   it('writes an unreadable submitted_at onto the intake the item names', async () => {
     const patientId = await patient('recA', null);
     const [intake] = await db

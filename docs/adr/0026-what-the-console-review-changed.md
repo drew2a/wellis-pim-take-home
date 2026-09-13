@@ -38,13 +38,20 @@ the rows an item names holds that column**. The patient is asked first, so `weig
 `height_cm` still correct the patient's copy as before; a field only the intake has reaches the
 intake.
 
-The 11 `DATE_UNREADABLE_TO_NULL` / `DATE_IMPOSSIBLE_TO_NULL` items name the intake **and** its
-patient, and `data_quality` routed every item with a patient to the patient. Only the intake has
-`submitted_at`, so the buttons the screen offered were answered with a 400 naming a column the
-reviewer could not see, and the screen said the field "is now empty" whatever the intake held.
-A reviewer reading the raw `32/13/2024` next to the patient's other records can often date the
-submission, and there is no reason the one value the item exists for should be the one value the
-console cannot write.
+`intakeFlagItems` raises a `data_quality` item naming the intake **and** its patient for a
+submission date it could not read, and `data_quality` routed every item with a patient to the
+patient. Only the intake has `submitted_at`, so the buttons the screen offered would be answered
+with a 400 naming a column the reviewer could not see, and the screen would report the field empty
+whatever the intake held. A reviewer reading the raw `32/13/2024` next to the patient's other
+records can often date the submission, and there is no reason the one value the item exists for
+should be the one value the console cannot write.
+
+**This export produces none of these items, and that is why nothing caught it.** All 62
+`data_quality` items are about a legacy patient — `select count(*) from review_items where
+type='data_quality' and intake_id is not null` is `0` — so the broken branch is one no screen in
+this database reaches. The 11 date items the module header counts are patient `dob`, which route
+to the patient and always worked. The fix is to a latent path, and its test is the only thing that
+exercises it.
 
 ### 2. An item with no row to correct is dismiss-only, and the screen says so in one line
 
@@ -101,8 +108,9 @@ common; today there are none.
 
 - Good: the screen and the server answer the same question — `writableTarget` — so what the console
   offers and what the route accepts cannot drift.
-- Good: 11 unreadable submission dates become correctable, and the 3 unreadable consent timestamps
-  stop pretending to be.
+- Good: an unreadable submission date becomes correctable, and an unreadable consent timestamp
+  stops pretending to be — neither of which this export happens to contain, so both are covered by
+  tests rather than by the queue.
 - Good: the merge screen is correct for a group of any size, and it is unchanged for a pair, which
   is every group in today's export.
 - **Bad, and not built: a correction can leave a shadow evaluation stale.** `eligibility_evaluations`

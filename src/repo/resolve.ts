@@ -171,9 +171,11 @@ const FIELDS: Readonly<Record<ResolvableEntity, Readonly<Record<string, Resolvab
   intake: {
     // The orphan's resolution: an intake that referenced a patient who is not in the export.
     patient_id: { property: 'patientId', schema: nullable(z.uuid()) },
-    // The 11 dates the mapper could not read (ADR-0026 item 1). Writable on the intake and on
-    // nothing else: it is the intake's own column, and a `data_quality` item that names it also
-    // names the patient, which is why `writableTarget` asks which row owns the field.
+    // A submission date the mapper could not read (ADR-0026 item 1). Writable on the intake and
+    // on nothing else: it is the intake's own column, and a `data_quality` item that names it also
+    // names the patient, which is why `writableTarget` asks which row owns the field. This export
+    // raises no such item — every `data_quality` item in it is about a patient — so the tests are
+    // the only thing that reaches this.
     submitted_at: { property: 'submittedAt', schema: nullable(calendarDate) },
     weight_kg: { property: 'weightKg', schema: nullable(oneDecimal) },
     height_cm: { property: 'heightCm', schema: nullable(wholeNumber) },
