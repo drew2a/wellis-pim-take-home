@@ -5,7 +5,7 @@ import Link from 'next/link';
 import type { ReactNode } from 'react';
 
 import type { TimelineEntry } from '@/repo/patient-detail';
-import { Raw } from '@/ui';
+import { Caption, Mono, Raw } from '@/ui';
 
 function changeLine(change: {
   field: string;
@@ -31,6 +31,11 @@ function changeLine(change: {
  * — so its changes list would print the same arrow a second time; the row shows the change and
  * then the rule code that made it. A transition's reason is a sentence about the move, and its
  * changes say which fields moved, so both are shown: there is nothing repeated to drop.
+ *
+ * The rule code is on every row that has one, never hidden by kind: it is the link from a patient
+ * to the "rules applied" table of the import report, and the visible evidence that every change we
+ * made names the rule that made it (`CLAUDE.md` §5). It is set second and small, because what a
+ * reviewer reads is the change; the code is what they cite once they have.
  */
 export function entryValue(entry: TimelineEntry): ReactNode {
   const states =
@@ -44,7 +49,9 @@ export function entryValue(entry: TimelineEntry): ReactNode {
       {entry.rule !== null && (
         <>
           {' '}
-          <Raw>{entry.rule}</Raw>
+          <Caption>
+            <Mono>{entry.rule}</Mono>
+          </Caption>
         </>
       )}
       {changes.map((change, index) => (
