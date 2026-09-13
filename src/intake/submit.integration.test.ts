@@ -87,6 +87,56 @@ async function counts(): Promise<Record<string, number>> {
   return out;
 }
 
+// ADR-0017: the day an intake is measured against is the clinic's day. Getting this wrong does not
+// merely mis-date a row — an 18th birthday read a day early is `age_below_minimum`, which
+// `rules/v1.json` lists under `precedence.absolute_rejects`, so no doctor can approve the intake
+// afterwards (ADR-0014 item 5).
+describe('the day a submission is measured against', () => {
+  // 22:30 UTC in July is 00:30 the next morning in Amsterdam.
+  const JUST_AFTER_LOCAL_MIDNIGHT = new Date('2026-07-14T22:30:00Z');
+  const EIGHTEENTH_BIRTHDAY_IS_15_JULY = '2008-07-15';
+
+  it('treats a patient whose 18th birthday is the clinic’s today as 18, not 17', async () => {
+    const id = await draft(
+      complete({
+        identity: {
+          fullName: 'Tess Jansen',
+          email: 't@example.com',
+          dob: EIGHTEENTH_BIRTHDAY_IS_15_JULY,
+        },
+      }),
+    );
+
+    const outcome = await submitIntake(db, { intakeId: id, now: JUST_AFTER_LOCAL_MIDNIGHT, rules });
+
+    expect(outcome.kind).toBe('submitted');
+    if (outcome.kind !== 'submitted') return;
+    expect(outcome.result.inputs.ageYears).toBe(18);
+    expect(outcome.result.reasons.join('; ')).not.toContain('under the minimum age');
+    expect(outcome.state).not.toBe('auto_rejected');
+  });
+
+  it('stamps the clinic’s day on the intake and the patient, not the UTC one', async () => {
+    const id = await draft(complete());
+
+    await submitIntake(db, { intakeId: id, now: JUST_AFTER_LOCAL_MIDNIGHT, rules });
+
+    const [intake] = await db.select().from(intakes).where(eq(intakes.id, id));
+    expect(intake?.submittedAt).toBe('2026-07-15');
+    const [patient] = await db.select().from(patients);
+    expect(patient?.signupDate).toBe('2026-07-15');
+  });
+
+  it('keeps the consent event as the instant it happened, not the day', async () => {
+    const id = await draft(complete());
+
+    await submitIntake(db, { intakeId: id, now: JUST_AFTER_LOCAL_MIDNIGHT, rules });
+
+    const [event] = await db.select().from(consentEvents);
+    expect(event?.at).toEqual(JUST_AFTER_LOCAL_MIDNIGHT);
+  });
+});
+
 describe('the consent gate (ADR-0015 item 4)', () => {
   it.each([
     ['absent', {}],

@@ -45,6 +45,7 @@ import {
   type PatientMatch,
 } from './detectors';
 import { stateForOutcome, type IntakeState } from './machine';
+import { dayOf } from './today';
 import { transitionIntake } from './transition';
 
 const FORM = { kind: 'process', name: INTAKE_FORM_ACTOR } as const;
@@ -71,8 +72,6 @@ export type SubmitOutcome =
 
 const issuesOf = (error: z.ZodError): ValidationIssue[] =>
   error.issues.map((issue) => ({ path: issue.path.join('.'), message: issue.message }));
-
-const iso = (at: Date): string => at.toISOString().slice(0, 10);
 
 /**
  * Everything the canonical patient row differs from what the patient typed, as normalisation
@@ -168,14 +167,17 @@ async function findMatches(
 
 export interface SubmitOptions {
   readonly intakeId: string;
-  /** The submission instant. Age, the signup date and the consent event are all measured from it. */
+  /**
+   * The submission instant. The consent event keeps it as an instant; age, the signup date and
+   * `submitted_at` are the clinic's calendar day containing it (ADR-0017).
+   */
   readonly now: Date;
   readonly rules?: Rules;
 }
 
 export async function submitIntake(db: Queryable, options: SubmitOptions): Promise<SubmitOutcome> {
   const rules = options.rules ?? currentRules();
-  const todayIso = iso(options.now);
+  const todayIso = dayOf(options.now);
 
   return db.transaction(async (tx) => {
     const [intake] = await tx
