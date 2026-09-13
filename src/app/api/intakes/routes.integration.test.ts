@@ -6,7 +6,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 
 import IntakePage from '@/app/intake/page';
 import { CONSENT_TEXT_VERSION } from '@/consent/text';
-import { auditEntries, intakes } from '@/db/schema';
+import { auditEntries, eligibilityEvaluations, intakes } from '@/db/schema';
 import type { IntakeStep } from '@/intake/answers';
 import { createTestDatabase, type TestDatabase, type TestDb } from '@/test/database';
 
@@ -229,6 +229,20 @@ describe('PATCH /api/intakes/:id', () => {
     ).toBe(404);
   });
 
+  // A draft with no answers is a broken invariant, not a case to default around: papering over it
+  // produced a 400 naming `formVersion`, a path no step owns, so the patient saw a message with no
+  // field to correct (`CLAUDE.md` §2).
+  it('fails loudly rather than inventing a form version for a draft with no answers', async () => {
+    const id = await newDraft();
+    await db.update(intakes).set({ answers: null }).where(eq(intakes.id, id));
+
+    const response = await patch(id, 'metrics', STEPS.metrics);
+
+    expect(response.status).toBe(500);
+    const [row] = await db.select().from(intakes).where(eq(intakes.id, id));
+    expect(row?.answers).toBeNull();
+  });
+
   it('refuses to change an intake that has already been submitted', async () => {
     const id = await newDraft();
     await fillIn(id);
@@ -310,6 +324,77 @@ describe('GET /api/intakes/:id', () => {
     };
     expect(afterwards.state).toBe('auto_cleared');
     expect(afterwards.evaluation.engineOutcome).toBe('auto_cleared');
+  });
+
+  // An intake can hold more than one evaluation: every import run rewrites the shadow rows. Which
+  // one the patient is shown must be the one that governs — `desc(evaluatedAt)`, non-shadow ahead
+  // of shadow on a tie — and it must be the *same* one `governingMatched` picks in
+  // `src/intake/transition.ts`, or the screen and the transition guard disagree about the verdict.
+  //
+  // Both cases are built so that an unordered query returns the wrong row: the row that should win
+  // is written into the heap second, which is where a bare `select` would find it last.
+  const shadowRow = (id: string, real: typeof eligibilityEvaluations.$inferSelect, at: Date) => ({
+    intakeId: id,
+    rulesetVersion: real.rulesetVersion,
+    engineOutcome: 'auto_rejected' as const,
+    reasons: ['shadow: a re-import re-judged this intake'],
+    matched: [],
+    inputs: real.inputs,
+    evaluatedAt: at,
+    shadow: true,
+  });
+
+  const evaluationOf = async (id: string): Promise<string> => {
+    const body = (await (await readIntake(new Request('http://x'), params(id))).json()) as {
+      evaluation: { engineOutcome: string };
+    };
+    return body.evaluation.engineOutcome;
+  };
+
+  const realEvaluation = async (id: string) => {
+    const [row] = await db
+      .select()
+      .from(eligibilityEvaluations)
+      .where(eq(eligibilityEvaluations.intakeId, id));
+    if (row === undefined) throw new Error('the submission wrote no evaluation');
+    return row;
+  };
+
+  it('shows the later evaluation when a re-import has written one', async () => {
+    const id = await newDraft();
+    await fillIn(id);
+    await submitIntake(new Request('http://x'), params(id));
+    const real = await realEvaluation(id);
+    const later = new Date(real.evaluatedAt.getTime() + 60_000);
+
+    await db.insert(eligibilityEvaluations).values(shadowRow(id, real, later));
+
+    expect(await evaluationOf(id)).toBe('auto_rejected');
+  });
+
+  it('prefers the real evaluation to a shadow written at the same instant', async () => {
+    const id = await newDraft();
+    await fillIn(id);
+    await submitIntake(new Request('http://x'), params(id));
+    const real = await realEvaluation(id);
+
+    // Rewritten in the opposite order — shadow first, then the real row — so that the tie on
+    // `evaluatedAt` is the only thing left to break, and a query without the tie-break would
+    // answer with the shadow.
+    await db.delete(eligibilityEvaluations).where(eq(eligibilityEvaluations.intakeId, id));
+    await db.insert(eligibilityEvaluations).values(shadowRow(id, real, real.evaluatedAt));
+    await db.insert(eligibilityEvaluations).values({
+      intakeId: id,
+      rulesetVersion: real.rulesetVersion,
+      engineOutcome: real.engineOutcome,
+      reasons: real.reasons,
+      matched: real.matched,
+      inputs: real.inputs,
+      evaluatedAt: real.evaluatedAt,
+      shadow: false,
+    });
+
+    expect(await evaluationOf(id)).toBe('auto_cleared');
   });
 
   it('is 404 for an unknown or malformed id', async () => {

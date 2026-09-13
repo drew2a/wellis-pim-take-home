@@ -5,7 +5,7 @@
 // Saving a step is not a transition: the state stays `draft` and no audit entry is written, because
 // R-B18 audits state changes and an entry per keystroke would bury the ones that matter
 // (ADR-0014 item 1). What the patient finally submitted is kept verbatim in `answers`.
-import { eq } from 'drizzle-orm';
+import { desc, eq } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { getDb } from '@/db/client';
@@ -40,13 +40,20 @@ export async function GET(_request: Request, context: RouteContext): Promise<Res
     if (intake === undefined) return notFound('no such intake');
 
     // Once submitted, the patient is shown what the rules found and why (R-B9). A draft has none.
+    //
+    // The governing evaluation, ordered exactly as `governingMatched` in `src/intake/transition.ts`
+    // orders it: latest first, non-shadow ahead of shadow on a tie. An intake can hold more than
+    // one row — every import run rewrites the shadow evaluations — and showing the patient
+    // whichever one Postgres returned first could show them a shadow verdict as their outcome.
     const [evaluation] = await db
       .select({
         engineOutcome: eligibilityEvaluations.engineOutcome,
         reasons: eligibilityEvaluations.reasons,
       })
       .from(eligibilityEvaluations)
-      .where(eq(eligibilityEvaluations.intakeId, intake.id));
+      .where(eq(eligibilityEvaluations.intakeId, intake.id))
+      .orderBy(desc(eligibilityEvaluations.evaluatedAt), eligibilityEvaluations.shadow)
+      .limit(1);
 
     return Response.json({
       id: intake.id,
@@ -91,9 +98,16 @@ export async function PATCH(request: Request, context: RouteContext): Promise<Re
         return conflict(`this intake has already been submitted (state ${intake.state})`);
       }
 
+      // Every draft is created by `POST /api/intakes`, which writes `formVersion` with the first
+      // step, and a legacy intake is never in `draft`. A draft without answers is therefore a
+      // broken invariant, not a case to paper over: inventing a `formVersion` here would produce a
+      // submission the schema rejects with an issue naming a field the form does not render
+      // (`CLAUDE.md` §2 — no default values, no swallowed errors).
+      if (intake.answers === null) {
+        throw new Error(`draft intake ${id.data} has no answers`);
+      }
       const merged: DraftAnswers = {
-        ...(intake.answers ?? {}),
-        formVersion: intake.answers?.formVersion ?? '',
+        ...intake.answers,
         [body.data.step satisfies IntakeStep]: step.data,
       };
       await tx.update(intakes).set({ answers: merged }).where(eq(intakes.id, id.data));
