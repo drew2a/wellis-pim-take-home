@@ -4,7 +4,7 @@
 // "Belongs to it" is the membership of ADR-0008 item 2 throughout — a patient's records are its own
 // and those of every patient merged into it, transitively. Nothing here joins on the copied
 // `patient_id` alone, because a merge moves no row (ADR-0011 item 3).
-import { desc, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, inArray } from 'drizzle-orm';
 
 import type { Queryable } from '@/db/queryable';
 import {
@@ -81,6 +81,7 @@ export interface PatientDetail {
     readonly title: string;
   }[];
   readonly timeline: readonly TimelineEntry[];
+  /** As exported, with the one exception `./mask.ts` governs everywhere: `bsn` is masked. */
   readonly rawPatients: readonly (typeof legacyPatientsRaw.$inferSelect)[];
   readonly rawIntakes: readonly (typeof legacyIntakesRaw.$inferSelect)[];
 }
@@ -146,10 +147,12 @@ export async function patientDetail(db: Queryable, id: string): Promise<PatientD
     shadows.filter((row) => row.shadow).map((row) => [row.intakeId, row]),
   );
 
+  // Open, because the section is headed "Open items" and says "Nothing open about this patient"
+  // when it is empty: without this every decision already taken reads as outstanding work.
   const items = await db
     .select({ id: reviewItems.id, type: reviewItems.type, title: reviewItems.title })
     .from(reviewItems)
-    .where(inArray(reviewItems.patientId, memberIds));
+    .where(and(inArray(reviewItems.patientId, memberIds), eq(reviewItems.status, 'open')));
 
   const entityIds = [...memberIds, ...intakeRows.map((row) => row.id)];
   const entries = await db
@@ -262,7 +265,11 @@ export async function patientDetail(db: Queryable, id: string): Promise<PatientD
     }),
     openItems: items,
     timeline,
-    rawPatients,
+    // The exported row, with its `bsn` masked like every other number the console shows. The row
+    // in the database stays byte-faithful (R-A8); what a page renders does not, or the reveal
+    // route of ADR-0023 item 8 would be a formality with the digits printed further down the same
+    // screen and no audit entry for the look.
+    rawPatients: rawPatients.map((row) => ({ ...row, bsn: maskIdentifier(row.bsn) })),
     rawIntakes,
   };
 }

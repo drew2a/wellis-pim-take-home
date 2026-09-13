@@ -202,4 +202,48 @@ describe('the rows as exported', () => {
     // Untrimmed, exactly as exported (R-A8).
     expect(detail?.rawPatients[0]?.fullName).toBe('Test Patient ');
   });
+
+  // The stored row keeps the digits; the page does not. Otherwise the reveal route of ADR-0023
+  // item 8 — which writes an audit entry before it answers — is a formality with the same number
+  // printed further down the same screen and no record of the look.
+  it('mask the bsn, like every other number the console shows', async () => {
+    const id = await patient('rec000000000000001', 'Test Patient');
+    await db
+      .insert(legacyPatientsRaw)
+      .values({ ...rows.legacyPatientRawRow(runId), bsn: '111222333' });
+
+    const detail = await patientDetail(db, id);
+    expect(detail?.rawPatients[0]?.bsn).toBe('******333');
+
+    const [stored] = await db
+      .select()
+      .from(legacyPatientsRaw)
+      .where(eq(legacyPatientsRaw.legacyId, 'rec000000000000001'));
+    expect(stored?.bsn).toBe('111222333');
+  });
+});
+
+describe('open items', () => {
+  // A closed item carries who closed it and why; the database refuses one that does not.
+  const item = async (patientId: string, status: 'open' | 'resolved'): Promise<void> => {
+    await db.insert(reviewItems).values({
+      ...rows.reviewItemRow(`key-${status}-${patientId}`),
+      patientId,
+      status,
+      ...(status === 'open'
+        ? {}
+        : { resolvedBy: 'Sanne Bakker', resolvedAt: new Date(), resolutionNote: 'read the raw' }),
+    });
+  };
+
+  // The section is headed "Open items" and says "Nothing open about this patient" when it is
+  // empty: a closed item listed there is work a reviewer does twice.
+  it('leave out the decisions already taken', async () => {
+    const id = await patient('recS', 'Bram Nair');
+    await item(id, 'open');
+    await item(id, 'resolved');
+
+    const detail = await patientDetail(db, id);
+    expect(detail?.openItems).toHaveLength(1);
+  });
 });

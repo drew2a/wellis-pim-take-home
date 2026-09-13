@@ -1,11 +1,17 @@
 'use client';
 
-// Two records side by side, and the decision a person takes about them (R-C4, R-C5, R-C6).
+// The records side by side, and the decision a person takes about them (R-C4, R-C5, R-C6).
 //
 // Per field the reviewer picks a record or types a value. Picking a record posts **which record**,
 // never the value shown: `bsn` is masked on this screen, and a form that sent back what it
 // displayed would write `******333` into the column. The server reads the value from the row that
 // was named (ADR-0022).
+//
+// A merge joins **two** records, and a candidate group can hold more than two: it is the transitive
+// closure over a shared key, so a new-flow submission matching a pair makes three. The reviewer
+// therefore names both sides, and a value can only be picked from one of the two in the merge
+// (ADR-0026 item 3). Assuming the other record was whichever one the survivor is not merged the
+// wrong pair and wrote a third record's values into the survivor.
 import { useRouter } from 'next/navigation';
 import { useState, type ReactElement } from 'react';
 
@@ -49,12 +55,28 @@ export function IdentityDecision({
 }): ReactElement {
   const router = useRouter();
   const [survivor, setSurvivor] = useState(0);
+  const [loser, setLoser] = useState(1);
   const [picks, setPicks] = useState<Readonly<Record<string, Pick>>>({});
   const [note, setNote] = useState('');
   const [failure, setFailure] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
 
-  const loser = survivor === 0 ? 1 : 0;
+  const firstOther = (skip: number): number => candidates.findIndex((_, index) => index !== skip);
+
+  /**
+   * Both sides at once, and the picks dropped. A pick names a record by its position, so keeping
+   * one made against a record that has just left the merge would post it as the other side's
+   * value — the reviewer would see one thing and the server would write another.
+   */
+  const choosePair = (nextSurvivor: number, nextLoser: number): void => {
+    setSurvivor(nextSurvivor);
+    setLoser(nextLoser);
+    setPicks({});
+  };
+
+  const inMerge = (index: number): boolean => index === survivor || index === loser;
+  const roleOf = (index: number): string => (index === survivor ? 'survives' : 'merged in');
+  const labelOf = (index: number): string => candidates[index]?.label ?? '';
 
   const send = async (body: Record<string, unknown>, label: string): Promise<void> => {
     setBusy(label);
@@ -116,12 +138,37 @@ export function IdentityDecision({
           name="survivor"
           checked={survivor === index}
           onChange={() => {
-            setSurvivor(index);
+            choosePair(index, index === loser ? firstOther(index) : loser);
           }}
         >
           {`${candidate.label} survives — ${String(candidate.intakeCount)} intakes, consent ${candidate.consent}`}
         </Choice>
       ))}
+
+      {candidates.length > 2 && (
+        <>
+          <Caption>And the record merged into it</Caption>
+          {candidates.map((candidate, index) =>
+            index === survivor ? null : (
+              <Choice
+                key={candidate.patientId}
+                type="radio"
+                name="loser"
+                checked={loser === index}
+                onChange={() => {
+                  choosePair(survivor, index);
+                }}
+              >
+                {`${candidate.label} — ${String(candidate.intakeCount)} intakes, consent ${candidate.consent}`}
+              </Choice>
+            ),
+          )}
+          <Hint>
+            A merge joins two records. Every other record in this group is left exactly as it is,
+            and deciding about it is a decision of its own.
+          </Hint>
+        </>
+      )}
 
       {rows.map((row) => (
         <div key={row.field}>
@@ -131,19 +178,31 @@ export function IdentityDecision({
           </Caption>
           {row.decidable ? (
             <>
-              {row.values.map((value, index) => (
-                <Choice
-                  key={candidates[index]?.patientId ?? String(index)}
-                  type="radio"
-                  name={`field-${row.field}`}
-                  checked={(picks[row.field] as { index?: number } | undefined)?.index === index}
-                  onChange={() => {
-                    setPicks({ ...picks, [row.field]: { index } });
-                  }}
-                >
-                  {value ?? '—'}
-                </Choice>
-              ))}
+              {row.values.map((value, index) =>
+                inMerge(index) ? (
+                  <Choice
+                    key={candidates[index]?.patientId ?? String(index)}
+                    type="radio"
+                    name={`field-${row.field}`}
+                    checked={(picks[row.field] as { index?: number } | undefined)?.index === index}
+                    onChange={() => {
+                      setPicks({ ...picks, [row.field]: { index } });
+                    }}
+                  >
+                    {`${value ?? '—'} — ${labelOf(index)}, ${roleOf(index)}`}
+                  </Choice>
+                ) : null,
+              )}
+              {candidates.length > 2 && (
+                <Hint>
+                  {row.values
+                    .flatMap((value, index) =>
+                      inMerge(index) ? [] : [`${value ?? '—'} — ${labelOf(index)}`],
+                    )
+                    .join('  ·  ')}
+                  {' — not part of this merge.'}
+                </Hint>
+              )}
               <TextField
                 label=""
                 placeholder="or type a value"

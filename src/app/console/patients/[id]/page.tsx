@@ -75,8 +75,8 @@ function entryValue(entry: TimelineEntry): ReactNode {
           <Raw>{entry.rule}</Raw>
         </>
       )}
-      {(entry.changes ?? []).map((change) => (
-        <span key={`${change.field}:${String(change.to)}`}>
+      {(entry.changes ?? []).map((change, index) => (
+        <span key={index}>
           {' · '}
           <Raw>{changeLine(change)}</Raw>
         </span>
@@ -222,6 +222,7 @@ export default async function PatientPage({
         <Card>
           <Definitions
             items={detail.openItems.map((row) => ({
+              key: row.id,
               term: '',
               value: (
                 <span>
@@ -237,9 +238,9 @@ export default async function PatientPage({
       <SectionTitle>How this record came to look the way it does</SectionTitle>
       <Card>
         <Definitions
-          items={detail.timeline.slice(0, TIMELINE_SHOWN).map((entry, index) => ({
+          items={detail.timeline.slice(0, TIMELINE_SHOWN).map((entry) => ({
             term: `${dayOf(entry.at)} · ${entry.actor}`,
-            value: <span key={index}>{entryValue(entry)}</span>,
+            value: entryValue(entry),
           }))}
         />
         {detail.timeline.length > TIMELINE_SHOWN && (
@@ -249,7 +250,10 @@ export default async function PatientPage({
 
       <SectionTitle>The rows as exported</SectionTitle>
       <Card>
-        <Hint>Read-only, untrimmed, exactly as the export gave them (R-A8).</Hint>
+        <Hint>
+          Read-only, untrimmed, exactly as the export gave them (R-A8) — with <Raw>bsn</Raw> masked
+          as it is everywhere else, because reading the number is a route that records the look.
+        </Hint>
         {[...detail.rawPatients, ...detail.rawIntakes].map((row, index) => (
           <Definitions
             key={index}

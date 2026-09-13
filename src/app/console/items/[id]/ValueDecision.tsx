@@ -6,6 +6,11 @@
 // A proposal is data on the item, never something the importer applied. Accepting one and typing a
 // value are the same mechanism — the resolution path — and the screen says so rather than making
 // "accept" look like a shortcut that skips the record.
+//
+// Some of these items have no row to correct at all — a consent event whose timestamp could not be
+// read was never stored, and ADR-0007 does not let one be written. There the value form is not
+// shown: offering a field and two buttons the server answers with a 400 walks a reviewer into a
+// dead end (ADR-0026 item 2). `uncorrectable` says so in one line, and dismissing stays.
 import { useRouter } from 'next/navigation';
 import { useState, type ReactElement } from 'react';
 
@@ -26,11 +31,14 @@ export function ValueDecision({
   field,
   current,
   proposal,
+  uncorrectable,
 }: {
   readonly itemId: string;
   readonly field: string;
   readonly current: string | null;
   readonly proposal: { readonly value: string; readonly rule: string | null } | null;
+  /** Why no value can be written, in one line, or null when one can. */
+  readonly uncorrectable: string | null;
 }): ReactElement {
   const router = useRouter();
   const [value, setValue] = useState('');
@@ -61,6 +69,37 @@ export function ValueDecision({
   };
 
   const noted = note.trim() !== '';
+
+  if (uncorrectable !== null) {
+    return (
+      <Card>
+        <Hint>{uncorrectable}</Hint>
+        <TextAreaField
+          label="Why"
+          hint="Recorded against the row this item names, with your name."
+          rows={3}
+          value={note}
+          onChange={(e) => {
+            setNote(e.target.value);
+          }}
+          required
+        />
+        {failure !== null && <ErrorText>{failure}</ErrorText>}
+        <ButtonRow>
+          <Button
+            variant="primary"
+            busy={busy === 'dismiss'}
+            disabled={!noted || busy !== null}
+            onClick={() => {
+              void send({ action: 'dismiss' }, 'dismiss');
+            }}
+          >
+            Leave it empty
+          </Button>
+        </ButtonRow>
+      </Card>
+    );
+  }
 
   return (
     <Card>

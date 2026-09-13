@@ -21,6 +21,7 @@ import {
   findReviewItem,
   type ReviewItemView,
 } from '@/repo/items';
+import { writableTarget } from '@/repo/resolve';
 import {
   Badge,
   Caption,
@@ -69,6 +70,57 @@ const DEFAULT_QUESTION = 'Confirm records that the importer read this correctly.
 const REJECT_MEANS =
   'Rejecting records the answer against the rows listed; it does not rewrite them. ' +
   'Changing the rule is a new ruleset version and a re-import.';
+
+/**
+ * The heading every decision sits under, and the decision itself — unless the item is closed.
+ *
+ * A decision is taken once: the queue's Status filter links straight to resolved and dismissed
+ * items, and a live form on one of those lets a reviewer write a note and press a button only to
+ * be told 409 afterwards. What a closed item shows instead is the decision that was taken.
+ */
+function YourDecision({
+  item,
+  children,
+}: {
+  readonly item: ReviewItemView['item'];
+  readonly children: ReactNode;
+}): ReactElement {
+  if (item.status === 'open') {
+    return (
+      <>
+        <SectionTitle>Your decision</SectionTitle>
+        {children}
+      </>
+    );
+  }
+  return (
+    <>
+      <SectionTitle>The decision that was taken</SectionTitle>
+      <Card>
+        <Definitions
+          items={[
+            { term: 'outcome', value: humanise(item.status) },
+            { term: 'by', value: item.resolvedBy ?? '—' },
+            { term: 'when', value: item.resolvedAt === null ? '—' : dayOf(item.resolvedAt) },
+            { term: 'why', value: item.resolutionNote ?? '—' },
+          ]}
+        />
+        <Hint>A decision is taken once, and this one is taken.</Hint>
+      </Card>
+    </>
+  );
+}
+
+/**
+ * Why a `data_quality` item has no value to write, in one line. The consent case names the table
+ * the line is still in, because "nothing was stored" invites the question of where it went.
+ */
+function noRowToCorrect(item: ReviewItemView['item'], rule: string): string {
+  if (rule === 'TIMESTAMP_UNPARSED') {
+    return 'No canonical event was stored for this line; the raw line is kept in legacy_consent_events_raw.';
+  }
+  return `Nothing this item names holds ${item.field ?? 'that field'}, so there is no value to write; the raw is kept either way.`;
+}
 
 /**
  * A payload's `rows`, when it has them. `payload` is `jsonb` and shaped differently per rule, so it
@@ -160,23 +212,24 @@ async function IdentityConflict({
         />
       </Card>
 
-      <SectionTitle>Your decision</SectionTitle>
-      <IdentityDecision
-        itemId={view.item.id}
-        candidates={conflict.candidates.map((candidate) => ({
-          patientId: candidate.patientId,
-          label: candidate.fields.full_name ?? candidate.patientId,
-          intakeCount: candidate.intakeCount,
-          consent: Object.values(candidate.consentStates).join(', ') || 'no record',
-          legacyIds: candidate.legacyIds,
-        }))}
-        rows={COMPARED_FIELDS.map((field) => ({
-          field,
-          values: conflict.candidates.map((candidate) => candidate.fields[field]),
-          differs: differing.has(field),
-          decidable: decidable.has(field),
-        }))}
-      />
+      <YourDecision item={view.item}>
+        <IdentityDecision
+          itemId={view.item.id}
+          candidates={conflict.candidates.map((candidate) => ({
+            patientId: candidate.patientId,
+            label: candidate.fields.full_name ?? candidate.patientId,
+            intakeCount: candidate.intakeCount,
+            consent: Object.values(candidate.consentStates).join(', ') || 'no record',
+            legacyIds: candidate.legacyIds,
+          }))}
+          rows={COMPARED_FIELDS.map((field) => ({
+            field,
+            values: conflict.candidates.map((candidate) => candidate.fields[field]),
+            differs: differing.has(field),
+            decidable: decidable.has(field),
+          }))}
+        />
+      </YourDecision>
     </>
   );
 }
@@ -211,8 +264,9 @@ async function ConsentItem({ view }: { readonly view: ReviewItemView }): Promise
           {`State now: ${derived ?? 'none'}. The log is evidence; the state is what we act on.`}
         </Hint>
       </Card>
-      <SectionTitle>Your decision</SectionTitle>
-      <ConsentDecision itemId={view.item.id} conflicted={derived === 'conflict'} />
+      <YourDecision item={view.item}>
+        <ConsentDecision itemId={view.item.id} conflicted={derived === 'conflict'} />
+      </YourDecision>
     </>
   );
 }
@@ -281,21 +335,24 @@ export default async function ReviewItemPage({
               />
             )}
           </Card>
-          <SectionTitle>Your decision</SectionTitle>
-          <OrphanDecision itemId={item.id} />
+          <YourDecision item={item}>
+            <OrphanDecision itemId={item.id} />
+          </YourDecision>
         </>
       )}
 
       {item.type === 'data_quality' && (
-        <>
-          <SectionTitle>Your decision</SectionTitle>
+        <YourDecision item={item}>
           <ValueDecision
             itemId={item.id}
             field={item.field ?? 'the value'}
             current={await currentValueOf(getDb(), item)}
             proposal={proposalOf(item)}
+            // The same question the server asks before it writes, so the screen cannot offer a
+            // correction the route refuses (ADR-0026 item 2).
+            uncorrectable={writableTarget(item) === null ? noRowToCorrect(item, rule) : null}
           />
-        </>
+        </YourDecision>
       )}
 
       {item.type === 'consent' && <ConsentItem view={view} />}
@@ -329,8 +386,9 @@ export default async function ReviewItemPage({
               about it now.
             </Hint>
           </Card>
-          <SectionTitle>Your decision</SectionTitle>
-          <ClinicalHistoryDecision itemId={item.id} />
+          <YourDecision item={item}>
+            <ClinicalHistoryDecision itemId={item.id} />
+          </YourDecision>
         </>
       )}
 
@@ -345,8 +403,9 @@ export default async function ReviewItemPage({
               }))}
             />
           </Card>
-          <SectionTitle>Your decision</SectionTitle>
-          <DuplicateDecision itemId={item.id} intakes={pairedIntakes(item.payload)} />
+          <YourDecision item={item}>
+            <DuplicateDecision itemId={item.id} intakes={pairedIntakes(item.payload)} />
+          </YourDecision>
         </>
       )}
 
@@ -372,13 +431,16 @@ export default async function ReviewItemPage({
               </Card>
             </>
           )}
-          <SectionTitle>Your decision</SectionTitle>
-          <Hint>{REJECT_MEANS}</Hint>
-          <VocabularyDecision
-            itemId={item.id}
-            question={QUESTIONS[rule] ?? DEFAULT_QUESTION}
-            rows={excludable(poundsRowsOf(item, rule))}
-          />
+          <YourDecision item={item}>
+            <>
+              <Hint>{REJECT_MEANS}</Hint>
+              <VocabularyDecision
+                itemId={item.id}
+                question={QUESTIONS[rule] ?? DEFAULT_QUESTION}
+                rows={excludable(poundsRowsOf(item, rule))}
+              />
+            </>
+          </YourDecision>
         </>
       ) : (
         ![
@@ -389,15 +451,14 @@ export default async function ReviewItemPage({
           'consent',
           'clinical_history',
         ].includes(item.type) && (
-          <>
-            <SectionTitle>Your decision</SectionTitle>
+          <YourDecision item={item}>
             <Card>
               <Hint>
                 {`The screen for a ${humanise(item.type)} item is not built. Nothing here can be
                 decided until it is, and the API refuses a decision it cannot carry out.`}
               </Hint>
             </Card>
-          </>
+          </YourDecision>
         )
       )}
     </Page>
