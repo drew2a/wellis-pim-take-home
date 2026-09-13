@@ -211,7 +211,10 @@ describe('a declared GLP-1 (ADR-0015 item 6)', () => {
     expect(evaluateWith({ ageYears: 16, glp1Declared: true }).outcome).toBe('auto_rejected');
   });
 
-  it('leaves an evaluation that could not run unevaluable rather than flagged-and-cleared', () => {
+  // `resolve()` returns on a flag before it looks at what could not be evaluated, so a declared
+  // GLP-1 with a missing height is `auto_flagged`, not `not_evaluable`. The old name claimed the
+  // opposite of what the assertion proves and of what the engine does.
+  it('outranks a rule that could not run for want of an input', () => {
     expect(evaluateWith({ heightCm: null, glp1Declared: true }).outcome).toBe('auto_flagged');
   });
 });
