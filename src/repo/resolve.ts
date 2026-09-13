@@ -133,23 +133,34 @@ function asText(value: unknown): string | null {
   throw new Error(`a resolvable column holds a ${typeof value}, which has no text form`);
 }
 
-interface ParsedChange extends FieldChange {
+interface ParsedValue {
   readonly property: string;
   readonly parsed: unknown;
 }
 
-function parseChange(change: FieldChange): ParsedChange {
-  const resolvable = FIELDS[change.entityType][change.field];
+/**
+ * The text a reviewer typed, as the column can hold it — or a throw naming the field. Exported
+ * because a merge writes the same columns from the same kind of input (ADR-0022), and one
+ * declaration of what a field may hold is better than two that can drift.
+ */
+export function parseFieldValue(
+  entityType: ResolvableEntity,
+  field: string,
+  value: string | null,
+): ParsedValue {
+  const resolvable = FIELDS[entityType][field];
   if (resolvable === undefined) {
-    throw new Error(
-      `${change.field} is not a field the console may write on a ${change.entityType}`,
-    );
+    throw new Error(`${field} is not a field the console may write on a ${entityType}`);
   }
-  const parsed = resolvable.schema.safeParse(change.value);
-  if (!parsed.success) {
-    throw new Error(`${change.field}: ${z.prettifyError(parsed.error)}`);
-  }
-  return { ...change, property: resolvable.property, parsed: parsed.data };
+  const parsed = resolvable.schema.safeParse(value);
+  if (!parsed.success) throw new Error(`${field}: ${z.prettifyError(parsed.error)}`);
+  return { property: resolvable.property, parsed: parsed.data };
+}
+
+interface ParsedChange extends FieldChange, ParsedValue {}
+
+function parseChange(change: FieldChange): ParsedChange {
+  return { ...change, ...parseFieldValue(change.entityType, change.field, change.value) };
 }
 
 /**

@@ -552,4 +552,11 @@ export interface AuditChange {
   from: string | null;
   to: string | null;
   source_legacy_id?: string;
+  /**
+   * Present only where a **reviewer chose** this value rather than the survivor gaining a field it
+   * had none of: `loser` and `edited` can produce the same string, and the audit has to say
+   * whether the value was picked out of a row or typed (ADR-0022 item 1). Absent on every entry
+   * the importer writes.
+   */
+  chosen?: 'survivor' | 'loser' | 'edited';
 }

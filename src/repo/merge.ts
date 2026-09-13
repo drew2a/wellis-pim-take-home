@@ -13,9 +13,12 @@ import type { Queryable } from '@/db/queryable';
 import { auditEntries, patientLegacyIds, patients, type AuditChange } from '@/db/schema';
 import { recomputeConsentStates } from '@/consent/states';
 
+import { elfproef } from '@/import/mapper/bsn';
+
 import { dedupeKeyFor } from './audit';
 import { maskIdentifier } from './mask';
 import { survivorOf } from './membership';
+import { parseFieldValue } from './resolve';
 
 /**
  * The fields ADR-0006 calls "about the person". `source` and `signup_date` are deliberately absent:
@@ -25,7 +28,7 @@ import { survivorOf } from './membership';
  * `empty` is the value that counts as "not held", so that a survivor with `sex` `unknown` can gain
  * the loser's `female` while a survivor with `female` never loses it.
  */
-type PersonField =
+export type PersonField =
   | 'fullName'
   | 'email'
   | 'dob'
@@ -69,27 +72,50 @@ export const MERGED_INTO = 'merged_into';
 /** One change per repointed alias row: legacy id X stopped resolving to the loser. */
 const ALIAS = 'patient_id';
 
+/** Where a decided value came from. Recorded, not inferred: `loser` and `edited` can produce the
+ * same string, and the audit has to say whether a reviewer chose a value that was in the data or
+ * typed one that was not (ADR-0022 item 1). */
+export type FieldSource = 'survivor' | 'loser' | 'edited';
+
+export interface FieldDecision {
+  readonly value: string | null;
+  readonly source: FieldSource;
+}
+
+/** A reviewer's per-field picks. The importer passes none, and its merges are unchanged. */
+export type FieldDecisions = Readonly<Partial<Record<PersonField, FieldDecision>>>;
+
 export interface MergeRequest {
   readonly survivorId: string;
   readonly loserId: string;
   /** `importer` for a tier-1 merge, a human identity for a decision taken in the console. */
   readonly actor: string;
+  /** The stable identity behind a human actor; null for a named process (ADR-0014 item 4). */
+  readonly actorReviewerId?: string | null;
   /** Names the survivor rule that chose this direction (ADR-0006). */
   readonly reason: string;
   readonly declaredConsentTypes: readonly string[];
   readonly reviewItemId?: string | null;
+  /**
+   * What the reviewer chose, per field (R-C5, ADR-0022). A decided field wins; an undecided one
+   * keeps ADR-0006's rule — the survivor keeps what it holds and gains what it lacks.
+   */
+  readonly fieldDecisions?: FieldDecisions | undefined;
 }
 
 export interface MergeOutcome {
   /** False when the pair was already merged: a re-run finds its own work and does nothing. */
   readonly merged: boolean;
   readonly gained: AuditChange[];
+  /** The fields a reviewer chose that differed from what the survivor already held. */
+  readonly decided: AuditChange[];
   readonly repointedLegacyIds: string[];
 }
 
 export interface UnmergeRequest {
   readonly loserId: string;
   readonly actor: string;
+  readonly actorReviewerId?: string | null;
   readonly reason: string;
   readonly declaredConsentTypes: readonly string[];
   readonly reviewItemId?: string | null;
@@ -121,13 +147,20 @@ async function patientRow(db: Queryable, id: string, role: string): Promise<Pati
  * a second import run finds the alias repointed and does nothing (ADR-0006).
  */
 export async function mergePatients(db: Queryable, request: MergeRequest): Promise<MergeOutcome> {
+  // The four writes below plus the consent recomputation are one fact, so the transaction belongs
+  // to this function and not to whichever caller remembers (ADR-0022 item 4). Drizzle nests this
+  // as a savepoint when the caller already has one, so the importer's run is unaffected.
+  return db.transaction((tx) => mergeInTransaction(tx, request));
+}
+
+async function mergeInTransaction(db: Queryable, request: MergeRequest): Promise<MergeOutcome> {
   const { survivorId, loserId } = request;
   if (survivorId === loserId) throw new Error(`cannot merge patient ${loserId} into itself`);
   const survivor = await patientRow(db, survivorId, 'survivor');
   const loser = await patientRow(db, loserId, 'loser');
 
   if (loser.mergedInto === survivorId) {
-    return { merged: false, gained: [], repointedLegacyIds: [] };
+    return { merged: false, gained: [], decided: [], repointedLegacyIds: [] };
   }
   if (loser.mergedInto !== null) {
     throw new Error(`patient ${loserId} is already merged into ${loser.mergedInto}`);
@@ -149,9 +182,18 @@ export async function mergePatients(db: Queryable, request: MergeRequest): Promi
   // Deterministic, and true where the loser carries several legacy ids after an earlier merge.
   const sourceLegacyId = repointedLegacyIds[0];
 
-  const gained = fieldsGained(survivor, loser, sourceLegacyId);
-  if (gained.length > 0)
-    await db.update(patients).set(patchFrom(loser, gained)).where(eq(patients.id, survivorId));
+  const decisions = request.fieldDecisions ?? {};
+  const decided = fieldsDecided(survivor, decisions, sourceLegacyId);
+  // A decided field wins; an undecided one keeps ADR-0006's rule. `bsn_check` follows `bsn`.
+  const decidedColumns = new Set(decided.map((change) => change.field));
+  if (decisions.bsn !== undefined) decidedColumns.add('bsn_check');
+  const gained = fieldsGained(survivor, loser, sourceLegacyId).filter(
+    (change) => !decidedColumns.has(change.field),
+  );
+
+  const patch = { ...patchFrom(loser, gained), ...patchFromDecisions(decisions) };
+  if (Object.keys(patch).length > 0)
+    await db.update(patients).set(patch).where(eq(patients.id, survivorId));
 
   await db.update(patients).set({ mergedInto: survivorId }).where(eq(patients.id, loserId));
   if (repointedLegacyIds.length > 0) {
@@ -182,7 +224,7 @@ export async function mergePatients(db: Queryable, request: MergeRequest): Promi
       fromState: null,
       toState: null,
       reason: `absorbed patient ${loserId}: ${request.reason}`,
-      changes: [{ field: MERGED_FROM, from: null, to: loserId }, ...gained],
+      changes: [{ field: MERGED_FROM, from: null, to: loserId }, ...gained, ...decided],
     },
   ]);
 
@@ -190,7 +232,7 @@ export async function mergePatients(db: Queryable, request: MergeRequest): Promi
     declaredTypes: request.declaredConsentTypes,
     survivorIds: [survivorId],
   });
-  return { merged: true, gained, repointedLegacyIds };
+  return { merged: true, gained, decided, repointedLegacyIds };
 }
 
 /** Takes a merge back: the inverse of every write above, and the same audit trail in reverse. */
@@ -216,7 +258,7 @@ export async function unmergePatient(
   const released = (mergeOfSurvivor.changes ?? []).filter((change) => change.field !== MERGED_FROM);
 
   if (released.length > 0) {
-    await db.update(patients).set(emptyPatch(released)).where(eq(patients.id, survivorId));
+    await db.update(patients).set(restorePatch(released)).where(eq(patients.id, survivorId));
   }
   await db.update(patients).set({ mergedInto: null }).where(eq(patients.id, loserId));
   if (repointedLegacyIds.length > 0) {
@@ -300,6 +342,79 @@ function fieldsGained(
   return changes;
 }
 
+/**
+ * What a reviewer's picks change about the survivor, as audit changes (R-C5, ADR-0022 item 2).
+ * A decision equal to the value already there writes nothing, because nothing changed.
+ *
+ * `source_legacy_id` is set only where the value came from the loser's row: an edited value came
+ * from the reviewer, and claiming a row supplied it would be a false provenance record.
+ */
+function fieldsDecided(
+  survivor: PatientRow,
+  decisions: FieldDecisions,
+  sourceLegacyId: string | undefined,
+): AuditChange[] {
+  const changes: AuditChange[] = [];
+  for (const key of Object.keys(decisions)) {
+    if (!(key in PERSON_FIELDS)) {
+      throw new Error(`${key} is not a field of the person and cannot be decided in a merge`);
+    }
+    const field = key as PersonField;
+    const decision = decisions[field];
+    if (decision === undefined) continue;
+    // Validated by the same declaration the resolution path uses, so the two writers of a patient
+    // column cannot disagree about what it may hold (ADR-0023).
+    parseFieldValue('patient', PERSON_FIELDS[field].column, decision.value);
+
+    const current = text(survivor[field]);
+    if (current === decision.value) continue;
+    const shown = (value: string | null): string | null =>
+      field === 'bsn' && value !== null ? maskIdentifier(value) : value;
+    const provenance =
+      decision.source === 'loser' && sourceLegacyId !== undefined
+        ? { source_legacy_id: sourceLegacyId }
+        : {};
+    changes.push({
+      field: PERSON_FIELDS[field].column,
+      from: shown(current),
+      to: shown(decision.value),
+      ...provenance,
+      chosen: decision.source,
+    });
+    if (field === 'bsn') {
+      changes.push({
+        field: 'bsn_check',
+        from: survivor.bsnCheck,
+        to: bsnCheckFor(decision.value),
+        ...provenance,
+        chosen: decision.source,
+      });
+    }
+  }
+  return changes;
+}
+
+/** A decided number is checked here, because nothing else will: the mapper only sees raw rows. */
+const bsnCheckFor = (bsn: string | null): string =>
+  bsn === null ? 'absent' : elfproef(bsn) ? 'valid' : 'invalid';
+
+/** The survivor's patch for the reviewer's picks, in the columns' own types. */
+function patchFromDecisions(decisions: FieldDecisions): Partial<PatientRow> {
+  const patch: Partial<PatientRow> = {};
+  for (const field of Object.keys(decisions) as PersonField[]) {
+    const decision = decisions[field];
+    if (decision === undefined) continue;
+    const { property, parsed } = parseFieldValue(
+      'patient',
+      PERSON_FIELDS[field].column,
+      decision.value,
+    );
+    Object.assign(patch, { [property]: parsed });
+    if (field === 'bsn') patch.bsnCheck = bsnCheckFor(decision.value) as PatientRow['bsnCheck'];
+  }
+  return patch;
+}
+
 /** The survivor's patch for a merge: the loser's own values, never the masked ones. */
 function patchFrom(loser: PatientRow, gained: readonly AuditChange[]): Partial<PatientRow> {
   const patch: Partial<PatientRow> = {};
@@ -316,11 +431,20 @@ function patchFrom(loser: PatientRow, gained: readonly AuditChange[]): Partial<P
 }
 
 /**
- * The survivor's patch for an unmerge. A gained field was empty before the merge by definition, so
- * the value to restore is the field's own empty value and never a stored one — which is also why
- * a masked `bsn` costs nothing: unmerge writes null, not the digits.
+ * The survivor's patch for an unmerge, per released field:
+ *
+ *  - A **gained** field was empty before the merge by definition, so the value to restore is the
+ *    field's own empty value and never a stored one.
+ *  - A field a reviewer **chose** had a value before the merge, and the entry records it in
+ *    `from`, so that is what comes back. Without this an unmerge would blank a value the survivor
+ *    had all along.
+ *
+ * **`bsn` is the exception, and blanks either way.** Its `from` is masked in the entry — jsonb is
+ * out of reach of the console's column-level masking (`./mask.ts`) — so a chosen number cannot be
+ * restored from the record. Blanking is the safe direction for an identifier, the audit entry says
+ * a value was there, and the raw row still holds it. Unmerge has no console screen (R-S4).
  */
-function emptyPatch(released: readonly AuditChange[]): Partial<PatientRow> {
+function restorePatch(released: readonly AuditChange[]): Partial<PatientRow> {
   const patch: Partial<PatientRow> = {};
   for (const change of released) {
     if (change.field === 'bsn_check') {
@@ -329,7 +453,11 @@ function emptyPatch(released: readonly AuditChange[]): Partial<PatientRow> {
     }
     const field = FIELD_BY_COLUMN.get(change.field);
     if (field === undefined) throw new Error(`unmerge cannot write unknown field ${change.field}`);
-    Object.assign(patch, { [field]: PERSON_FIELDS[field].empty });
+    const restored =
+      change.chosen === undefined || field === 'bsn' ? PERSON_FIELDS[field].empty : change.from;
+    Object.assign(patch, {
+      [field]: parseFieldValue('patient', change.field, restored).parsed,
+    });
   }
   return patch;
 }
@@ -351,7 +479,7 @@ interface EntryDraft {
  */
 async function writeEntries(
   db: Queryable,
-  request: { actor: string; reviewItemId?: string | null },
+  request: { actor: string; actorReviewerId?: string | null; reviewItemId?: string | null },
   drafts: readonly EntryDraft[],
 ): Promise<void> {
   await db
@@ -359,6 +487,8 @@ async function writeEntries(
     .values(
       drafts.map((draft) => ({
         actor: request.actor,
+        // The stable identity behind a human actor; a named process has none (ADR-0014 item 4).
+        actorReviewerId: request.actorReviewerId ?? null,
         entityType: 'patient',
         entityId: draft.entityId,
         fromState: draft.fromState,

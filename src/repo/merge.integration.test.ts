@@ -12,6 +12,8 @@ import {
   intakes,
   patientLegacyIds,
   patients,
+  reviewers,
+  type AuditChange,
 } from '@/db/schema';
 import { createTestDatabase, type TestDatabase } from '@/test/database';
 import * as rows from '@/test/rows';
@@ -370,6 +372,195 @@ describe('mergePatients / unmergePatient (ADR-0006)', () => {
       const [event] = await database.db.select().from(consentEvents);
       expect(intake?.patientId).toBe(loser);
       expect(event?.patientId).toBe(loser);
+    });
+  });
+  // ADR-0022: a reviewer picks the survivor and, per field, the winning value or an edit (R-C5).
+  // `mergePatients` on its own copies only fields the survivor does not hold, which is the tier-1
+  // rule and the wrong one for two rows that contradict each other.
+  describe('a reviewer’s per-field decisions', () => {
+    const mergeWith = (
+      survivorId: string,
+      loserId: string,
+      fieldDecisions: Parameters<typeof mergePatients>[1]['fieldDecisions'],
+      actorReviewerId: string | null = null,
+    ) =>
+      mergePatients(database.db, {
+        survivorId,
+        loserId,
+        actor: REVIEWER,
+        actorReviewerId,
+        reason: 'the same person, confirmed by phone',
+        declaredConsentTypes: TYPES,
+        fieldDecisions,
+      });
+
+    const changesOn = async (patientId: string): Promise<AuditChange[]> =>
+      (await auditFor(patientId)).flatMap((entry) => entry.changes ?? []);
+
+    it('writes the loser’s value over one the survivor already holds', async () => {
+      const survivor = await insertPatient('recS', { fullName: 'Bram Nair' });
+      const loser = await insertPatient('recL', { fullName: 'Braam Nair' });
+      await mergeWith(survivor, loser, { fullName: { value: 'Braam Nair', source: 'loser' } });
+
+      const [row] = await database.db.select().from(patients).where(eq(patients.id, survivor));
+      expect(row?.fullName).toBe('Braam Nair');
+      expect(await changesOn(survivor)).toContainEqual({
+        field: 'full_name',
+        from: 'Bram Nair',
+        to: 'Braam Nair',
+        source_legacy_id: 'recL',
+        chosen: 'loser',
+      });
+    });
+
+    // An edited value came from the reviewer, not from a row; naming a row would be false
+    // provenance (ADR-0022 item 2).
+    it('claims no source row for a value the reviewer typed', async () => {
+      const survivor = await insertPatient('recS', { city: 'Utrecht' });
+      const loser = await insertPatient('recL', { city: 'Delft' });
+      await mergeWith(survivor, loser, { city: { value: 'Amsterdam', source: 'edited' } });
+
+      expect(await changesOn(survivor)).toContainEqual({
+        field: 'city',
+        from: 'Utrecht',
+        to: 'Amsterdam',
+        chosen: 'edited',
+      });
+    });
+
+    it('writes no change for a decision that is already the value', async () => {
+      const survivor = await insertPatient('recS', { city: 'Utrecht' });
+      const loser = await insertPatient('recL', { city: 'Utrecht' });
+      const outcome = await mergeWith(survivor, loser, {
+        city: { value: 'Utrecht', source: 'survivor' },
+      });
+      expect(outcome.decided).toEqual([]);
+    });
+
+    it('lets a decision win over the field the survivor would have gained', async () => {
+      const survivor = await insertPatient('recS', { city: null });
+      const loser = await insertPatient('recL', { city: 'Delft' });
+      await mergeWith(survivor, loser, { city: { value: 'Rotterdam', source: 'edited' } });
+
+      const [row] = await database.db.select().from(patients).where(eq(patients.id, survivor));
+      expect(row?.city).toBe('Rotterdam');
+      const changes = await changesOn(survivor);
+      expect(changes.filter((change) => change.field === 'city')).toHaveLength(1);
+    });
+
+    it('checks a decided bsn, because nothing else will', async () => {
+      const survivor = await insertPatient('recS');
+      const loser = await insertPatient('recL');
+      await mergeWith(survivor, loser, { bsn: { value: '111222333', source: 'loser' } });
+
+      const [row] = await database.db.select().from(patients).where(eq(patients.id, survivor));
+      expect(row).toMatchObject({ bsn: '111222333', bsnCheck: 'valid' });
+      // Masked in the entry, like every other bsn in a jsonb column (`./mask.ts`).
+      expect(await changesOn(survivor)).toContainEqual(
+        expect.objectContaining({ field: 'bsn', to: '******333' }),
+      );
+    });
+
+    it('refuses a field that is not a field of the person', async () => {
+      const survivor = await insertPatient('recS');
+      const loser = await insertPatient('recL');
+      await expect(
+        mergeWith(survivor, loser, { mergedInto: { value: survivor, source: 'edited' } } as never),
+      ).rejects.toThrow(/mergedInto/);
+    });
+
+    it('refuses a value the column cannot hold, and writes nothing at all', async () => {
+      const survivor = await insertPatient('recS', { fullName: 'Bram Nair' });
+      const loser = await insertPatient('recL');
+      await expect(
+        mergeWith(survivor, loser, { dob: { value: '2023-02-30', source: 'edited' } }),
+      ).rejects.toThrow(/dob/);
+
+      const [row] = await database.db.select().from(patients).where(eq(patients.id, loser));
+      expect(row?.mergedInto).toBeNull();
+      expect(await auditFor(survivor)).toEqual([]);
+    });
+
+    it('names the reviewer behind a human merge on both entries', async () => {
+      const [reviewer] = await database.db
+        .insert(reviewers)
+        .values({ name: REVIEWER, role: 'ops' })
+        .returning({ id: reviewers.id });
+      const survivor = await insertPatient('recS');
+      const loser = await insertPatient('recL');
+      await mergeWith(survivor, loser, {}, reviewer?.id ?? null);
+
+      for (const id of [survivor, loser]) {
+        expect((await auditFor(id))[0]?.actorReviewerId).toBe(reviewer?.id);
+      }
+    });
+
+    it('leaves actor_reviewer_id null for the importer', async () => {
+      const survivor = await insertPatient('recS');
+      const loser = await insertPatient('recL');
+      await merge(survivor, loser);
+      expect((await auditFor(survivor))[0]?.actorReviewerId).toBeNull();
+    });
+
+    // Without this an unmerge would blank a value the survivor had all along.
+    it('gives a chosen value back on unmerge', async () => {
+      const survivor = await insertPatient('recS', { city: 'Utrecht' });
+      const loser = await insertPatient('recL', { city: 'Delft' });
+      await mergeWith(survivor, loser, { city: { value: 'Delft', source: 'loser' } });
+      await unmergePatient(database.db, {
+        loserId: loser,
+        actor: REVIEWER,
+        reason: 'not the same person after all',
+        declaredConsentTypes: TYPES,
+      });
+
+      const [row] = await database.db.select().from(patients).where(eq(patients.id, survivor));
+      expect(row?.city).toBe('Utrecht');
+    });
+
+    // The four writes and the consent recomputation are one fact, so a failure after the first of
+    // them must leave none of them (ADR-0022 item 4). A review item id that does not exist fails
+    // the audit insert, which happens after both patient updates.
+    it('writes nothing when the merge fails after it has started', async () => {
+      const survivor = await insertPatient('recS', { city: null });
+      const loser = await insertPatient('recL', { city: 'Delft' });
+      await expect(
+        mergePatients(database.db, {
+          survivorId: survivor,
+          loserId: loser,
+          actor: REVIEWER,
+          reason: 'the same person',
+          declaredConsentTypes: TYPES,
+          reviewItemId: '00000000-0000-4000-8000-000000000000',
+        }),
+      ).rejects.toThrow();
+
+      const [survivorRow] = await database.db
+        .select()
+        .from(patients)
+        .where(eq(patients.id, survivor));
+      const [loserRow] = await database.db.select().from(patients).where(eq(patients.id, loser));
+      expect(survivorRow?.city).toBeNull();
+      expect(loserRow?.mergedInto).toBeNull();
+      expect(await aliasOf('recL')).toBe(loser);
+      expect(await auditFor(survivor)).toEqual([]);
+    });
+
+    // The documented limit: a chosen bsn is masked in the record, so unmerge blanks it rather than
+    // writing back digits it does not have. The raw row still holds the number.
+    it('blanks a chosen bsn on unmerge rather than restoring a masked one', async () => {
+      const survivor = await insertPatient('recS', { bsn: '111222333', bsnCheck: 'valid' });
+      const loser = await insertPatient('recL');
+      await mergeWith(survivor, loser, { bsn: { value: '123456782', source: 'edited' } });
+      await unmergePatient(database.db, {
+        loserId: loser,
+        actor: REVIEWER,
+        reason: 'not the same person after all',
+        declaredConsentTypes: TYPES,
+      });
+
+      const [row] = await database.db.select().from(patients).where(eq(patients.id, survivor));
+      expect(row).toMatchObject({ bsn: null, bsnCheck: 'absent' });
     });
   });
 });
