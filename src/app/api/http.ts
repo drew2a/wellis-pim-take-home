@@ -1,5 +1,6 @@
-// Shared response shapes for the intake routes. Every input from outside the process goes through
-// Zod at its point of entry (ADR-0003); these helpers only decide what the caller is told.
+// Shared response shapes for every route under `src/app/api/` — the patient's intake routes and
+// the review console's alike. Every input from outside the process goes through Zod at its point
+// of entry (ADR-0003); these helpers only decide what the caller is told.
 import { z } from 'zod';
 
 export interface ApiIssue {
@@ -11,7 +12,7 @@ export const issuesOf = (error: z.ZodError): ApiIssue[] =>
   error.issues.map((issue) => ({ path: issue.path.join('.'), message: issue.message }));
 
 /**
- * Every intake route answers with one patient's own intake — their name, email, date of birth,
+ * Every route here answers with one patient's own intake — their name, email, date of birth,
  * weight and medication — and the intake's uuid is the only thing that authorises the read, since
  * there is no patient authentication (README, R-S4). A store that kept such a response would serve
  * it to the next caller of that URL, so none of them is stored: not by the browser, not by a proxy,
@@ -29,6 +30,20 @@ export const badRequest = (message: string, issues: readonly ApiIssue[] = []): R
 export const notFound = (message: string): Response => json({ error: message }, 404);
 
 export const conflict = (message: string): Response => json({ error: message }, 409);
+
+/**
+ * No session, or one that names nobody (ADR-0021 item 3). Every mutating console route answers
+ * this before it reads its body, so an unauthenticated caller learns nothing about what the route
+ * would have accepted.
+ */
+export const unauthorized = (): Response => json({ error: 'sign in to the console first' }, 401);
+
+/**
+ * A session, but not the role the action needs — today only `doctor`, on approve and reject
+ * (ADR-0014 item 3). The machine's own message is passed through, because "this transition does
+ * not exist for you" is what the reviewer has to be told.
+ */
+export const forbidden = (message: string): Response => json({ error: message }, 403);
 
 /** How far `describeError` follows `cause`. Bounded so a cyclic chain cannot spin. */
 const MAX_CAUSE_DEPTH = 4;
@@ -82,4 +97,4 @@ export function serverError(context: string, error: unknown): Response {
 }
 
 /** Route params are input like any other (ADR-0003): an id that is not a uuid never reaches SQL. */
-export const intakeIdSchema = z.uuid();
+export const routeUuid = z.uuid();
