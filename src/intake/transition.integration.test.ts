@@ -302,14 +302,12 @@ describe('the age carve-out (ADR-0014 item 3)', () => {
         evaluatedAt: new Date('2020-01-01T00:00:00Z'),
       }),
     );
-    await db
-      .insert(eligibilityEvaluations)
-      .values(
-        eligibilityEvaluationRow(id, {
-          shadow: false,
-          evaluatedAt: new Date('2026-01-01T00:00:00Z'),
-        }),
-      );
+    await db.insert(eligibilityEvaluations).values(
+      eligibilityEvaluationRow(id, {
+        shadow: false,
+        evaluatedAt: new Date('2026-01-01T00:00:00Z'),
+      }),
+    );
     await expect(
       transitionIntake(db, { intakeId: id, to: 'approved', actor: doctor, reason: 'cleared' }),
     ).resolves.toMatchObject({ to: 'approved' });

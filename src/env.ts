@@ -9,6 +9,26 @@ const postgresUrl = z.url({ protocol: /^postgres(ql)?$/ });
 const optional = <T extends z.ZodType>(schema: T) =>
   z.preprocess((value) => (value === '' ? undefined : value), schema.optional());
 
+// The care team, seeded by `npm run seed:reviewers` (ADR-0014 item 4). A JSON array so one
+// variable carries both fields; identification for the audit, never authentication (Q8, R-S4).
+const reviewerSeedSchema = z.object({
+  name: z.string().trim().min(1),
+  role: z.enum(['doctor', 'ops']),
+});
+
+export type ReviewerSeed = z.infer<typeof reviewerSeedSchema>;
+
+// A malformed value must fail as a validation message, not as a raw SyntaxError from the parser,
+// so unparseable JSON is handed on as the string it was and the array schema rejects it.
+const jsonArray = z.preprocess((value): unknown => {
+  if (typeof value !== 'string' || value === '') return undefined;
+  try {
+    return JSON.parse(value) as unknown;
+  } catch {
+    return value;
+  }
+}, z.array(reviewerSeedSchema).optional());
+
 const envSchema = z.object({
   DATABASE_URL: postgresUrl,
   // Same role and secret as DATABASE_URL through the Supabase session pooler (port 5432) instead
@@ -19,6 +39,8 @@ const envSchema = z.object({
   // a non-local host unless this is set, so a .env pointed at production for a migration cannot
   // be hit by `npm run check`.
   ALLOW_REMOTE_TEST_DATABASE: optional(z.literal('1')),
+  // e.g. REVIEWERS='[{"name":"Dr Vermeer","role":"doctor"},{"name":"Sanne","role":"ops"}]'
+  REVIEWERS: jsonArray,
 });
 
 export type Env = z.infer<typeof envSchema>;
