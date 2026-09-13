@@ -3,11 +3,12 @@
 - **Status:** proposed
 - **Date:** 2026-09-13
 - **Deciders:** Andrei Andreev
-- **Requirements:** R-B1, R-B2, R-B3, R-B4, R-B5, R-B8, R-B9, R-B11, R-B12, R-A7, R-A11, R-A31,
-  R-T4 · **Resolves:** Q7 (default A, applied to the new flow) ·
+- **Requirements:** R-B1, R-B2, R-B3, R-B4, R-B5, R-B6, R-B7, R-B8, R-B9, R-B11, R-B12, R-A7,
+  R-A11, R-A31, R-T4 · **Resolves:** Q7 (default A, applied to the new flow) ·
   **Amends:** ADR-0004 (`intakes.intake_id` becomes nullable, `intakes.answers`,
   `eligibility_evaluations.matched`), ADR-0009 item 3 (the convention for evidence written outside
-  the importer, extended to review items)
+  the importer, extended to review items), **ADR-0010** (`EligibilityInput` gains
+  `glp1Declared`; the GLP-1 rule fires on the declaration as well as on a matched term — item 6)
 
 ## Context and problem statement
 
@@ -81,7 +82,7 @@ Multi-step (R-B1), plain (R-B4), one step per screen, server-side draft after ev
 |---|---|---|
 | 1 identity | full name, email, date of birth | non-empty name; email syntax; a date in the past giving an age of at most **100** at submission — the same bound the importer calls impossible (ADR-0009 item 1), lifted out of `src/import/mapper/dates.ts` into one shared constant |
 | 2 body metrics | height (cm), weight (kg) | the **plausibility bounds of `rules/v1.json`** — 100–230 cm, 30–300 kg — with a message naming the bound: "Enter a height in centimetres between 100 and 230." |
-| 3 medications | "Are you currently using a GLP-1 medication?" yes/no, with the brand names from `glp1_terms` listed; on yes, a checklist of those brands plus a free-text "other medication" box | on yes, at least one brand or the free text must be filled |
+| 3 medications | "Are you currently using a GLP-1 medication?" yes/no — an **engine input** (item 6), not a hint — with the brand names from `glp1_terms` listed; on yes, a checklist of those brands plus a free-text "other medication" box | on yes, at least one brand or the free text must be filled |
 | 4 conditions | a checklist built from `weight_related_condition_terms` and `flag_condition_terms`, plus a free-text "anything else" box | none: no condition is a valid answer |
 | 5 consent | the consent text, its version, and one explicit "I agree" | see item 4 |
 
@@ -149,10 +150,10 @@ what we act on (`CLAUDE.md` §6).
    these are the same rules. The blanking codes cannot fire here: Zod refused at the boundary
    what the importer had to accept.
 4. **Fill the intake** from the answers and **evaluate**: `ageYears` at submission (Q4),
-   `weightKg`, `heightCm`, `medications` = the ticked brand terms plus the free text,
-   `conditions` = the ticked condition terms (the authoritative answer, which may suppress the
-   band flag), `conditionsOther` = the free text (flag terms only — it can add a flag, never
-   clear one; ADR-0010).
+   `weightKg`, `heightCm`, `glp1Declared` = the yes/no answer (item 6), `medications` = the
+   ticked brand terms plus the free text, `conditions` = the ticked condition terms (the
+   authoritative answer, which may suppress the band flag), `conditionsOther` = the free text
+   (flag terms only — it can add a flag, never clear one; ADR-0010).
 5. **Store the evaluation**: one `eligibility_evaluations` row, `shadow` **false**, with
    `engine_outcome`, `reasons`, `inputs`, the new `matched`, `ruleset_version`, and
    `import_run_id` null. `intakes.ruleset_version` gets the same value (R-B8).
@@ -160,12 +161,41 @@ what we act on (`CLAUDE.md` §6).
    `eligibility engine`, reason = the engine's explanation lines verbatim, `ruleset_version`
    set), through `transitionIntake` and nothing else (ADR-0014 item 5).
 7. **Consent**: the event and the recomputed state (item 4).
-8. **Detectors** (item 6).
+8. **Detectors** (item 7).
 
 Steps 2–8 are one transaction: a submission is one fact, and a patient without the intake that
 created them, or an intake without its evaluation, would be worse than a rejected request.
 
-### 6. The two detectors that run at submit
+### 6. The GLP-1 declaration is an engine input, not a detector
+
+`EligibilityInput` gains **`glp1Declared: boolean`**, and the GLP-1 rule fires on
+`glp1Declared || matched.length > 0`. The declaration is a structured answer to the question the
+ruleset exists to ask, so it belongs where the verdict is formed — not in a detector that watches
+the engine be silent. A patient who says "I am taking a GLP-1" is **never `auto_cleared`**, which
+is R-B6(d) verbatim, and the reason for it is stored in the same `reasons` array as every other:
+
+| declared | matched terms | reason line |
+|---|---|---|
+| no | yes | `flagged: current GLP-1 medication (ozempic)` — unchanged |
+| yes | yes | the same line; the terms are the better evidence |
+| yes | no | `flagged: current GLP-1 medication (declared by patient)` |
+| no | no | no line, no match |
+
+`matched` still names `glp1_medication` in all three firing cases, `EvaluatedInputs` gains
+`glp1Declared` so a stored evaluation explains itself without the answers, and the engine stays
+pure — it is handed one more input, not a second source of truth. **Legacy passes `false`**: the
+legacy questionnaire asked no such question, and inventing a "yes" from free text is what
+`matchTerms` already does honestly. No shadow evaluation changes.
+
+This amends ADR-0010, which specified the input shape without a declaration because Part B's form
+did not exist yet. ADR-0005's Part B note had it right already — "medications and conditions are
+structured inputs (yes/no current GLP-1 use with brand names listed, a condition checklist) plus
+an 'other' free-text field; **the engine evaluates the structured fields only**; free text goes to
+the doctor unchanged, with the same matcher run over it as a safety net that can only add a flag,
+never clear one" — and the engine had no way to receive the structured medication answer. This is
+that note made true in the engine.
+
+### 7. The two detectors that run at submit
 
 **`POSSIBLE_EXISTING_PATIENT`** — a `review_items` row, type `identity_conflict`, scope `row`.
 The new patient's candidate keys (ADR-0006: canonical email, `bsn`, E.164 phone, folded name +
@@ -178,18 +208,21 @@ submission against a legacy record is not — and it is **never a block**: the p
 their intake, the engine runs, the intake enters the machine. Deciding whether two people are one
 person is a reviewer's job, and it is not worth making a patient wait for it.
 
-**`NEW_GLP1_DECLARED_UNMATCHED`** — a `review_items` row, type `clinical_history`, scope `row`,
-raised when the patient answered **yes** to current GLP-1 use and the engine matched **no** term
-from `glp1_terms` in what they named. The ruleset's list is the definition of "GLP-1 medication"
-(R-B11), so the engine is right to stay silent and the outcome stands as the rules produced it;
-but a patient who says they are taking one and names a drug we do not know is exactly a case a
-human should see. The alternative — flagging the intake on the boolean — would put a verdict in
-the state that the engine did not reach, and a state that disagrees with the stored evaluation is
-the kind of second implementation ADR-0011 item 1 refuses.
+**`NEW_GLP1_DECLARED_UNMATCHED`** — a `review_items` row, type `vocabulary`, scope
+**`vocabulary`**, raised when the patient answered **yes** to current GLP-1 use and the engine
+matched **no** term from `glp1_terms` in what they named. The intake is already `auto_flagged` by
+item 6, so this item is not about that patient at all: it asks *the ruleset* a question — "a
+patient named `Saxenda 3mg pen`; it is not in `glp1_terms`; add it to v2?" — which is a
+vocabulary-level decision for a human, not one row decision per patient who names the same drug
+(`CLAUDE.md` §5). Accordingly `patient_id` and `intake_id` are null, the payload carries the text
+verbatim and the first intake that carried it, and the `dedupe_key` is
+(`vocabulary`, `vocabulary`, `ruleset:glp1_terms`, `NEW_GLP1_DECLARED_UNMATCHED`, the folded
+text), so the hundredth patient naming the same drug adds no item — the same shape ADR-0009 item 8
+already gives an unseen consent spelling.
 
-Both items use the canonical uuid in their `dedupe_key` where the importer would use a natural
-key: a new-flow entity has none (ADR-0009 item 3), and the "same key on every run" argument that
-motivated natural keys applies to re-imports, not to a submission that happens once.
+`POSSIBLE_EXISTING_PATIENT` uses the canonical uuid in its `dedupe_key` where the importer would
+use a natural key: a new-flow entity has none (ADR-0009 item 3), and the "same key on every run"
+argument that motivated natural keys applies to re-imports, not to a submission that happens once.
 
 ### Consequences
 
@@ -209,9 +242,13 @@ motivated natural keys applies to re-imports, not to a submission that happens o
 - Bad: an unauthenticated `GET /api/intakes/:id` returns a patient's own submission to anyone
   holding the uuid. Accepted and recorded as a scope cut; the uuid is a v4 capability and nothing
   enumerates it.
-- Bad: a patient who declares GLP-1 use in words the ruleset does not know can still be
-  `auto_cleared`, with only a review item to catch it. Accepted deliberately, and the reasoning is
-  in item 6; the alternative corrupts the relationship between the stored verdict and the state.
+- Good: a patient who declares GLP-1 use is flagged whatever they call the drug, and the reason
+  saying *why* is in the stored evaluation like every other — no detector, no second verdict, no
+  state that disagrees with the evaluation behind it.
+- Bad: `EligibilityInput` now has a field that only one of its two callers can ever set to `true`,
+  and the history audit must keep passing `false` forever. Accepted: the alternative is an engine
+  that cannot see an answer the form asks, and `false` is the honest value for a questionnaire
+  that never asked.
 - Neutral: an abandoned draft stays in the database forever as a `draft` row with partial answers
   and no patient. No expiry is built; it is a candidate for a scheduled cleanup Wellis does not
   need in week one.
@@ -232,8 +269,16 @@ motivated natural keys applies to re-imports, not to a submission that happens o
 - Integration test: a submission whose email matches an existing patient raises exactly one
   `POSSIBLE_EXISTING_PATIENT` item **and still** creates the patient, the intake and the
   evaluation, and leaves the intake in its `auto_*` state.
-- Integration test: a submission declaring GLP-1 use with an unlisted drug name raises exactly one
-  `NEW_GLP1_DECLARED_UNMATCHED` item and does not change the engine's outcome.
+- Unit tests on the engine, the four rows of item 6's table: declared with no matched term flags
+  with the `(declared by patient)` reason and `glp1_medication` in `matched`; declared with a
+  matched term keeps the quoting reason; not declared behaves exactly as before (the existing
+  cases still pass unchanged); a declaration cannot rescue an absolute reject, and it does
+  pre-empt a BMI reject the same way a matched term does (Q1).
+- Integration test: a submission declaring GLP-1 use with an unlisted drug name lands in
+  `auto_flagged` and raises exactly one `NEW_GLP1_DECLARED_UNMATCHED` vocabulary item; a second
+  submission naming the same drug raises none, and one naming a different drug raises another.
+- Unit test: the history audit passes `glp1Declared: false`, and every shadow evaluation's outcome
+  is unchanged by the new input (the existing import-report figures still hold).
 - Unit tests: every checklist option value is a ruleset term; every ruleset condition term is
   covered by an option.
 

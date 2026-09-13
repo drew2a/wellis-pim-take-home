@@ -3,9 +3,10 @@
 - **Status:** proposed
 - **Date:** 2026-09-13
 - **Deciders:** Andrei Andreev
-- **Requirements:** R-B13, R-B14, R-B15, R-B16, R-B17, R-B18, R-B19, R-B20, R-B21, R-T4 ·
-  **Resolves:** Q8 (default A) · **Amends:** ADR-0009 item 4 (the two Part B system actors),
-  ADR-0004 (`audit_entries` gains `seq`, `ruleset_version`, `actor_reviewer_id`)
+- **Requirements:** R-B6, R-B7, R-B13, R-B14, R-B15, R-B16, R-B17, R-B18, R-B19, R-B20, R-B21,
+  R-T4 · **Resolves:** Q8 (default A) · **Enforces:** Q1's age carve-out, at the transition ·
+  **Amends:** ADR-0009 item 4 (the two Part B system actors), ADR-0004 (`audit_entries` gains
+  `seq`, `ruleset_version`, `actor_reviewer_id`)
 
 ## Context and problem statement
 
@@ -55,19 +56,19 @@ hand-written `UPDATE`.
 Twelve `intake_state` values, **ten legal ordered pairs**, plus creation. Every other pair is
 illegal.
 
-| # | from | to | actor kind | actor | performed by |
-|---|---|---|---|---|---|
-| 0 | *(creation)* | `draft` | process | `intake form` | `POST /api/intakes` |
-| 1 | `draft` | `submitted` | process | `intake form` | `POST /api/intakes/:id/submit` |
-| 2 | `submitted` | `auto_cleared` | process | `eligibility engine` | the same request |
-| 3 | `submitted` | `auto_flagged` | process | `eligibility engine` | the same request |
-| 4 | `submitted` | `auto_rejected` | process | `eligibility engine` | the same request |
-| 5 | `auto_cleared` | `in_review` | reviewer | the reviewer who claims it | console (Part C) |
-| 6 | `auto_flagged` | `in_review` | reviewer | the reviewer who claims it | console (Part C) |
-| 7 | `auto_rejected` | `in_review` | reviewer | the reviewer who claims it | console (Part C) |
-| 8 | `legacy_pending` | `in_review` | reviewer | the reviewer who claims it | console (Part C) |
-| 9 | `in_review` | `approved` | reviewer | the deciding reviewer | console (Part C) |
-| 10 | `in_review` | `rejected` | reviewer | the deciding reviewer | console (Part C) |
+| # | from | to | actor kind | actor | extra guard | performed by |
+|---|---|---|---|---|---|---|
+| 0 | *(creation)* | `draft` | process | `intake form` | — | `POST /api/intakes` |
+| 1 | `draft` | `submitted` | process | `intake form` | — | `POST /api/intakes/:id/submit` |
+| 2 | `submitted` | `auto_cleared` | process | `eligibility engine` | — | the same request |
+| 3 | `submitted` | `auto_flagged` | process | `eligibility engine` | — | the same request |
+| 4 | `submitted` | `auto_rejected` | process | `eligibility engine` | — | the same request |
+| 5 | `auto_cleared` | `in_review` | reviewer | the reviewer who claims it | — | console (Part C) |
+| 6 | `auto_flagged` | `in_review` | reviewer | the reviewer who claims it | — | console (Part C) |
+| 7 | `auto_rejected` | `in_review` | reviewer | the reviewer who claims it | — | console (Part C) |
+| 8 | `legacy_pending` | `in_review` | reviewer | the reviewer who claims it | — | console (Part C) |
+| 9 | `in_review` | `approved` | reviewer | the deciding reviewer | role `doctor`; no absolute reject | console (Part C) |
+| 10 | `in_review` | `rejected` | reviewer | the deciding reviewer | role `doctor` | console (Part C) |
 
 The graph is acyclic: no state is entered twice, so no transition can legitimately repeat. Edges
 5–10 are part of the machine and are implemented and tested on this branch; the routes that
@@ -114,12 +115,33 @@ edge taken by the wrong kind as firmly as it rejects an edge that does not exist
 - **Reviewer only** (edges 5–10): claiming, approving, rejecting. The engine never approves and
   never rejects — `approved` and `rejected` are medical decisions by a person (§3B, R-B19).
 
+Two edges carry a further guard, declared in the same table and refused the same loud way:
+
+- **Role.** Edges 9 and 10 — the medical decision — require the reviewer's role to be `doctor`.
+  Claiming (edges 5–8) and every review-item action are open to any reviewer: triaging the queue,
+  resolving a conflict and merging two records are operational work, while approving or rejecting
+  a course of treatment is not. A seeded role that gates nothing would be decoration; this is the
+  one place it decides something.
+- **The age carve-out.** Edge 9 is refused when the intake's stored evaluation has
+  `age_below_minimum` in `matched`. `QUESTIONS.md` Q1 makes the age rule an *absolute* reject
+  precisely because it is a legal gate a reviewer cannot resolve in the patient's favour
+  (`rules/v1.json`, `precedence.absolute_rejects`); leaving `in_review → approved` open to
+  everyone would have let a click undo the one rule the ruleset calls absolute. `rejected` and
+  staying in `in_review` remain available, so the reviewer still has a decision to make — just
+  not that one. The guard reads the intake's **governing evaluation**: the one with the latest
+  `evaluated_at`, non-shadow first on a tie, which is the submission's own evaluation for a new
+  intake and the current ruleset's shadow evaluation for a legacy one. An intake in `in_review`
+  with no stored evaluation at all cannot be judged, so approving it **throws** rather than
+  failing open (`CLAUDE.md` §2). The guard reads `eligibility_evaluations.matched`, the column
+  ADR-0015 adds, which is why a database seeded before that migration must be re-imported before
+  the guard means anything.
+
 ### 4. The actor model
 
 | kind | who | recorded as |
 |---|---|---|
 | process | one of `SYSTEM_ACTORS` | `audit_entries.actor` = the process name, `actor_reviewer_id` null, `dedupe_key` deterministic (ADR-0008) |
-| reviewer | a row in the new `reviewers` table | `audit_entries.actor` = the reviewer's name **as it was at the time**, `actor_reviewer_id` = their id, `dedupe_key` null |
+| reviewer | a row in the new `reviewers` table, carrying their id, name and role | `audit_entries.actor` = the reviewer's name **as it was at the time**, `actor_reviewer_id` = their id, `dedupe_key` null |
 
 - `SYSTEM_ACTORS` (ADR-0009 item 4) gains exactly two members, and nowhere else:
   **`intake form`** (accepts a submission) and **`eligibility engine`** (applies the verdict).
@@ -130,8 +152,9 @@ edge taken by the wrong kind as firmly as it rejects an edge that does not exist
   (`doctor` | `ops`), `created_at`. Seeded from a `REVIEWERS` environment variable (a JSON array
   of `{name, role}`) validated by Zod in `src/env.ts` and applied by `npm run seed:reviewers`,
   which upserts by name. **No SSO, no login, no sessions** — Q8 default A, recorded as a
-  deliberate scope cut in `README.md` (R-S4). What a role *may do* is not enforced on this
-  branch; the column exists so the console can enforce it without a migration.
+  deliberate scope cut in `README.md` (R-S4). The role is enforced on this branch, on exactly the
+  two edges item 3 names; the honest limit is that without authentication the caller *asserts*
+  which reviewer they are, so the role separates duties, it does not resist an attacker.
 - The reviewer's name is copied onto the audit entry rather than joined at read time: the entry is
   evidence and must still say who decided after the person is renamed or removed. `actor_reviewer_id`
   is the stable identity Q8 asks for so that real authentication slots in later.
@@ -142,14 +165,20 @@ edge taken by the wrong kind as firmly as it rejects an edge that does not exist
 
 `transitionIntake(db, request)` in `src/intake/transition.ts` is the **only** code that writes
 `intakes.state`, and it is the only code that writes an `audit_entries` row for an intake
-transition. The edge table, the actor kinds and the validation are a pure, I/O-free module
-(`src/intake/machine.ts`) callable from a test without a database (`CLAUDE.md` §2).
+transition. The edge table, the actor kinds, the required roles and the validation are a pure,
+I/O-free module (`src/intake/machine.ts`) callable from a test without a database
+(`CLAUDE.md` §2). The age guard is declared there too — as a property of edge 9 and as a pure
+predicate over a `matched` list — and only the *fetch* of the governing evaluation lives in the
+transition function, so the rule itself is still testable without a database.
 
 In one transaction it: locks the intake (`select … for update`), reads `from`, refuses unless
-`(from, to)` is in the table **and** the actor's kind matches the edge **and** the reason is
-non-empty, updates `intakes.state`, and inserts the audit entry with `actor`, `at`, `from_state`,
-`to_state`, `reason`, `ruleset_version` and the optional `review_item_id` / `changes`. It throws
+`(from, to)` is in the table **and** the actor's kind matches the edge **and** the actor's role
+satisfies the edge **and** the edge's guard passes **and** the reason is non-empty, updates
+`intakes.state`, and inserts the audit entry with `actor`, `at`, `from_state`, `to_state`,
+`reason`, `ruleset_version` and the optional `review_item_id` / `changes`. It throws
 `IllegalTransitionError` before any write, so an illegal edge leaves the database untouched.
+Every refusal is the same error and the same loudness: a missing edge, the wrong actor kind, the
+wrong role and a blocked approval are all "this transition does not exist for you".
 
 - **The reason is mandatory and is the human's note** where a human takes the edge (R-C6, R-C8).
   For edges 2–4 it is the engine's own explanation lines joined verbatim, so the timeline explains
@@ -222,6 +251,16 @@ incomplete submission is refused with 400 and writes nothing.
 - Good: the edge table is eleven rows of data. It can be read out loud in the follow-up, and the
   exhaustive test is a grid over all 144 ordered pairs rather than a list of cases someone chose.
 - Good: `in_review` naming a person, plus the acyclic graph, gives exclusive claiming for free.
+- Good: the one rule the ruleset calls absolute stays absolute all the way to the console. An
+  under-age intake cannot be approved by anyone, and the refusal quotes the same `matched` list
+  the patient's explanation was built from.
+- Bad: the role gate and the age guard make the transition function read two things the trigger
+  cannot see (the reviewer's role, the stored evaluation), so both are application-level only.
+  Accepted: they restrict *who may do a legal transition*, while the trigger's job is that no
+  illegal state exists at all.
+- Bad: the age guard depends on a column (`eligibility_evaluations.matched`) whose historical
+  rows the migration backfills with `[]`, so it fails open on a database that has not been
+  re-imported since. Accepted and named here; production is seeded by a fresh import (R-T6).
 - Bad: the edge set is written twice — TypeScript and the trigger's SQL. Mitigated, not removed:
   the integration test drives the database from the TypeScript table over every pair, so a
   divergence fails the build rather than reaching production.
@@ -242,7 +281,15 @@ incomplete submission is refused with 400 and writes nothing.
 
 - Unit tests over the pure machine: all **144** ordered state pairs — 10 accepted, 134 refused
   (the 12 identity pairs included: moving to the state you are in is not a transition); every edge
-  refused for the wrong actor kind; an empty reason refused.
+  refused for the wrong actor kind; an empty reason refused; the age predicate refusing a
+  `matched` list that holds `age_below_minimum` and passing one that does not.
+- Integration tests, the role gate, both roles on both edges: a `doctor` takes
+  `in_review → approved` and `in_review → rejected`; an `ops` reviewer is refused on both and
+  writes nothing; both roles take a claim edge.
+- Integration tests, the age carve-out: an intake whose stored evaluation matched
+  `age_below_minimum` is refused `in_review → approved` and writes nothing, while
+  `in_review → rejected` succeeds for the same intake; an intake in `in_review` with no stored
+  evaluation throws on approval.
 - Integration test, the full grid through `transitionIntake`: each of the 10 legal edges succeeds,
   writes exactly one audit entry with actor, from, to, reason and (edges 2–4) the ruleset version,
   and leaves the intake in the new state; each of the other 134 throws and leaves
