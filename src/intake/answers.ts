@@ -22,12 +22,20 @@ import { CONDITION_OPTIONS, GLP1_OPTIONS, optionValues, type ChecklistOption } f
 /** Stamped into the answers and onto `intakes.questionnaire_version_label` (ADR-0015 item 1). */
 export const INTAKE_FORM_VERSION = 'intake-form-v1';
 
+/**
+ * The steps in the order the patient walks through them (ADR-0019).
+ *
+ * Consent is first because it is permission to process the answers that follow: asking it last
+ * meant a patient who declined had already sent their date of birth, their weight and their
+ * diagnoses. This is the only place the order is written down — the form derives its screens from
+ * it, and `POST /api/intakes` names the first step in a test that reads it back.
+ */
 export const INTAKE_STEPS = [
+  'consent',
   'identity',
   'metrics',
   'medications',
   'conditions',
-  'consent',
 ] as const;
 export type IntakeStep = (typeof INTAKE_STEPS)[number];
 
@@ -66,20 +74,20 @@ export interface ConsentAnswers {
 /** A draft in progress: every step is optional until it has been saved. */
 export interface DraftAnswers {
   readonly formVersion: string;
+  readonly consent?: ConsentAnswers;
   readonly identity?: IdentityAnswers;
   readonly metrics?: MetricsAnswers;
   readonly medications?: MedicationAnswers;
   readonly conditions?: ConditionAnswers;
-  readonly consent?: ConsentAnswers;
 }
 
 /** A draft that is ready to submit: every step answered. */
 export interface SubmittedAnswers extends DraftAnswers {
+  readonly consent: ConsentAnswers;
   readonly identity: IdentityAnswers;
   readonly metrics: MetricsAnswers;
   readonly medications: MedicationAnswers;
   readonly conditions: ConditionAnswers;
-  readonly consent: ConsentAnswers;
 }
 
 export const emptyAnswers = (): DraftAnswers => ({ formVersion: INTAKE_FORM_VERSION });
@@ -233,7 +241,9 @@ function conditionsSchema(): z.ZodType<ConditionAnswers> {
 function consentSchema(): z.ZodType<ConsentAnswers> {
   return z.object({
     granted: z.literal(true, {
-      message: 'You have to agree to the consent statement before you can submit.',
+      // Said as "go on" rather than "submit": since ADR-0019 this is the first screen, and the
+      // patient reading it has nothing to submit yet.
+      message: 'You have to agree to the consent statement before you can go on.',
     }),
     textVersion: z.literal(CONSENT_TEXT_VERSION, {
       message: 'The consent text has changed. Read it again and agree to the current version.',
@@ -247,11 +257,11 @@ export type StepSchemas = {
 
 export function stepSchemas(context: AnswersContext): StepSchemas {
   return {
+    consent: consentSchema(),
     identity: identitySchema(context),
     metrics: metricsSchema(context),
     medications: medicationsSchema(),
     conditions: conditionsSchema(),
-    consent: consentSchema(),
   };
 }
 

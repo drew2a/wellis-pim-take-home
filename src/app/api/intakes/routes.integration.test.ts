@@ -51,18 +51,19 @@ const post = (body: string): Promise<Response> =>
   createDraft(new Request('http://localhost/api/intakes', { method: 'POST', body }));
 
 async function newDraft(): Promise<string> {
-  const response = await post(JSON.stringify(STEPS.identity));
+  const response = await post(JSON.stringify(STEPS.consent));
   if (response.status !== 201) throw new Error(`creating a draft failed: ${await response.text()}`);
   const body = (await response.json()) as { id: string };
   return body.id;
 }
 
+// In the order the patient walks through them (ADR-0019), which is also the order `fillIn` saves.
 const STEPS: Record<IntakeStep, unknown> = {
+  consent: { granted: true, textVersion: CONSENT_TEXT_VERSION },
   identity: { fullName: 'Sem de Boer', email: 'sem@example.com', dob: '1986-04-02' },
   metrics: { heightCm: 180, weightKg: 101 },
   medications: { glp1Declared: false, glp1: [], otherMedications: '' },
   conditions: { conditions: [], otherConditions: '' },
-  consent: { granted: true, textVersion: CONSENT_TEXT_VERSION },
 };
 
 async function fillIn(id: string, skip: IntakeStep[] = []): Promise<void> {
@@ -82,7 +83,7 @@ const issues = async (response: Response): Promise<{ path: string; message: stri
 
 describe('POST /api/intakes', () => {
   it('creates a draft from the first step and records that it was created', async () => {
-    const response = await post(JSON.stringify(STEPS.identity));
+    const response = await post(JSON.stringify(STEPS.consent));
     expect(response.status).toBe(201);
     const body = (await response.json()) as { id: string; state: string };
     expect(body.state).toBe('draft');
@@ -95,8 +96,10 @@ describe('POST /api/intakes', () => {
       outcome: 'pending',
       patientId: null,
     });
-    // The first step is saved by the same request that creates the row (ADR-0016 item 1).
-    expect(row?.answers?.identity).toEqual(STEPS.identity);
+    // The first step is saved by the same request that creates the row (ADR-0016 item 1), and the
+    // first step is consent (ADR-0019): no health data has been sent yet.
+    expect(row?.answers?.consent).toEqual(STEPS.consent);
+    expect(row?.answers?.identity).toBeUndefined();
 
     const [entry] = await db.select().from(auditEntries).where(eq(auditEntries.entityId, body.id));
     expect(entry).toMatchObject({ actor: 'intake form', fromState: null, toState: 'draft' });
@@ -112,17 +115,31 @@ describe('POST /api/intakes', () => {
 
   it('refuses a first step that does not validate, and writes nothing', async () => {
     const response = await post(
-      JSON.stringify({ ...(STEPS.identity as object), dob: '2999-01-01' }),
+      JSON.stringify({ granted: true, textVersion: `not-${CONSENT_TEXT_VERSION}` }),
     );
 
     expect(response.status).toBe(400);
     expect(await issues(response)).toContainEqual(
       expect.objectContaining({
-        path: 'dob',
-        message: expect.stringContaining('in the past') as unknown,
+        path: 'textVersion',
+        message: expect.stringContaining('consent text has changed') as unknown,
       }),
     );
     expect(await db.select().from(intakes)).toHaveLength(0);
+  });
+
+  // The consent gate is now the front door (ADR-0019 item 2): a patient who does not agree leaves
+  // no row, no audit entry and no answers behind, because the request that would have created
+  // them is the one that is refused.
+  it('refuses to create a draft for a patient who does not agree, and writes nothing', async () => {
+    const response = await post(
+      JSON.stringify({ granted: false, textVersion: CONSENT_TEXT_VERSION }),
+    );
+
+    expect(response.status).toBe(400);
+    expect(await issues(response)).toContainEqual(expect.objectContaining({ path: 'granted' }));
+    expect(await db.select().from(intakes)).toHaveLength(0);
+    expect(await db.select().from(auditEntries)).toHaveLength(0);
   });
 
   it('refuses a body that is not JSON, and writes nothing', async () => {
@@ -272,9 +289,19 @@ describe('POST /api/intakes/:id/submit', () => {
     });
   });
 
+  // Since ADR-0019 the form cannot produce an unconsented draft — consent is what creates the row.
+  // The gate at submit is the server's own check and is not the form's to skip (R-B7, R-T4), so the
+  // draft is stripped of its consent directly in the database to put the gate under test alone.
   it('refuses a submission without consent, and leaves the draft a draft', async () => {
     const id = await newDraft();
-    await fillIn(id, ['consent']);
+    await fillIn(id);
+    const [before] = await db.select().from(intakes).where(eq(intakes.id, id));
+    if (before?.answers === undefined || before.answers === null) {
+      throw new Error('the draft under test has no answers');
+    }
+    const { consent, ...unconsented } = before.answers;
+    expect(consent).toBeDefined();
+    await db.update(intakes).set({ answers: unconsented }).where(eq(intakes.id, id));
 
     const response = await submit(id);
 
@@ -418,7 +445,7 @@ describe('cache headers', () => {
     // Success and failure alike: a 404 and a 409 answer "does this intake exist, and where has it
     // got to" — the same disclosure as the body, shorter.
     const responses = [
-      await post(JSON.stringify(STEPS.identity)),
+      await post(JSON.stringify(STEPS.consent)),
       await post('not json'),
       await read(id),
       await read(UNKNOWN),

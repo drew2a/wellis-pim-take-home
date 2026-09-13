@@ -14,7 +14,7 @@
 import { useCallback, useState, type ReactElement } from 'react';
 
 import { CONSENT_TEXT, CONSENT_TEXT_VERSION } from '@/consent/text';
-import type { IntakeStep } from '@/intake/answers';
+import { INTAKE_STEPS, type IntakeStep } from '@/intake/answers';
 import { CONDITION_OPTIONS, GLP1_OPTIONS } from '@/intake/options';
 import {
   Button,
@@ -50,13 +50,22 @@ interface Submitted {
   readonly rulesetVersion: string;
 }
 
-const STEPS: readonly { readonly step: IntakeStep; readonly title: string }[] = [
-  { step: 'identity', title: 'About you' },
-  { step: 'metrics', title: 'Height and weight' },
-  { step: 'medications', title: 'Medication' },
-  { step: 'conditions', title: 'Medical conditions' },
-  { step: 'consent', title: 'Consent' },
-];
+const TITLES: Record<IntakeStep, string> = {
+  consent: 'Consent',
+  identity: 'About you',
+  metrics: 'Height and weight',
+  medications: 'Medication',
+  conditions: 'Medical conditions',
+};
+
+/**
+ * The screens, in the order `INTAKE_STEPS` gives (ADR-0019) — consent first, so no answer is sent
+ * before permission to process it exists. The order is not repeated here: this form and the create
+ * route read the same list, so the screen a patient sees first is the step the server expects.
+ */
+const STEPS: readonly { readonly step: IntakeStep; readonly title: string }[] = INTAKE_STEPS.map(
+  (step) => ({ step, title: TITLES[step] }),
+);
 
 /** Server answers for one step, built from the fields of that step. */
 type StepAnswers = Record<string, unknown>;
