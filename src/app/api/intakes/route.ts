@@ -5,8 +5,12 @@
 // a question in claims an intake that never happened. Creating the row and saving step one are one
 // transaction because they are one fact — this patient started an intake.
 //
-// The identity step is validated by the same schema `PATCH /api/intakes/:id` uses, so the two
-// routes cannot disagree about what a valid first step is (`CLAUDE.md` §2).
+// The first step is **consent** (ADR-0019), so nothing a patient has not given permission to
+// process ever reaches this route. `consentSchema` requires `granted` to be literally `true`:
+// a patient who does not agree is refused here, and no row, audit entry or answer is written.
+//
+// The step is validated by the same schema `PATCH /api/intakes/:id` uses, so the two routes cannot
+// disagree about what a valid first step is (`CLAUDE.md` §2).
 //
 // The intake's uuid is the only credential the patient gets: there is no patient authentication,
 // which is a deliberate scope cut (README, R-S4).
@@ -30,12 +34,12 @@ export async function POST(request: Request): Promise<Response> {
     return badRequest('the request body is not JSON');
   }
 
-  const schema = stepSchemas({ rules: currentRules(), todayIso: todayIso() }).identity;
-  const identity = schema.safeParse(raw);
-  if (!identity.success) {
-    return badRequest('some answers need another look', issuesOf(identity.error));
+  const schema = stepSchemas({ rules: currentRules(), todayIso: todayIso() }).consent;
+  const consent = schema.safeParse(raw);
+  if (!consent.success) {
+    return badRequest('some answers need another look', issuesOf(consent.error));
   }
-  const answers: DraftAnswers = { ...emptyAnswers(), identity: identity.data };
+  const answers: DraftAnswers = { ...emptyAnswers(), consent: consent.data };
 
   try {
     return await getDb().transaction(async (tx) => {

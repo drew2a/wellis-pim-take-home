@@ -7,6 +7,7 @@ import type { ReactElement } from 'react';
 import { dobBounds } from '@/intake/answers';
 import { todayIso } from '@/intake/today';
 import { currentRules } from '@/rules/load';
+import { Lead, Page, PageTitle } from '@/ui';
 
 import { IntakeForm } from './IntakeForm';
 
@@ -15,12 +16,12 @@ export const dynamic = 'force-dynamic';
 export default function IntakePage(): ReactElement {
   const { plausibility } = currentRules();
   return (
-    <main>
-      <h1>Wellis intake</h1>
-      <p>
+    <Page>
+      <PageTitle>Wellis intake</PageTitle>
+      <Lead>
         A few questions about you and your health. A member of our care team reads every answer;
         nothing here is a medical decision on its own.
-      </p>
+      </Lead>
       <IntakeForm
         bounds={{
           heightCm: plausibility.height_cm,
@@ -29,6 +30,6 @@ export default function IntakePage(): ReactElement {
           dob: dobBounds(todayIso()),
         }}
       />
-    </main>
+    </Page>
   );
 }

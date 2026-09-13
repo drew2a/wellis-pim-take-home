@@ -2,17 +2,34 @@
 
 // The patient-facing intake form (R-B1, R-B4): five steps, one per screen, saved to the server
 // after each one. The first step creates the draft, so nothing is written until the patient has
-// answered something (ADR-0016). Plain on purpose — the brief asks for correct, not polished.
+// answered something (ADR-0016).
 //
 // It carries no business rules. Every message under a field is the server's own, from the Zod
 // schema at the boundary, so there is exactly one definition of what a valid answer is and the
-// client cannot disagree with it (`CLAUDE.md` §2, R-T4). The only client-side validation is the
-// browser's `required`, which is a convenience.
-import { useCallback, useState, type ReactElement, type ReactNode } from 'react';
+// client cannot disagree with it (`CLAUDE.md` §2, R-T4). Client-side validation here is a
+// convenience and nothing more: the browser's `required`, and the greyed-out button on the consent
+// step. Both only decline to send a request the server would refuse anyway — `consentSchema` is
+// still the one thing that decides whether consent was given (ADR-0019 item 2).
+//
+// It carries no styling either: every element on the screen is a component from `@/ui`, so how
+// this form looks is decided there and not here (`src/ui/index.ts`).
+import { useCallback, useState, type ReactElement } from 'react';
 
 import { CONSENT_TEXT, CONSENT_TEXT_VERSION } from '@/consent/text';
-import type { IntakeStep } from '@/intake/answers';
+import { INTAKE_STEPS, type IntakeStep } from '@/intake/answers';
 import { CONDITION_OPTIONS, GLP1_OPTIONS } from '@/intake/options';
+import {
+  Button,
+  ButtonRow,
+  Card,
+  Choice,
+  ErrorText,
+  Field,
+  Prose,
+  StepIndicator,
+  TextAreaField,
+  TextField,
+} from '@/ui';
 
 export interface Bounds {
   readonly heightCm: { readonly min: number; readonly max: number };
@@ -26,6 +43,7 @@ interface Issue {
   readonly message: string;
 }
 
+/** The submit response as the server sends it. The patient's screen reads `state` and no more. */
 interface Submitted {
   readonly state: string;
   readonly outcome: string;
@@ -33,13 +51,22 @@ interface Submitted {
   readonly rulesetVersion: string;
 }
 
-const STEPS: readonly { readonly step: IntakeStep; readonly title: string }[] = [
-  { step: 'identity', title: 'About you' },
-  { step: 'metrics', title: 'Height and weight' },
-  { step: 'medications', title: 'Medication' },
-  { step: 'conditions', title: 'Medical conditions' },
-  { step: 'consent', title: 'Consent' },
-];
+const TITLES: Record<IntakeStep, string> = {
+  consent: 'Consent',
+  identity: 'About you',
+  metrics: 'Height and weight',
+  medications: 'Medication',
+  conditions: 'Medical conditions',
+};
+
+/**
+ * The screens, in the order `INTAKE_STEPS` gives (ADR-0019) — consent first, so no answer is sent
+ * before permission to process it exists. The order is not repeated here: this form and the create
+ * route read the same list, so the screen a patient sees first is the step the server expects.
+ */
+const STEPS: readonly { readonly step: IntakeStep; readonly title: string }[] = INTAKE_STEPS.map(
+  (step) => ({ step, title: TITLES[step] }),
+);
 
 /** Server answers for one step, built from the fields of that step. */
 type StepAnswers = Record<string, unknown>;
@@ -159,7 +186,7 @@ export function IntakeForm({ bounds }: { bounds: Bounds }): ReactElement {
   if (submitted !== null) return <Result submitted={submitted} />;
 
   const current = STEPS[index];
-  if (current === undefined) return <p className="error">This form has no such step.</p>;
+  if (current === undefined) return <ErrorText>This form has no such step.</ErrorText>;
 
   return (
     <form
@@ -168,24 +195,23 @@ export function IntakeForm({ bounds }: { bounds: Bounds }): ReactElement {
         void advance();
       }}
     >
-      <p className="progress">
-        Step {index + 1} of {STEPS.length}
-      </p>
-      <h2>{current.title}</h2>
+      <StepIndicator index={index} count={STEPS.length} title={current.title} />
 
-      {current.step === 'identity' && (
-        <>
-          <Field label="Full name" issue={issueFor(issues, 'fullName')}>
-            <input
+      <Card>
+        {current.step === 'identity' && (
+          <>
+            <TextField
+              label="Full name"
+              message={messageFor(issues, 'fullName')}
               value={fullName}
               onChange={(e) => {
                 setFullName(e.target.value);
               }}
               required
             />
-          </Field>
-          <Field label="Email address" issue={issueFor(issues, 'email')}>
-            <input
+            <TextField
+              label="Email address"
+              message={messageFor(issues, 'email')}
               type="email"
               value={email}
               onChange={(e) => {
@@ -193,9 +219,9 @@ export function IntakeForm({ bounds }: { bounds: Bounds }): ReactElement {
               }}
               required
             />
-          </Field>
-          <Field label="Date of birth" issue={issueFor(issues, 'dob')}>
-            <input
+            <TextField
+              label="Date of birth"
+              message={messageFor(issues, 'dob')}
               type="date"
               min={bounds.dob.min}
               max={bounds.dob.max}
@@ -205,18 +231,15 @@ export function IntakeForm({ bounds }: { bounds: Bounds }): ReactElement {
               }}
               required
             />
-          </Field>
-        </>
-      )}
+          </>
+        )}
 
-      {current.step === 'metrics' && (
-        <>
-          <Field
-            label="Height in centimetres"
-            hint={`Between ${bounds.heightCm.min} and ${bounds.heightCm.max}.`}
-            issue={issueFor(issues, 'heightCm')}
-          >
-            <input
+        {current.step === 'metrics' && (
+          <>
+            <TextField
+              label="Height in centimetres"
+              hint={`Between ${bounds.heightCm.min} and ${bounds.heightCm.max}.`}
+              message={messageFor(issues, 'heightCm')}
               type="number"
               inputMode="numeric"
               value={heightCm}
@@ -225,13 +248,10 @@ export function IntakeForm({ bounds }: { bounds: Bounds }): ReactElement {
               }}
               required
             />
-          </Field>
-          <Field
-            label="Weight in kilograms"
-            hint={`Between ${bounds.weightKg.min} and ${bounds.weightKg.max}, one decimal place.`}
-            issue={issueFor(issues, 'weightKg')}
-          >
-            <input
+            <TextField
+              label="Weight in kilograms"
+              hint={`Between ${bounds.weightKg.min} and ${bounds.weightKg.max}, one decimal place.`}
+              message={messageFor(issues, 'weightKg')}
               type="number"
               step="0.1"
               inputMode="decimal"
@@ -241,19 +261,17 @@ export function IntakeForm({ bounds }: { bounds: Bounds }): ReactElement {
               }}
               required
             />
-          </Field>
-        </>
-      )}
+          </>
+        )}
 
-      {current.step === 'medications' && (
-        <>
-          <Field
-            label="Are you currently using a GLP-1 medication?"
-            hint="These are medicines such as Ozempic, Wegovy, Mounjaro, Saxenda or Trulicity."
-            issue={issueFor(issues, 'glp1Declared')}
-          >
-            <label className="choice">
-              <input
+        {current.step === 'medications' && (
+          <>
+            <Field
+              label="Are you currently using a GLP-1 medication?"
+              hint="These are medicines such as Ozempic, Wegovy, Mounjaro, Saxenda or Trulicity."
+              message={messageFor(issues, 'glp1Declared')}
+            >
+              <Choice
                 type="radio"
                 name="glp1Declared"
                 checked={glp1Declared === true}
@@ -261,11 +279,10 @@ export function IntakeForm({ bounds }: { bounds: Bounds }): ReactElement {
                   setGlp1Declared(true);
                 }}
                 required
-              />
-              Yes
-            </label>
-            <label className="choice">
-              <input
+              >
+                Yes
+              </Choice>
+              <Choice
                 type="radio"
                 name="glp1Declared"
                 checked={glp1Declared === false}
@@ -273,134 +290,135 @@ export function IntakeForm({ bounds }: { bounds: Bounds }): ReactElement {
                   setGlp1Declared(false);
                   setGlp1([]);
                 }}
-              />
-              No
-            </label>
-          </Field>
+              >
+                No
+              </Choice>
+            </Field>
 
-          {glp1Declared === true && (
-            <Field label="Which one?" issue={issueFor(issues, 'glp1')}>
-              {GLP1_OPTIONS.map((option) => (
-                <label key={option.value} className="choice">
-                  <input
+            {glp1Declared === true && (
+              <Field label="Which one?" message={messageFor(issues, 'glp1')}>
+                {GLP1_OPTIONS.map((option) => (
+                  <Choice
+                    key={option.value}
                     type="checkbox"
                     checked={glp1.includes(option.value)}
                     onChange={() => {
                       setGlp1(toggle(glp1, option.value));
                     }}
-                  />
-                  {option.label}
-                </label>
-              ))}
-            </Field>
-          )}
+                  >
+                    {option.label}
+                  </Choice>
+                ))}
+              </Field>
+            )}
 
-          <Field
-            label="Any other medication you take"
-            hint={
-              glp1Declared === true
-                ? 'If your GLP-1 medication is not in the list above, write its name here.'
-                : 'Leave this empty if there is none.'
-            }
-            issue={issueFor(issues, 'otherMedications')}
-          >
-            <textarea
+            <TextAreaField
+              label="Any other medication you take"
+              hint={
+                glp1Declared === true
+                  ? 'If your GLP-1 medication is not in the list above, write its name here.'
+                  : 'Leave this empty if there is none.'
+              }
+              message={messageFor(issues, 'otherMedications')}
               rows={3}
               value={otherMedications}
               onChange={(e) => {
                 setOtherMedications(e.target.value);
               }}
             />
-          </Field>
-        </>
-      )}
+          </>
+        )}
 
-      {current.step === 'conditions' && (
-        <>
-          <Field
-            label="Has a doctor diagnosed you with any of these?"
-            issue={issueFor(issues, 'conditions')}
-          >
-            {CONDITION_OPTIONS.map((option) => (
-              <label key={option.value} className="choice">
-                <input
+        {current.step === 'conditions' && (
+          <>
+            <Field
+              label="Has a doctor diagnosed you with any of these?"
+              message={messageFor(issues, 'conditions')}
+            >
+              {CONDITION_OPTIONS.map((option) => (
+                <Choice
+                  key={option.value}
                   type="checkbox"
                   checked={conditions.includes(option.value)}
                   onChange={() => {
                     setConditions(toggle(conditions, option.value));
                   }}
-                />
-                {option.label}
-              </label>
-            ))}
-          </Field>
-          <Field
-            label="Anything else we should know about your health"
-            hint="Leave this empty if there is nothing."
-            issue={issueFor(issues, 'otherConditions')}
-          >
-            <textarea
+                >
+                  {option.label}
+                </Choice>
+              ))}
+            </Field>
+            <TextAreaField
+              label="Anything else we should know about your health"
+              hint="Leave this empty if there is nothing."
+              message={messageFor(issues, 'otherConditions')}
               rows={3}
               value={otherConditions}
               onChange={(e) => {
                 setOtherConditions(e.target.value);
               }}
             />
-          </Field>
-        </>
-      )}
+          </>
+        )}
 
-      {current.step === 'consent' && (
-        <>
-          <p className="consent">{CONSENT_TEXT}</p>
-          <p className="hint">Consent text version {CONSENT_TEXT_VERSION}.</p>
-          <Field label="" issue={issueFor(issues, 'granted')}>
-            <label className="choice">
-              <input
+        {current.step === 'consent' && (
+          <>
+            <Prose text={CONSENT_TEXT} />
+            <Field label="" message={messageFor(issues, 'granted')}>
+              <Choice
                 type="checkbox"
                 checked={granted}
                 onChange={(e) => {
                   setGranted(e.target.checked);
                 }}
-              />
-              I have read the statement above and I agree.
-            </label>
-          </Field>
-        </>
-      )}
+              >
+                I have read the statement above and I agree.
+              </Choice>
+            </Field>
+          </>
+        )}
 
-      {/* An issue no field on this step owns — a whole-step refinement, or a step still missing at
-          submit — is shown here rather than swallowed. */}
-      {issues
-        .filter((issue) => !FIELDS[current.step].includes(issue.path))
-        .map((issue) => (
-          <p key={`${issue.path}:${issue.message}`} className="error">
-            {issue.message}
-          </p>
-        ))}
-      {failure !== null && <p className="error">{failure}</p>}
+        {/* An issue no field on this step owns — a whole-step refinement, or a step still missing
+            at submit — is shown here rather than swallowed. */}
+        {issues
+          .filter((issue) => !FIELDS[current.step].includes(issue.path))
+          .map((issue) => (
+            <ErrorText key={`${issue.path}:${issue.message}`}>{issue.message}</ErrorText>
+          ))}
+        {failure !== null && <ErrorText>{failure}</ErrorText>}
+      </Card>
 
-      <div className="actions">
+      <ButtonRow>
         {index > 0 && (
-          <button
-            type="button"
+          <Button
             onClick={() => {
               setIndex(index - 1);
             }}
             disabled={busy}
           >
             Back
-          </button>
+          </Button>
         )}
-        <button type="submit" disabled={busy}>
+        <Button
+          type="submit"
+          variant="primary"
+          busy={busy}
+          disabled={!agreedIfAsked(current.step, granted)}
+        >
           {index < STEPS.length - 1 ? 'Next' : 'Submit'}
-        </button>
-      </div>
+        </Button>
+      </ButtonRow>
     </form>
   );
 }
 
-/** What the patient is told afterwards: the engine's own explanation lines, verbatim (R-B9). */
+/**
+ * What the patient is told afterwards: one sentence, and who decides next.
+ *
+ * Not the engine's explanation lines and not the ruleset version (ADR-0020). R-B8 and R-B9 are
+ * unaffected — the outcome still carries its explanation and the intake still stores the version
+ * that judged it; both are for the reviewer reading the case, not for the patient reading a screen.
+ */
 function Result({ submitted }: { submitted: Submitted }): ReactElement {
   const headline: Record<string, string> = {
     auto_cleared: 'Thank you — your intake is with our care team.',
@@ -408,38 +426,9 @@ function Result({ submitted }: { submitted: Submitted }): ReactElement {
     auto_rejected: 'Thank you. Based on your answers, our programme is not suitable for you.',
   };
   return (
-    <section>
-      <h2>{headline[submitted.state] ?? 'Thank you.'}</h2>
+    <Card title={headline[submitted.state] ?? 'Thank you.'}>
       <p>A doctor makes the final decision; nothing here is one.</p>
-      <h3>What the rules found</h3>
-      <ul>
-        {submitted.reasons.map((reason) => (
-          <li key={reason}>{reason}</li>
-        ))}
-      </ul>
-      <p className="hint">Assessed with ruleset {submitted.rulesetVersion}.</p>
-    </section>
-  );
-}
-
-function Field({
-  label,
-  hint,
-  issue,
-  children,
-}: {
-  label: string;
-  hint?: string;
-  issue?: Issue | undefined;
-  children: ReactNode;
-}): ReactElement {
-  return (
-    <div className="field">
-      {label !== '' && <label className="label">{label}</label>}
-      {hint !== undefined && <p className="hint">{hint}</p>}
-      {children}
-      {issue !== undefined && <p className="error">{issue.message}</p>}
-    </div>
+    </Card>
   );
 }
 
@@ -449,11 +438,22 @@ const FIELDS: Record<IntakeStep, readonly string[]> = {
   metrics: ['heightCm', 'weightKg'],
   medications: ['glp1Declared', 'glp1', 'otherMedications'],
   conditions: ['conditions', 'otherConditions'],
-  consent: ['granted', 'textVersion'],
+  // `textVersion` is deliberately absent: no field on this step renders it, so an issue naming it
+  // — the consent text changed under a patient who still has the old one open — falls through to
+  // the step-level messages in the card and is shown rather than filtered into silence.
+  consent: ['granted'],
 };
 
-const issueFor = (issues: readonly Issue[], path: string): Issue | undefined =>
-  issues.find((issue) => issue.path === path);
+/**
+ * Whether this step's answer may be sent yet. Only the consent step has one: a patient who has not
+ * ticked the box has not consented, and the button says so by going grey rather than by sending a
+ * request that comes back 400. Every other step is the server's to judge.
+ */
+const agreedIfAsked = (step: IntakeStep, granted: boolean): boolean =>
+  step !== 'consent' || granted;
+
+const messageFor = (issues: readonly Issue[], path: string): string | undefined =>
+  issues.find((issue) => issue.path === path)?.message;
 
 const toggle = (values: readonly string[], value: string): string[] =>
   values.includes(value) ? values.filter((v) => v !== value) : [...values, value];

@@ -149,12 +149,17 @@ a GLP-1. Over the legacy export the matcher reproduces the counts ADR-0005 was a
 npm run dev                 # http://localhost:3000/intake
 ```
 
-Five steps — identity, height and weight, medication, conditions, consent — each saved to the
+Five steps — consent, identity, height and weight, medication, conditions — each saved to the
 server as it is answered, so the draft is a row in `intakes` with `state = 'draft'` from the first
-question. Nothing on the client decides anything: every message the patient sees under a field is
-the server's own, from the Zod schema at the boundary, and the plausibility bounds and the
-condition and GLP-1 checklists are read from `rules/v1.json`, so the form cannot disagree with the
-engine about what is valid or about what counts as a weight-related condition.
+question. Consent comes first because it is permission to process everything that follows
+(ADR-0019): a patient who does not agree is refused at the first screen, and no row, no audit entry
+and no answer is written — so an abandoned draft holds a grant and its text version, and no
+personal data at all.
+
+Nothing on the client decides anything: every message the patient sees under a field is the
+server's own, from the Zod schema at the boundary, and the plausibility bounds and the condition
+and GLP-1 checklists are read from `rules/v1.json`, so the form cannot disagree with the engine
+about what is valid or about what counts as a weight-related condition.
 
 Submitting is one transaction: it creates the patient (`prospect`), fills the intake, stores the
 evaluation with `shadow = false`, writes the consent event, moves the intake `draft → submitted →

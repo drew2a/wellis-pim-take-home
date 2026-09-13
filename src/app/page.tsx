@@ -1,18 +1,21 @@
 import Link from 'next/link';
 import type { ReactElement } from 'react';
 
+import { Card, Hint, Lead, Page, PageTitle } from '@/ui';
+
 export default function Home(): ReactElement {
   return (
-    <main>
-      <h1>Wellis Intake</h1>
-      <ul>
-        <li>
+    <Page>
+      <PageTitle>Wellis Intake</PageTitle>
+      <Lead>Legacy import, the patient intake flow, and the review console.</Lead>
+      <Card>
+        <p>
           <Link href="/intake">Start an intake</Link> — the patient-facing questionnaire.
-        </li>
-      </ul>
-      <p className="hint">
-        The review console is not built yet; see <code>README.md</code> for what is in scope.
-      </p>
-    </main>
+        </p>
+        <Hint>
+          The review console is not built yet; see <code>README.md</code> for what is in scope.
+        </Hint>
+      </Card>
+    </Page>
   );
 }

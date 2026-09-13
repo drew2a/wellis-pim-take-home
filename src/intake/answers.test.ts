@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest';
 import { MAX_PLAUSIBLE_AGE_YEARS } from '@/eligibility/age';
 import { currentRules } from '@/rules/load';
 
-import { dobBounds, stepSchemas } from './answers';
+import { INTAKE_STEPS, dobBounds, stepSchemas } from './answers';
 
 const accepts = (todayIso: string, dob: string): boolean =>
   stepSchemas({ rules: currentRules(), todayIso }).identity.safeParse({
@@ -58,5 +58,17 @@ describe('dobBounds', () => {
     // forward to 1 March, which would cut a day off the range the schema allows.
     expect(dobBounds('2024-02-29').min).toBe('1923-03-01');
     expect(dobBounds('2000-02-29').min).toBe('1899-03-01');
+  });
+});
+
+// ADR-0019: consent is step one, and `POST /api/intakes` names that step explicitly. The route and
+// this list are the two places the order is written down; this is what keeps them from drifting.
+describe('the order of the steps', () => {
+  it('asks for consent before anything else, so no health data is sent without permission', () => {
+    expect(INTAKE_STEPS[0]).toBe('consent');
+  });
+
+  it('leaves consent out of the rest, so it is asked exactly once', () => {
+    expect(INTAKE_STEPS.slice(1)).not.toContain('consent');
   });
 });

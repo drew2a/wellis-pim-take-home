@@ -1,6 +1,6 @@
 # ADR-0017: The day an intake is measured against is the clinic's day, not UTC
 
-- **Status:** proposed
+- **Status:** accepted
 - **Date:** 2026-09-13
 - **Deciders:** Andrei Andreev
 - **Requirements:** R-B5, R-B6, R-B11, R-T4 · **Relates to:** Q4 (age is taken at submission) ·
