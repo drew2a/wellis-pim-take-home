@@ -244,13 +244,28 @@ export interface CompareRow {
 }
 
 /** Two competing versions of the truth, side by side (R-C4). */
+export interface CompareColumn {
+  readonly label: string;
+  /**
+   * Present when the **column** is the decision — which of two same-day intakes is the record of
+   * note. A choice about a whole record belongs on the record's own heading; put into a radio's
+   * label it becomes a paragraph, and the reviewer reads twelve fields twice to find the two that
+   * differ.
+   */
+  readonly checked?: boolean;
+  readonly onPick?: () => void;
+}
+
 export function CompareCard({
   title,
+  name,
   columns,
   rows,
 }: {
   readonly title: string;
-  readonly columns: readonly ReactNode[];
+  /** The radio group's name. Required only when the columns are pickable. */
+  readonly name?: string;
+  readonly columns: readonly CompareColumn[];
   readonly rows: readonly CompareRow[];
 }): ReactElement {
   return (
@@ -260,14 +275,30 @@ export function CompareCard({
         <span className="w-30 shrink-0 font-mono text-[11px] tracking-[0.08em] text-grey-600 uppercase">
           field
         </span>
-        {columns.map((column, index) => (
-          <span
-            key={index}
-            className="min-w-0 flex-1 basis-38 text-[12.5px] font-semibold break-words text-grey-900"
-          >
-            {column}
-          </span>
-        ))}
+        {columns.map((column, index) =>
+          column.onPick === undefined ? (
+            <span
+              key={index}
+              className="min-w-0 flex-1 basis-38 text-[12.5px] font-semibold break-words text-grey-900"
+            >
+              {column.label}
+            </span>
+          ) : (
+            <label
+              key={index}
+              className="flex min-w-0 flex-1 basis-38 cursor-pointer items-center gap-2 text-[12.5px] font-semibold break-words text-grey-900"
+            >
+              <input
+                type="radio"
+                name={name}
+                checked={column.checked === true}
+                onChange={column.onPick}
+                className="size-4 shrink-0 accent-accent-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-600"
+              />
+              {column.label}
+            </label>
+          ),
+        )}
       </div>
       {rows.map((row) => (
         <div
@@ -276,7 +307,9 @@ export function CompareCard({
             row.differs ? 'border-b border-differs-200 bg-differs-50' : 'border-b border-hairline'
           }`}
         >
-          <span className="w-30 shrink-0 font-mono text-xs text-grey-600">{row.field}</span>
+          <span className="w-30 shrink-0 font-mono text-xs [overflow-wrap:anywhere] text-grey-600">
+            {row.field}
+          </span>
           {row.values.map((value, index) => (
             <span
               key={index}
@@ -353,7 +386,9 @@ export function MergeFields({
           }`}
         >
           <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1">
-            <span className="w-30 shrink-0 font-mono text-xs text-grey-600">{row.field}</span>
+            <span className="w-30 shrink-0 font-mono text-xs [overflow-wrap:anywhere] text-grey-600">
+              {row.field}
+            </span>
             {row.agreed !== null ? (
               <span className="min-w-0 flex-1 text-[13.5px] break-words text-grey-500">
                 {row.agreed}

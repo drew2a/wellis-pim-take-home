@@ -172,7 +172,7 @@ export function IdentityDecision({
           // keeps its own whatever the other record says.
           <CompareCard
             title="What the rows say, and nobody chooses"
-            columns={candidates.map((candidate) => candidate.label)}
+            columns={candidates.map((candidate) => ({ label: candidate.label }))}
             rows={describing.map((row) => ({
               field: row.field,
               values: row.values.map((value) => value ?? '—'),

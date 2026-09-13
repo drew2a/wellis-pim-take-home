@@ -130,6 +130,13 @@ on. R-C5's pick-and-edit survives on every field where the two records disagree,
 the item exists for; correcting a value both rows got wrong is a `data_quality` decision and has
 its own screen.
 
+A `duplicate_intake` item is the same comparison with the choice one level up. Its payload gave
+each intake as a run-on `field value · field value` line, printed once as evidence and again inside
+each radio's label, so a reviewer read twelve fields twice to find the two that differ. It is now
+one row per field with the differing rows marked, and **the radio sits on the column heading**:
+what is being decided is a whole record, not a field of it. Nothing is merged and both rows stay,
+so the cells are read-only.
+
 ### Consequences
 
 - Good: a reviewer keeps their place. Deciding an item leaves the queue where it was, one row

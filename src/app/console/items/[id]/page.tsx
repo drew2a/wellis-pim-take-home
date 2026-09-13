@@ -36,6 +36,7 @@ import {
   humanise,
   titled,
   toneForReviewItem,
+  type CompareRow,
   type EvidenceRow,
 } from '@/ui';
 
@@ -158,14 +159,37 @@ const scalar = (value: unknown): string => {
   return String(value);
 };
 
-/** The pair a same-day item names, each summarised by what a reviewer compares them on. */
+/** The pair a same-day item names, each as the fields a reviewer compares them on. */
 function pairedIntakes(payload: unknown): PairedIntake[] {
   const rows = (payload as { intakes?: unknown }).intakes;
   if (!Array.isArray(rows)) return [];
   return (rows as Record<string, unknown>[]).flatMap((row) => {
     const intakeId = row.intake_id;
     if (typeof intakeId !== 'string') return [];
-    return [{ intakeId, summary: describe(row) }];
+    return [{ intakeId, fields: row }];
+  });
+}
+
+/**
+ * The two intakes as one row per field, in the order the payload names them, with the rows they
+ * disagree on marked. `intake_id` is left out: it is the column heading.
+ *
+ * Both rows stay whatever is decided, so this is a comparison and not a merge — the decision is
+ * which of the two is the record of note, and it is taken on the column rather than per field.
+ */
+function comparedIntakes(pair: readonly PairedIntake[]): CompareRow[] {
+  const fields = [...new Set(pair.flatMap((intake) => Object.keys(intake.fields)))].filter(
+    (field) => field !== 'intake_id',
+  );
+  return fields.map((field) => {
+    const values = pair.map((intake) => scalar(intake.fields[field]));
+    return {
+      field,
+      values: values.map((value, index) =>
+        value === '—' ? value : <Raw key={index}>{value}</Raw>,
+      ),
+      differs: new Set(values).size > 1,
+    };
   });
 }
 
@@ -431,20 +455,13 @@ async function Decision({
   if (item.type === 'duplicate_intake') {
     const pair = pairedIntakes(item.payload);
     return (
-      <DuplicateDecision itemId={item.id} after={after} intakes={pair}>
-        <Evidence
-          view={view}
-          extra={
-            <EvidenceCard
-              title="The two intakes, side by side"
-              rows={pair.map((intake) => ({
-                key: intake.intakeId,
-                term: intake.intakeId,
-                value: intake.summary,
-              }))}
-            />
-          }
-        />
+      <DuplicateDecision
+        itemId={item.id}
+        after={after}
+        intakes={pair.map((intake) => intake.intakeId)}
+        rows={comparedIntakes(pair)}
+      >
+        <Evidence view={view} />
       </DuplicateDecision>
     );
   }

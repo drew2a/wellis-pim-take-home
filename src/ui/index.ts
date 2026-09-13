@@ -29,6 +29,7 @@ export {
   FindingsCard,
   MergeFields,
   Folded,
+  type CompareColumn,
   type CompareRow,
   type EvidenceRow,
   type Finding,

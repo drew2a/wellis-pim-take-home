@@ -4,25 +4,32 @@
 // neither is deleted and neither legacy outcome is rewritten, because what the legacy process
 // recorded is evidence. The decision is which of them is the record of note, and that is written
 // into the audit and onto the item rather than into either row.
+//
+// Because both rows stay, the comparison is read-only and the choice sits on the column heading:
+// what a reviewer decides here is about a whole record, not about a field of it.
 import { useState, type ReactElement, type ReactNode } from 'react';
 
 import { useDecide } from '@/app/console/useDecide';
-import { Choice, DecisionBar, DetailBody, DetailSection, ENTER, Hint, NEEDS_A_NOTE } from '@/ui';
+import { CompareCard, DecisionBar, DetailBody, ENTER, NEEDS_A_NOTE, type CompareRow } from '@/ui';
 
 export interface PairedIntake {
   readonly intakeId: string;
-  readonly summary: string;
+  /** The payload's row for this intake, as jsonb gave it. */
+  readonly fields: Record<string, unknown>;
 }
 
 export function DuplicateDecision({
   itemId,
   after,
   intakes,
+  rows,
   children,
 }: {
   readonly itemId: string;
   readonly after: string;
-  readonly intakes: readonly PairedIntake[];
+  /** The two intake ids, in payload order — the columns of the comparison. */
+  readonly intakes: readonly string[];
+  readonly rows: readonly CompareRow[];
   readonly children: ReactNode;
 }): ReactElement {
   const decide = useDecide(`/api/console/items/${itemId}/resolve`, after);
@@ -33,22 +40,18 @@ export function DuplicateDecision({
     <>
       <DetailBody>
         {children}
-        <DetailSection title="Which one is the record of note">
-          {intakes.map((intake) => (
-            <Choice
-              key={intake.intakeId}
-              type="radio"
-              name="recordOfNote"
-              checked={chosen === intake.intakeId}
-              onChange={() => {
-                setChosen(intake.intakeId);
-              }}
-            >
-              {`${intake.intakeId} — ${intake.summary}`}
-            </Choice>
-          ))}
-          <Hint>Both intakes stay, and neither outcome changes.</Hint>
-        </DetailSection>
+        <CompareCard
+          title="The two intakes — pick the record of note"
+          name="recordOfNote"
+          columns={intakes.map((intakeId) => ({
+            label: intakeId,
+            checked: chosen === intakeId,
+            onPick: () => {
+              setChosen(intakeId);
+            },
+          }))}
+          rows={rows}
+        />
       </DetailBody>
       <DecisionBar
         note={decide.note}
@@ -58,13 +61,13 @@ export function DuplicateDecision({
           !decide.noted
             ? NEEDS_A_NOTE
             : chosen === ''
-              ? 'Pick the record of note above, or say that both are genuine.'
+              ? 'Tick the record of note above, or say that both are genuine. Neither row is deleted or altered either way, and neither outcome changes.'
               : undefined
         }
         error={decide.failure}
         actions={[
           {
-            label: 'Mark as the record of note',
+            label: chosen === '' ? 'Mark as the record of note' : `${chosen} is the record`,
             variant: 'primary',
             hint: ENTER,
             busy: decide.busy === 'keep_one',
