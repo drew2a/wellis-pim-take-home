@@ -10,6 +10,7 @@ import type { ReactElement } from 'react';
 
 import { requireReviewer } from '@/console/guard';
 import { getDb } from '@/db/client';
+import { showBmi } from '@/eligibility/evaluate';
 import { blocksApproval, edgeFor } from '@/intake/machine';
 import { dayOf } from '@/intake/today';
 import { findIntake, type IntakeView } from '@/repo/intakes';
@@ -102,7 +103,18 @@ function submission(intake: IntakeView['intake']): Definition[] {
 /** What the rules saw, so the verdict explains itself without re-running the engine (ADR-0010). */
 function inputsOf(evaluation: NonNullable<IntakeView['evaluation']>): Definition[] {
   return Object.entries(evaluation.inputs as unknown as Record<string, unknown>).map(
-    ([term, given]) => ({ term, value: <Raw>{value(given)}</Raw> }),
+    ([term, given]) => ({
+      term,
+      // BMI through the engine's own formatter, so this line and the reasons below it cannot show
+      // the same number two ways (Q2, `showBmi`). Everything else is the value as stored.
+      value: (
+        <Raw>
+          {term === 'bmi' && typeof given === 'number'
+            ? showBmi(given, currentRules())
+            : value(given)}
+        </Raw>
+      ),
+    }),
   );
 }
 

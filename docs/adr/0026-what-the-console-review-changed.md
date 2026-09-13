@@ -100,6 +100,12 @@ common; today there are none.
 - **The exported rows on a patient's page show a masked `bsn`.** The stored row keeps the digits
   (R-A8); the page does not. ADR-0023 item 8 makes reading the number a route that writes an audit
   entry first, and the same nine digits printed further down the same screen made that a formality.
+- **A BMI is shown the way the engine's own reasons show it.** The input panel dumped the raw
+  float — `35.35353535353536` — where Q2's default is "computed on unrounded BMI, displayed to one
+  decimal". One decimal alone is not enough: a stored `26.9536…` rounds to `27.0`, which would have
+  sat directly above the reason `rejected: BMI 26.95 below 27`. `showBmi` reuses the engine's
+  `formatBmi`, widening until the value shown sits on the same side of every threshold as the exact
+  one, so the panel and the reason under it cannot show one number two ways.
 - **Losing a race is a 409, not a 500.** `lockOpenItem` raises `ItemClosedError`, and the
   transition route tells a state race apart from a role refusal by re-reading the intake: both are
   `IllegalTransitionError`, and only one of them is about the reviewer.
@@ -140,6 +146,8 @@ common; today there are none.
   audit entry, and that `81` is recorded as `80.0 → 81.0`.
 - A pure test asserts the consent decision is established on the survivor, and another that a
   survivor already merged away is refused with the same message as a loser.
+- Boundary tests on `showBmi` at 26.99, 26.994, 27, 30.0 and 30.04, plus one asserting it agrees
+  with the reason string the same evaluation carries.
 - Not covered by a test: the transition route's 409-on-race. Reaching it needs the intake to move
   between the route's read and its transaction, which no integration test can produce
   deterministically without instrumenting the repository.
