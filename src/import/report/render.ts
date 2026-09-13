@@ -3,6 +3,7 @@
 // clock, no database — everything it prints is already a number in the report (ADR-0011 item 14).
 import type {
   Assumption,
+  Consent,
   ImportReport,
   MatrixCell,
   RuleApplied,
@@ -169,14 +170,22 @@ function rulesApplied(report: ImportReport): string[] {
   ];
 }
 
+/** The shape of the groups, from the counted sizes: a claim about them would be a claim. */
+function groupShape(sizes: readonly Tally[]): string {
+  const [only] = sizes;
+  if (sizes.length === 1 && only?.key === '2') return 'every one of them a pair';
+  return sizes.map((entry) => `${entry.rows} of ${entry.key} rows`).join(', ');
+}
+
 function identity(report: ImportReport): string[] {
   const id = report.identity;
   return [
     '## Identity: duplicate patient records',
     '',
-    `${id.candidates} candidate groups, every one of them a pair. Only a group that is literally ` +
-      'identical on identity and non-contradictory on everything else is merged by the importer; ' +
-      'everything else is a decision for a human, shown side by side with no proposed winner.',
+    `${id.candidates} candidate groups, ${groupShape(id.groupSizes)}. Only a group that is ` +
+      'literally identical on identity and non-contradictory on everything else is merged by the ' +
+      'importer; everything else is a decision for a human, shown side by side with no proposed ' +
+      'winner.',
     '',
     ...table(
       ['tier', 'groups', 'what the importer did'],
@@ -197,6 +206,46 @@ function identity(report: ImportReport): string[] {
   ];
 }
 
+/**
+ * The two consent-state tables differ by exactly two things (ADR-0011 item 3). Both can be empty —
+ * an export with no duplicate patient row produces neither — and a paragraph that named a table
+ * it had not printed would be describing a different export.
+ */
+function whatMergesDidToTheStates(c: Consent): string[] {
+  const away = c.statesOfMergedAwayRows;
+  const changed = c.statesChangedByMerge;
+  if (away.length === 0 && changed.length === 0) {
+    return [
+      'The two tables agree row for row: no merge took a row away, and no survivor changed state.',
+      '',
+    ];
+  }
+  const awayClause =
+    away.length === 0
+      ? 'No row was taken away by a merge'
+      : `The merged-away rows take their own state with them (${total(away)}: ` +
+        `${away.map((entry) => `${entry.rows} \`${entry.key}\``).join(', ')})`;
+  const changedClause =
+    changed.length === 0
+      ? 'and no survivor changed state as a result:'
+      : 'so some survivors change state:';
+  return [
+    'Two things separate the two tables, and between them they account for it exactly. ' +
+      `${awayClause}, because a duplicate row is not a second person to chase for consent. And a ` +
+      "merge hands the survivor its duplicate's events — a merge moves no event, and a patient's " +
+      `records are the union its membership returns — ${changedClause}`,
+    '',
+    ...tallyTable('survivor state changed by a merge', changed, 'patients'),
+    ...(changed.length === 0
+      ? []
+      : [
+          'That second table is the reason a duplicate matters here beyond tidiness: for those ' +
+            'patients the consent record was on the row we were about to stop looking at.',
+          '',
+        ]),
+  ];
+}
+
 function consent(report: ImportReport): string[] {
   const c = report.consent;
   const timing = c.timing;
@@ -211,23 +260,18 @@ function consent(report: ImportReport): string[] {
     '',
     ...tallyTable('state, per surviving patient', c.statesPerPatient, 'patients'),
     ...tallyTable('state, per legacy row before merges', c.statesPerLegacyRow, 'rows'),
-    'Two things separate the two tables, and between them they account for it exactly. The ' +
-      `merged-away rows take their own state with them (${total(c.statesOfMergedAwayRows)}: ` +
-      c.statesOfMergedAwayRows.map((entry) => `${entry.rows} \`${entry.key}\``).join(', ') +
-      '), because a duplicate row is not a second person to chase for consent. And a merge hands ' +
-      "the survivor its duplicate's events — a merge moves no event, and a patient's records are " +
-      'the union its membership returns — so some survivors change state:',
-    '',
-    ...tallyTable('survivor state changed by a merge', c.statesChangedByMerge, 'patients'),
-    'That second table is the reason a duplicate matters here beyond tidiness: for those ' +
-      'patients the consent record was on the row we were about to stop looking at.',
-    '',
+    ...whatMergesDidToTheStates(c),
     ...tallyTable('items raised, per surviving patient', c.itemsPerPatient, 'items'),
     ...tallyTable('items the same rules raise per legacy row', c.itemsPerLegacyRow, 'items'),
     '### What the log says about the medical record',
     '',
     'Both figures count intakes whose submission date the mapper could read, against the ' +
-      "timestamps of that legacy row's own events, in Europe/Amsterdam days.",
+      "timestamps of that legacy row's own events, in Europe/Amsterdam days. " +
+      `${timing.intakesExcludedForAnUnreadableDate} intakes, over ` +
+      `${timing.patientsExcludedForAnUnreadableDate} patients, are outside them for that reason: ` +
+      'the mapper nulled their submission date as impossible, so the canonical row has no date ' +
+      'to compare. They are the whole difference between the figures below and the profiling ' +
+      "session's, which read the raw dates.",
     '',
     ...table(
       ['finding', 'intakes'],

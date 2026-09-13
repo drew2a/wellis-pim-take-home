@@ -176,6 +176,13 @@ describe('the import report', () => {
     expect(identity.fieldsGainedFromLosers).toBe(summary.identity.gainedFields);
     // One survivor clause per merged pair, from the merge's own audit entry.
     expect(sum(identity.survivorRule)).toBe(identity.tier1Merged);
+    // The group sizes are a partition of the same groups over the same rows, so "every one of
+    // them a pair" is a figure the report carries rather than a sentence the renderer asserts.
+    expect(sum(identity.groupSizes)).toBe(identity.candidates);
+    expect(identity.groupSizes.reduce((n, entry) => n + Number(entry.key) * entry.rows, 0)).toBe(
+      summary.identity.rows,
+    );
+    expect(identity.groupSizes).toEqual([{ key: '2', rows: 70 }]);
   });
 
   it('counts consent states twice — per patient and per legacy row — and explains the difference', async () => {
@@ -265,12 +272,15 @@ describe('the import report', () => {
     expect(
       timing.patientsWithAnIntakeBeforeFirstGrant + timing.patientsExcludedForAnUnreadableDate,
     ).toBe(70);
+    // Over both comparison populations, not the grant side alone: an intake whose patient has a
+    // revocation and no grant belongs to the second figure, and a count that joined `grants`
+    // would leave it out of the figure and out of the exclusion that explains the figure.
     expect(timing.intakesExcludedForAnUnreadableDate).toBe(
       await scalar(database.sql`
         select count(*)::text as n from intakes i
-        where i.submitted_at is null and exists (
+        where i.legacy_patient_id is not null and i.submitted_at is null and exists (
           select 1 from consent_events e
-          where e.patient_id = i.patient_id and e.action = 'granted')
+          where e.patient_id = i.patient_id and e.source_line is not null)
       `),
     );
     // ADR-0005 carries 83 for the second figure, from the profiling session, and it reproduces.
@@ -391,7 +401,7 @@ describe('the import report', () => {
       'referral',
       '`OK`',
       'questionnaire label',
-      '36 years into the future',
+      'dated in 2062',
       'dated after',
       'Valid BSNs',
       'without a unit',
@@ -407,6 +417,53 @@ describe('the import report', () => {
         expect([key, value > 0]).toEqual([key, true]);
       }
     }
+  });
+
+  // Two findings the review caught claiming more than the data says: a shared BSN the importer had
+  // already resolved counted as an open collision, and a cut-over date typed into the query.
+  it('separates the shared BSNs the importer resolved from the ones still open', async () => {
+    const found = report.notInExportNotes.find((entry) => entry.finding.startsWith('Valid BSNs'));
+    const numbers = found?.numbers ?? {};
+    expect(numbers.bsnValues).toBe(
+      await scalar(database.sql`
+        select count(*)::text as n from (
+          select bsn from patients
+          where created_from_legacy_id is not null and bsn_check = 'valid'
+          group by bsn having count(*) > 1) t
+      `),
+    );
+    // The open half counts surviving rows only; a pair the importer merged is one patient now.
+    expect(numbers.valuesStillOnMoreThanOneSurvivingPatient).toBe(
+      await scalar(database.sql`
+        select count(*)::text as n from (
+          select bsn from patients
+          where created_from_legacy_id is not null and bsn_check = 'valid' and merged_into is null
+          group by bsn having count(*) > 1) t
+      `),
+    );
+    expect(numbers.bsnValues).toBe(
+      (numbers.valuesStillOnMoreThanOneSurvivingPatient ?? 0) +
+        (numbers.valuesResolvedByTier1Merge ?? 0),
+    );
+    expect(numbers.valuesResolvedByTier1Merge).toBeGreaterThan(0);
+  });
+
+  it('reads the v2 cut-over off the log instead of naming a date', async () => {
+    const found = report.notInExportNotes.find((entry) =>
+      entry.finding.startsWith('Patients with'),
+    );
+    const cutOver = await database.sql<{ at: string }[]>`
+      select to_char(min(at) at time zone 'Europe/Amsterdam', 'YYYY-MM-DD') as at
+      from consent_events where version = 'v2' and source_line is not null
+    `;
+    expect(found?.finding).toContain(`(${cutOver[0]?.at})`);
+    expect(found?.numbers.eventsStillLabelledV1AfterIt).toBe(
+      await scalar(database.sql`
+        select count(*)::text as n from consent_events
+        where version = 'v1' and source_line is not null and at >= (
+          select min(at) from consent_events where version = 'v2' and source_line is not null)
+      `),
+    );
   });
 
   it('renders byte-identical files on a second run over the same export (R-A15)', async () => {

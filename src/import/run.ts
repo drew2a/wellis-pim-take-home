@@ -462,6 +462,8 @@ export async function runImport(db: Queryable, options: ImportOptions): Promise<
         asOf: options.asOf,
         rules: options.rules,
         ruleHits,
+        candidateGroupSizes: groups.map((group) => group.members.length),
+        tier1HumanDecided: merges.humanDecided,
         declaredConsentTypes,
       });
 

@@ -102,8 +102,15 @@ export interface Assumption {
 }
 
 export interface Identity {
-  /** Tier-1 pairs the importer merged, tier-2 and tier-3 groups a human decides (ADR-0006). */
+  /**
+   * Candidate groups the run formed (ADR-0006), counted by the run itself: `merged_into` records
+   * a merge, not the grouping that proposed it, so reading the tiers back out of the database
+   * would count a group a human merged twice — once as merged, once as the item still open.
+   */
   readonly candidates: number;
+  /** Groups per member count, so "every one of them a pair" is a figure rather than a claim. */
+  readonly groupSizes: readonly Tally[];
+  /** Rows the importer merged away: one per loser, which for a pair is one per group. */
   readonly tier1Merged: number;
   readonly tier2: number;
   readonly tier3: number;
@@ -123,6 +130,8 @@ export interface ConsentTiming {
    * Intakes the comparison could not include, and the patients they belong to: the mapper nulled
    * their submission date as impossible, so the canonical row has no date to compare. They are
    * the difference between these figures and the profiling session's, which read the raw dates.
+   * Counted over both comparison populations — a patient with a grant *or* with a revocation no
+   * later grant undoes — so an intake missing from either figure above is visible in this one.
    */
   readonly intakesExcludedForAnUnreadableDate: number;
   readonly patientsExcludedForAnUnreadableDate: number;

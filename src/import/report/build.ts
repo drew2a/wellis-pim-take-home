@@ -8,7 +8,7 @@
 // the shadow evaluation come from the engine (ADR-0011 item 21: nothing stores `matched`), and the
 // consent states per legacy row come from the same pure derivation applied to each row's own
 // events, because a row a merge took away holds no state of its own (ADR-0011 item 13).
-import { eq, isNotNull, sql, type SQL } from 'drizzle-orm';
+import { and, eq, isNotNull, sql, type SQL } from 'drizzle-orm';
 
 import { deriveConsentStates, type ConsentEventInput } from '@/consent/derive';
 import type { Queryable } from '@/db/queryable';
@@ -52,6 +52,13 @@ export interface ReportInput {
    * the stored inputs would be a second implementation of the rules (ADR-0011 item 21).
    */
   readonly ruleHits: Readonly<Record<string, number>>;
+  /**
+   * The candidate groups the run formed, one member count each, and the tier-1 groups a human had
+   * already decided (ADR-0006, ADR-0012 item 2). Neither is a count of any column: `merged_into`
+   * records that a merge happened, not the grouping that proposed it and not the tier it sat in.
+   */
+  readonly candidateGroupSizes: readonly number[];
+  readonly tier1HumanDecided: number;
   readonly declaredConsentTypes: readonly string[];
 }
 
@@ -73,6 +80,14 @@ async function one<T extends Row>(db: Queryable, statement: SQL): Promise<T> {
 function count(value: unknown): number {
   if (typeof value !== 'number' || !Number.isInteger(value)) {
     throw new Error(`a report query returned ${JSON.stringify(value)} where a count was expected`);
+  }
+  return value;
+}
+
+/** The same guard as `count`, for the one value a findings query returns that is not a number. */
+function text(value: unknown): string {
+  if (typeof value !== 'string' || value === '') {
+    throw new Error(`a report query returned ${JSON.stringify(value)} where a string was expected`);
   }
   return value;
 }
@@ -311,19 +326,26 @@ function rulesApplied(cleaned: WhatWasCleaned, rules: Rules, intakeWeights: numb
 // Identity (ADR-0006, ADR-0012 item 2)
 // ---------------------------------------------------------------------------------------------
 
-async function identity(db: Queryable, items: readonly StoredItem[]): Promise<Identity> {
-  // A pair a human decided is counted whether or not it is merged right now: an unmerge clears
-  // `merged_into`, and the count exists so that a pair that stops merging is visible rather than
-  // silent (ADR-0012 item 2).
+async function identity(
+  db: Queryable,
+  input: ReportInput,
+  items: readonly StoredItem[],
+): Promise<Identity> {
+  // A merge a human owns is not the importer's, whatever tier proposed it: `merged_into` written
+  // by a human actor is that reviewer's decision (ADR-0012 item 2). Which of those were tier-1
+  // pairs is the run's to say — the tier lives in the grouping, not in any column — so the count
+  // of them arrives on the input rather than being read back out of the database here.
   const humanOwned = await humanOwnedFields(db, 'patient');
-  const decided = [...humanOwned.entries()]
-    .filter(([, fields]) => fields.has(MERGED_INTO))
-    .map(([patientId]) => patientId);
+  const decided = new Set(
+    [...humanOwned.entries()]
+      .filter(([, fields]) => fields.has(MERGED_INTO))
+      .map(([patientId]) => patientId),
+  );
   const mergedIds = await rows<{ id: string }>(
     db,
     sql`select id from patients where merged_into is not null`,
   );
-  const byTheImporter = mergedIds.filter((row) => !decided.includes(row.id)).length;
+  const byTheImporter = mergedIds.filter((row) => !decided.has(row.id)).length;
   const survivorRule = await rows<{ reason: string; pairs: number }>(
     db,
     sql`select e.reason, count(*)::int as pairs
@@ -342,12 +364,19 @@ async function identity(db: Queryable, items: readonly StoredItem[]): Promise<Id
   );
   const tier = (n: 2 | 3): number =>
     items.filter((item) => item.rule === `IDENTITY_TIER_${n}`).length;
+  const sizes = new Map<number, number>();
+  for (const size of input.candidateGroupSizes) sizes.set(size, (sizes.get(size) ?? 0) + 1);
   return {
-    candidates: byTheImporter + decided.length + tier(2) + tier(3),
+    candidates: input.candidateGroupSizes.length,
+    // Sorted by size rather than by key: these keys are numbers, and `10` before `2` would read
+    // as a mistake in a table whose whole point is the shape of the groups.
+    groupSizes: [...sizes.entries()]
+      .sort(([a], [b]) => a - b)
+      .map(([size, groups]) => ({ key: String(size), rows: groups })),
     tier1Merged: byTheImporter,
     tier2: tier(2),
     tier3: tier(3),
-    tier1HumanDecided: decided.length,
+    tier1HumanDecided: input.tier1HumanDecided,
     survivorRule: tallyOf(
       // The audit reason is `merged into patient <uuid>: tier-1 merge, <clause>`; the report
       // counts the clause, which is the rule, and never the uuid, which is one pair.
@@ -389,6 +418,9 @@ async function consent(
     })
     .from(patientsTable)
     .where(isNotNull(patientsTable.createdFromLegacyId));
+  // Scoped to the export on both sides, as `whatCameIn` is: `source_line` marks an event that
+  // came out of `consents.jsonl`, and the report is a statement about the export, so an event the
+  // console writes later must not change a figure a re-import over the same three files produces.
   const events = await db
     .select({
       patientId: consentEventsTable.patientId,
@@ -398,7 +430,7 @@ async function consent(
       at: consentEventsTable.at,
     })
     .from(consentEventsTable)
-    .where(isNotNull(consentEventsTable.patientId));
+    .where(and(isNotNull(consentEventsTable.patientId), isNotNull(consentEventsTable.sourceLine)));
   const byPatient = new Map<string, ConsentEventInput[]>();
   for (const event of events) {
     const key = event.patientId as string;
@@ -438,7 +470,9 @@ async function consent(
 
   const stored = await rows<{ patient_id: string; type: string; state: string }>(
     db,
-    sql`select patient_id, type, state from consent_states`,
+    sql`select s.patient_id, s.type, s.state from consent_states s
+        join patients p on p.id = s.patient_id
+        where p.created_from_legacy_id is not null`,
   );
   const storedState = new Map(stored.map((row) => [`${row.patient_id}|${row.type}`, row.state]));
   const changedByMerge = perRow
@@ -459,33 +493,48 @@ async function consent(
     excludedPatients: number;
   }>(
     db,
-    sql`with grants as (
-          select patient_id, min(at) as first_grant from consent_events
-          where action = 'granted' and patient_id is not null group by 1
+    // `legacy` and `events` scope both sides to the export, as `whatCameIn` does. The exclusion
+    // counts over the union of the two comparison populations: an intake whose patient has a
+    // revocation but no grant is missing from the second figure, not the first, and a count that
+    // joined `grants` alone would leave it out of both and out of its own explanation.
+    sql`with events as (
+          select patient_id, action, at from consent_events
+          where patient_id is not null and source_line is not null
+        ),
+        legacy as (
+          select id, patient_id, submitted_at from intakes where legacy_patient_id is not null
+        ),
+        grants as (
+          select patient_id, min(at) as first_grant from events
+          where action = 'granted' group by 1
         ),
         revocations as (
-          select patient_id, max(at) as last_revoke from consent_events
-          where action = 'revoked' and patient_id is not null group by 1
+          select patient_id, max(at) as last_revoke from events
+          where action = 'revoked' group by 1
         ),
         still_revoked as (
           select r.patient_id, r.last_revoke from revocations r
           where not exists (
-            select 1 from consent_events e where e.patient_id = r.patient_id
+            select 1 from events e where e.patient_id = r.patient_id
               and e.action = 'granted' and e.at > r.last_revoke)
         ),
+        comparable as (
+          select patient_id from grants union select patient_id from still_revoked
+        ),
         before as (
-          select i.id, i.patient_id from intakes i join grants g on g.patient_id = i.patient_id
+          select i.id, i.patient_id from legacy i join grants g on g.patient_id = i.patient_id
           where i.submitted_at is not null
             and i.submitted_at < (g.first_grant at time zone 'Europe/Amsterdam')::date
+        ),
+        excluded as (
+          select i.id, i.patient_id from legacy i join comparable c on c.patient_id = i.patient_id
+          where i.submitted_at is null
         )
         select (select count(*) from before)::int as before,
                (select count(distinct patient_id) from before)::int as patients,
-               (select count(*) from intakes i join grants g on g.patient_id = i.patient_id
-                where i.submitted_at is null)::int as "excludedIntakes",
-               (select count(distinct i.patient_id) from intakes i
-                join grants g on g.patient_id = i.patient_id
-                where i.submitted_at is null)::int as "excludedPatients",
-               (select count(*) from intakes i join still_revoked r on r.patient_id = i.patient_id
+               (select count(*) from excluded)::int as "excludedIntakes",
+               (select count(distinct patient_id) from excluded)::int as "excludedPatients",
+               (select count(*) from legacy i join still_revoked r on r.patient_id = i.patient_id
                 where i.submitted_at is not null
                   and i.submitted_at > (r.last_revoke at time zone 'Europe/Amsterdam')::date
                )::int as after`,
@@ -493,7 +542,8 @@ async function consent(
   const future = await rows<{ action: string; n: number }>(
     db,
     sql`select action, count(*)::int as n from consent_events
-        where at > ${`${input.asOf}T23:59:59.999Z`}::timestamptz group by 1`,
+        where source_line is not null
+          and at > ${`${input.asOf}T23:59:59.999Z`}::timestamptz group by 1`,
   );
 
   return {
@@ -600,41 +650,66 @@ async function notInExportNotes(
     readonly consent: Consent;
   },
 ): Promise<UnexpectedFinding[]> {
+  // Every count here is scoped to the export, as `whatCameIn` is: a patient the console creates
+  // later, or a consent event it writes, must not move a number in a file whose stated property is
+  // that a diff of it is a change in the data or in the rules.
   const c = await one(
     db,
-    sql`select
-      (select count(*) from patients where source = 'referral')::int as "referral",
-      (select count(*) from intakes
-        where legacy_patient_id is not null
-          and questionnaire_version_label is null)::int as "noVersionLabel",
+    sql`with legacy_patients as (
+        select * from patients where created_from_legacy_id is not null
+      ),
+      legacy_intakes as (
+        select * from intakes where legacy_patient_id is not null
+      ),
+      legacy_events as (
+        select * from consent_events where source_line is not null
+      ),
+      shared_bsn as (
+        select bsn,
+               count(*)::int as rows,
+               count(*) filter (where merged_into is null)::int as surviving
+        from legacy_patients where bsn_check = 'valid' group by bsn having count(*) > 1
+      ),
+      -- The cut-over is read off the log rather than typed: the first event that carries v2 is
+      -- the earliest moment a v1 event could be a straggler, and no profile section fixes a date.
+      v2_cut_over as (
+        select min(at) as at from legacy_events where version = 'v2'
+      )
+      select
+      (select count(*) from legacy_patients where source = 'referral')::int as "referral",
+      (select count(*) from legacy_intakes
+        where questionnaire_version_label is null)::int as "noVersionLabel",
       (select count(*) from legacy_patients_raw where signup_date like '%2062%')::int as "patients2062",
       (select count(*) from legacy_intakes_raw where submitted_at like '%2062%')::int as "intakes2062",
       (select count(*) from legacy_consent_events_raw where at like '%2062%')::int as "events2062",
-      (select count(*) from (
-        select bsn from patients where bsn_check = 'valid' group by bsn having count(*) > 1
-       ) t)::int as "sharedBsnValues",
-      (select count(*) from patients p where p.bsn_check = 'valid' and exists (
-        select 1 from patients q where q.bsn = p.bsn and q.id <> p.id))::int as "sharedBsnPatients",
+      (select count(*) from shared_bsn where surviving > 1)::int as "openBsnValues",
+      (select coalesce(sum(surviving), 0) from shared_bsn where surviving > 1)::int
+        as "openBsnPatients",
+      (select count(*) from shared_bsn where surviving <= 1)::int as "mergedBsnValues",
+      (select coalesce(sum(rows), 0) from shared_bsn where surviving <= 1)::int
+        as "mergedBsnPatients",
       (select count(*) from legacy_patients_raw
         where weight_unit = '' and weight ~ '^[0-9]+(\\.[0-9]+)?$')::int as "unitLess",
       (select count(*) filter (
         where (case when weight ~ '^[0-9]+(\\.[0-9]+)?$' then weight::numeric else 0 end) > 200)
         from legacy_patients_raw where weight_unit = '')::int as "unitLessAbove200",
-      (select count(*) from intakes
+      (select count(*) from legacy_intakes
         where reviewer_note ilike '%twijfel, toch akkoord%' and outcome = 'rejected')::int
         as "doubtfulRejections",
-      (select count(*) from consent_events where version = 'v1'
-        and (at at time zone 'Europe/Amsterdam') >= timestamp '2024-01-01')::int as "v1Stragglers",
-      (select count(*) from consent_events
+      (select to_char((select at from v2_cut_over) at time zone 'Europe/Amsterdam', 'YYYY-MM-DD'))
+        as "v2CutOver",
+      (select count(*) from legacy_events e, v2_cut_over v
+        where e.version = 'v1' and e.at >= v.at)::int as "v1Stragglers",
+      (select count(*) from legacy_events
         where (at at time zone 'Europe/Amsterdam') < timestamp '2023-01-01')::int as "before2023",
-      (select count(*) from patients p where p.created_from_legacy_id is not null
-        and exists (select 1 from consent_events e where e.patient_id = p.id)
+      (select count(*) from legacy_patients p
+        where exists (select 1 from legacy_events e where e.patient_id = p.id)
         and not exists (
-          select 1 from consent_events e where e.patient_id = p.id
+          select 1 from legacy_events e where e.patient_id = p.id
             and (e.at at time zone 'Europe/Amsterdam') >= timestamp '2023-01-01'))::int
         as "noEventSince2023",
       (select count(*) from (
-        select patient_id from consent_events where patient_id is not null and source_line is not null
+        select patient_id from legacy_events where patient_id is not null
         group by patient_id
         having array_agg(source_line order by at, source_line) <> array_agg(source_line order by source_line)
        ) t)::int as "outOfFileOrder"`,
@@ -683,8 +758,8 @@ async function notInExportNotes(
     },
     {
       finding:
-        'Three patient records are shifted about 36 years into the future, consistently across ' +
-        'all three files; their dates of birth are normal, so it is the row that moved, not a digit',
+        'Whole patient records dated in 2062 — decades into the future, consistently across all ' +
+        'three files; their dates of birth are normal, so it is the row that moved, not a digit',
       numbers: {
         patientRows: count(c.patients2062),
         intakeRows: count(c.intakes2062),
@@ -703,12 +778,19 @@ async function notInExportNotes(
       notCovered: 'the notes question the log only *before* 2023',
     },
     {
+      // Split because the two halves are different problems: a value the importer resolved is a
+      // duplicate that is now one patient, and a value still on two surviving rows is an open
+      // identity collision. One count over both would overstate what is left to decide.
       finding:
-        'Valid BSNs carried by more than one patient row: an identity collision on a national ' +
-        'identifier, not a formatting problem',
+        'Valid BSNs carried by more than one patient row. Where the two rows were identical on ' +
+        'identity the importer merged them and the value now belongs to one patient; the rest ' +
+        'are an identity collision on a national identifier, not a formatting problem',
       numbers: {
-        bsnValues: count(c.sharedBsnValues),
-        patients: count(c.sharedBsnPatients),
+        bsnValues: count(c.openBsnValues) + count(c.mergedBsnValues),
+        valuesResolvedByTier1Merge: count(c.mergedBsnValues),
+        rowsThoseMergesCovered: count(c.mergedBsnPatients),
+        valuesStillOnMoreThanOneSurvivingPatient: count(c.openBsnValues),
+        survivingPatientsSharingThem: count(c.openBsnPatients),
       },
       evidence: 'P-6, P-34',
       notCovered: 'the notes say BSNs were "never validated", which is a claim about their shape',
@@ -770,12 +852,13 @@ async function notInExportNotes(
     {
       finding:
         'Patients with no consent event at all, and `v1` consent-text versions still appearing ' +
-        'after the `v2` cut-over: silence before 2023 cannot be told from a lost record',
+        `after the first \`v2\` event (${text(c.v2CutOver)}): silence before 2023 cannot be told ` +
+        'from a lost record',
       numbers: {
         patientsWithNoRecord: consentState('no_record') + consentState('unknown_pre_log'),
         eventsBefore2023: count(c.before2023),
         patientsWithNoEventSince2023: count(c.noEventSince2023),
-        eventsStillLabelledV1After2024: count(c.v1Stragglers),
+        eventsStillLabelledV1AfterIt: count(c.v1Stragglers),
       },
       evidence: 'P-30, P-31, P-32',
       notCovered:
@@ -812,7 +895,7 @@ export async function buildReport(db: Queryable, input: ReportInput): Promise<Im
     whatWasCleaned: cleaned,
     whatWasQuarantined: whatWasQuarantined(items),
     rulesApplied: rulesApplied(cleaned, input.rules, count(intakeWeights.n)),
-    identity: await identity(db, items),
+    identity: await identity(db, input, items),
     consent: consentReport,
     shadowEvaluation: shadow,
     notInExportNotes: await notInExportNotes(db, input, {

@@ -50,6 +50,7 @@ const report: ImportReport = {
   ],
   identity: {
     candidates: 4,
+    groupSizes: [{ key: '2', rows: 4 }],
     tier1Merged: 1,
     tier2: 1,
     tier3: 2,
@@ -151,6 +152,35 @@ describe('renderMarkdown', () => {
     } & ImportReport;
     changed.whatCameIn.intakes.orphans = 3;
     expect(renderMarkdown(changed)).not.toBe(markdown);
+  });
+
+  // The two claims the renderer used to make about a report it had not read: that every candidate
+  // group is a pair, and that a merge changed something. Both are now read off the JSON.
+  it('describes the candidate groups from their counted sizes, not from an assumption', () => {
+    expect(markdown).toContain('4 candidate groups, every one of them a pair.');
+    const mixed = structuredClone(report);
+    const sizes = [
+      { key: '2', rows: 3 },
+      { key: '3', rows: 1 },
+    ];
+    const changed = { ...mixed, identity: { ...mixed.identity, groupSizes: sizes } };
+    expect(renderMarkdown(changed)).toContain('4 candidate groups, 3 of 2 rows, 1 of 3 rows.');
+  });
+
+  it('reads correctly for an export in which no merge happened', () => {
+    const noMerges: ImportReport = {
+      ...report,
+      consent: { ...report.consent, statesOfMergedAwayRows: [], statesChangedByMerge: [] },
+    };
+    const rendered = renderMarkdown(noMerges);
+    expect(rendered).toContain('The two tables agree row for row');
+    expect(rendered).not.toContain('(0: )');
+    // No paragraph points at a table that was not printed.
+    expect(rendered).not.toContain('That second table is the reason');
+  });
+
+  it('prints the intakes the consent comparison could not include (ADR-0013 item 6)', () => {
+    expect(markdown).toContain('3 intakes, over 2 patients, are outside them for that reason');
   });
 
   it('ends in exactly one newline, so a diff of the file has no trailing noise', () => {
