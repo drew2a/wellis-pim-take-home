@@ -1,6 +1,6 @@
 # ADR-0014: The intake state machine: edges, actors, audited transitions and the database lock
 
-- **Status:** proposed
+- **Status:** accepted
 - **Date:** 2026-09-13
 - **Deciders:** Andrei Andreev
 - **Requirements:** R-B6, R-B7, R-B13, R-B14, R-B15, R-B16, R-B17, R-B18, R-B19, R-B20, R-B21,
