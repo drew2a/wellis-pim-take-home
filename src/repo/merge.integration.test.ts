@@ -435,6 +435,43 @@ describe('mergePatients / unmergePatient (ADR-0006)', () => {
       expect(outcome.decided).toEqual([]);
     });
 
+    // Deciding for the survivor where the survivor holds nothing is a decision that the field
+    // stays empty. It changes no value, so it produces no `decided` change — and the field must
+    // still be kept out of `gained`, or the entry would claim a value the patch never writes.
+    it('keeps a field the reviewer left empty empty, and records no gain', async () => {
+      const survivor = await insertPatient('recS', { email: null });
+      const loser = await insertPatient('recL', { email: 'other@example.nl' });
+
+      const outcome = await mergeWith(survivor, loser, { email: { source: 'survivor' } });
+
+      expect(outcome.decided).toEqual([]);
+      expect(outcome.gained.map((change) => change.field)).not.toContain('email');
+      const [row] = await database.db.select().from(patients).where(eq(patients.id, survivor));
+      expect(row?.email).toBeNull();
+      expect((await changesOn(survivor)).filter((change) => change.field === 'email')).toEqual([]);
+    });
+
+    // `full_name`'s empty value is `''`, which the column's own declaration rejects: restoring it
+    // through the parser threw in the middle of the unmerge transaction.
+    it('unmerges a gained name back to empty', async () => {
+      const survivor = await insertPatient('recS', { fullName: '' });
+      const loser = await insertPatient('recL', { fullName: 'Bram Nair' });
+      await mergeWith(survivor, loser, {});
+
+      const [merged] = await database.db.select().from(patients).where(eq(patients.id, survivor));
+      expect(merged?.fullName).toBe('Bram Nair');
+
+      await unmergePatient(database.db, {
+        loserId: loser,
+        actor: REVIEWER,
+        reason: 'not the same person after all',
+        declaredConsentTypes: TYPES,
+      });
+
+      const [restored] = await database.db.select().from(patients).where(eq(patients.id, survivor));
+      expect(restored?.fullName).toBe('');
+    });
+
     it('lets a decision win over the field the survivor would have gained', async () => {
       const survivor = await insertPatient('recS', { city: null });
       const loser = await insertPatient('recL', { city: 'Delft' });

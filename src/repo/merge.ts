@@ -18,7 +18,7 @@ import { elfproef } from '@/import/mapper/bsn';
 import { dedupeKeyFor } from './audit';
 import { maskIdentifier } from './mask';
 import { survivorOf } from './membership';
-import { parseFieldValue } from './resolve';
+import { asText, parseFieldValue } from './resolve';
 
 /**
  * The fields ADR-0006 calls "about the person". `source` and `signup_date` are deliberately absent:
@@ -193,8 +193,16 @@ async function mergeInTransaction(db: Queryable, request: MergeRequest): Promise
 
   const decisions = request.fieldDecisions ?? {};
   const decided = fieldsDecided(survivor, loser, decisions, sourceLegacyId);
-  // A decided field wins; an undecided one keeps ADR-0006's rule. `bsn_check` follows `bsn`.
-  const decidedColumns = new Set(decided.map((change) => change.field));
+  // A decided field wins; an undecided one keeps ADR-0006's rule. **Every** decided field, not
+  // only the ones that changed something: picking the survivor's own empty value is a decision
+  // that the field stays empty, and reading the set off `decided` would let ADR-0006's rule fill
+  // it from the loser anyway — the column would keep the survivor's null while the entry claimed
+  // it gained the loser's value (`CLAUDE.md` §5). `bsn_check` follows `bsn`.
+  const decidedColumns = new Set(
+    (Object.keys(decisions) as PersonField[]).flatMap((field) =>
+      decisions[field] === undefined ? [] : [PERSON_FIELDS[field].column],
+    ),
+  );
   if (decisions.bsn !== undefined) decidedColumns.add('bsn_check');
   const gained = fieldsGained(survivor, loser, sourceLegacyId).filter(
     (change) => !decidedColumns.has(change.field),
@@ -383,10 +391,17 @@ function fieldsDecided(
     const field = key as PersonField;
     const decision = decisions[field];
     if (decision === undefined) continue;
-    const value = chosenValue(field, survivor, loser, decision);
     // Validated by the same declaration the resolution path uses, so the two writers of a patient
-    // column cannot disagree about what it may hold (ADR-0023).
-    parseFieldValue('patient', PERSON_FIELDS[field].column, value);
+    // column cannot disagree about what it may hold (ADR-0023). The parsed value, not the text as
+    // it was picked, because that is what the column will hold: `weight_kg` comes back from a
+    // `numeric(5,1)` as `80.0`, and a reviewer typing `80` decided nothing.
+    const value = asText(
+      parseFieldValue(
+        'patient',
+        PERSON_FIELDS[field].column,
+        chosenValue(field, survivor, loser, decision),
+      ).parsed,
+    );
 
     const current = text(survivor[field]);
     if (current === value) continue;
@@ -476,10 +491,15 @@ function restorePatch(released: readonly AuditChange[]): Partial<PatientRow> {
     }
     const field = FIELD_BY_COLUMN.get(change.field);
     if (field === undefined) throw new Error(`unmerge cannot write unknown field ${change.field}`);
-    const restored =
-      change.chosen === undefined || field === 'bsn' ? PERSON_FIELDS[field].empty : change.from;
+    const empty = PERSON_FIELDS[field].empty;
+    const restored = change.chosen === undefined || field === 'bsn' ? empty : change.from;
+    // Only a recorded `from` goes through the parser, because only that came from outside. The
+    // empty value is the field's own sentinel and is not a value anyone could have typed —
+    // `full_name`'s is `''`, which that column's declaration rejects — so parsing it would make
+    // unmerging a gained name throw in the middle of the transaction.
     Object.assign(patch, {
-      [field]: parseFieldValue('patient', change.field, restored).parsed,
+      [field]:
+        restored === empty ? empty : parseFieldValue('patient', change.field, restored).parsed,
     });
   }
   return patch;
