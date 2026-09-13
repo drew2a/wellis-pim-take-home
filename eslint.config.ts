@@ -26,5 +26,11 @@ export default defineConfig(
       '@typescript-eslint/non-nullable-type-assertion-style': 'off',
     },
   },
+  {
+    // `postcss.config.mjs` is JavaScript and outside the TypeScript project, so the rules that
+    // need a type checker cannot run on it. Everything else still does.
+    files: ['**/*.mjs'],
+    extends: [tseslint.configs.disableTypeChecked],
+  },
   prettier,
 );
