@@ -1,6 +1,6 @@
 # ADR-0016: A draft begins with the first answer, not with the page load
 
-- **Status:** proposed
+- **Status:** accepted
 - **Date:** 2026-09-13
 - **Deciders:** Andrei Andreev
 - **Requirements:** R-B1, R-B4, R-T4 ·
