@@ -264,6 +264,19 @@ Each is a decision, not an omission (R-S4):
   need a `doctor` — and nowhere else. Claiming an intake and every review-item action are open to
   both roles, because triage and data work are operational and approving a course of treatment is
   not (ADR-0014 item 3).
+- **A correction does not re-run the shadow evaluation it invalidates** (ADR-0026). Today's rules
+  are run over every legacy intake at import and stored with the inputs they judged — age at
+  submission, weight, height. A reviewer correcting one of those inputs leaves that stored verdict
+  standing on inputs that have changed, so the shadow outcome and the record can disagree until the
+  next import. Not built because it is three decisions and not one: deriving the engine's inputs
+  from canonical rows rather than from the importer's mapped structures, loading a *named*
+  `ruleset_version` where `loadRules` takes a filesystem path, and settling whether a correction
+  re-evaluates history at all — ADR-0005 says shadow rows are browsable and never applied. The
+  console shows the ruleset version next to every shadow verdict, so a stale one is at least
+  attributable.
+- **A merge joins two records at a time.** An identity item comparing three or more — reachable
+  through the new flow; there are none in the export — is decided one pair at a time, and the
+  records not in that merge are left exactly as they are (ADR-0026 item 3).
 
 ## Deploy
 
