@@ -8,3 +8,7 @@ reports/
 docs/profile/
 # Embedded verbatim into the generated inventory; formatting it changes the artifact.
 scripts/profile/inventory-template.html
+# The console design as the repo owner supplied it, and the bundle it was extracted from.
+# A reference, not source: reformatting it would make it stop being the thing that was approved.
+docs/design/
+Wellis Review Console.html
