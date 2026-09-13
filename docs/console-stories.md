@@ -217,8 +217,11 @@ value wins in each field, and the merge really happens.
 - **Resolve** with a required note describing what was done outside the system, or **dismiss**
   with a note. Both write an audit entry and close the item; neither writes a consent event —
   a grant obtained on paper is not a click in this console.
-- For the 7 `conflict` items only: **set the state** to `granted` or `revoked` with a note, which
-  writes `consent_states.state` and an audit entry.
+- For the 7 `conflict` items only: **set the state** to `granted` or `revoked` with a note. The
+  audit entry is the decision, carrying `consent_state:<type> conflict → granted`; the
+  `consent_states` row is its cache, and an event arriving after the decision takes it back
+  (ADR-0025). A state that is not `conflict` is refused: a clear revocation is acted on, not
+  overridden.
 - A test asserts a resolution with no note is refused by the route *and* by the database
   (`review_items_resolution_note_on_close`).
 - The payload's second action, `change_the_patient_status`, is **not** offered ([D-7](#d-7)).
@@ -462,7 +465,16 @@ flow. No test hard-codes a count; each compares the screen against the query.
 resolve / dismiss / set-the-state and says nothing about changing the patient's commercial status.
 *Decision:* the second is not built. Consent is not commercial standing (`CLAUDE.md` §6: *status*
 and *consent state* are different words for different things), and a status change from a consent
-item would be a value change nobody asked for. Recorded in the branch ADR, not invented in code.
+item would be a value change nobody asked for. Recorded in ADR-0023 item 3, not invented in code.
+
+**Settled since, and larger than it looked:** `consent_states` is derived and recomputed on every
+import and after every merge (ADR-0011 item 13), so a state set by hand would have vanished at the
+next import with the item closed and nothing to show for it. **ADR-0025** is the answer: the
+decision is the audit entry, the row is its cache marked `derivation_version = 'human'`, the
+recomputation keeps it while the evidence it was taken over is still the latest, and an event that
+orders after that supersedes it — so a patient who later consents properly needs nobody to
+remember them. Zero of the seven conflict patients is on either side of a merged pair, counted and
+asserted against the imported database.
 
 ### D-8
 **One item type, two payload shapes.** A legacy `identity_conflict` carries `rows: [...]` keyed by
@@ -507,6 +519,11 @@ change; stated so the ADR's prediction and the data are not silently different.
 legacy intakes share one `legacy import` audit timestamp, so that reading dates every one of them
 to the day of the import and the age filter becomes useless for 99 % of the queue. S-2 uses
 `submitted_at` for a legacy intake and the `→ draft` entry for a new-flow one.
+
+### D-16
+**Every review-item type has a decider, so the switch is exhaustive.** The route's `default` branch
+binds `never`, which means a type added to `review_item_type` without a decider fails `tsc` rather
+than reaching a reviewer as a refusal nobody wrote.
 
 ### D-15
 **The consent step's version caption.** ADR-0020 removed "Consent text version v3." from the

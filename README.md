@@ -203,6 +203,37 @@ also makes claiming exclusive, since `in_review → in_review` is not an edge. `
 matched an absolute reject: an under-age intake cannot be approved by anyone, which is why Q1 calls
 that rule absolute in the first place.
 
+## Part C — the review console
+
+`/console`, behind `/login`. One queue combining both sources of work — the review items the import
+could not decide and the intakes waiting for a person — filtered by type, age and status, oldest
+first. On this export that is **340 open items and 6 flagged intakes**, with the counts beside every
+filter taken from the database rather than from the page.
+
+Every kind of item has a screen and a decision:
+
+| item | open | the decision |
+|---|---|---|
+| `clinical_history` | 115 | what was done about something the legacy process could not see; **the outcome never changes** |
+| `consent` | 83 | what was done outside the system; for the 7 self-contradicting logs, the state a person established (ADR-0025) |
+| `data_quality` | 62 | accept the detector's proposal, type a value, or leave the null |
+| `identity_conflict` | 44 | merge with a survivor and a value per field, or "not the same person" |
+| `orphan_intake` | 21 | attach to a patient found by search, or leave unresolved |
+| `vocabulary` | 10 | confirm or reject the inference; for the 18 unit-less weights, apply it row by row |
+| `duplicate_intake` | 5 | which of a same-day pair is the record of note; **both rows stay** |
+
+An intake is claimed (`in_review`, with the reviewer's name on it) and then approved or rejected by
+a doctor with a note. The patient's page shows the record, everything the membership function says
+belongs to it, and the audit timeline that explains how it got there.
+
+Two properties hold by construction rather than by review:
+
+- **One writer.** Every value that changes after the import goes through `resolveReviewItem`, which
+  writes the value, the audit entry with actor and note, and closes the item in one transaction.
+  The merge is the single deliberate exception, for the reason ADR-0022 gives.
+- **The actor is never sent by the caller.** It comes from the session, and no route schema
+  declares a reviewer, an actor or a role — which is what makes the doctor gate mean something.
+
 ### Deliberate scope cuts
 
 Each is a decision, not an omission (R-S4):
@@ -220,6 +251,15 @@ Each is a decision, not an omission (R-S4):
   against `audit_entries.actor_reviewer_id`, which is already the stable identity.
 - **An abandoned draft stays forever**, as a `draft` row with partial answers and no patient. No
   expiry is built.
+- **No unmerge screen.** `unmergePatient` exists, is the exact inverse of a merge and is tested;
+  nothing in the console calls it. A merge taken back is rare enough to be worth a deliberate act
+  through the API.
+- **Sorting is by age only**, and there are no saved filters. The filters are the URL, so a
+  filtered queue can be kept in a tab, which is most of what saved filters would buy.
+- **No bulk actions**, except the row-by-row exclusion on a vocabulary item — which is not a bulk
+  action but the opposite: one decision, applied to the rows a person kept.
+- **The queue shows a page, not everything.** 500 rows, oldest first, which is the whole of the
+  default view; a filter that selects the 2068 legacy approvals says it is showing a page.
 - **Roles are enforced on exactly two edges** — `in_review → approved` and `in_review → rejected`
   need a `doctor` — and nowhere else. Claiming an intake and every review-item action are open to
   both roles, because triage and data work are operational and approving a course of treatment is
