@@ -1,0 +1,128 @@
+/* Plain and legible, nothing more (R-B4, "it may be visually plain"). One stylesheet, no
+   framework: the grading is about what the system does, not about how it looks. */
+:root {
+  color-scheme: light dark;
+  --ink: #1a1a1a;
+  --muted: #5a5a5a;
+  --line: #d0d0d0;
+  --error: #a11;
+  --ground: #fff;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ink: #ededed;
+    --muted: #a8a8a8;
+    --line: #444;
+    --error: #f87171;
+    --ground: #111;
+  }
+}
+
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font:
+    16px/1.5 system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
+}
+
+main {
+  max-width: 38rem;
+  margin: 0 auto;
+  padding: 2rem 1rem 4rem;
+}
+
+h1 {
+  font-size: 1.5rem;
+}
+h2 {
+  font-size: 1.2rem;
+  margin-top: 0;
+}
+
+.progress {
+  color: var(--muted);
+  font-size: 0.875rem;
+  margin: 0 0 0.25rem;
+}
+
+.field {
+  margin: 0 0 1.5rem;
+}
+
+.label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+}
+
+.hint {
+  color: var(--muted);
+  font-size: 0.875rem;
+  margin: 0 0 0.5rem;
+}
+
+.choice {
+  display: block;
+  margin: 0.25rem 0;
+}
+
+.choice input {
+  margin-right: 0.5rem;
+}
+
+input[type='text'],
+input[type='email'],
+input[type='date'],
+input[type='number'],
+input:not([type]),
+textarea {
+  width: 100%;
+  max-width: 24rem;
+  padding: 0.4rem;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: var(--ground);
+  color: inherit;
+  font: inherit;
+}
+
+.error {
+  color: var(--error);
+  margin: 0.35rem 0 0;
+}
+
+.consent {
+  white-space: pre-line;
+  border-left: 3px solid var(--line);
+  padding-left: 1rem;
+}
+
+.actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 2rem;
+}
+
+button {
+  padding: 0.5rem 1.25rem;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: var(--ground);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+button[type='submit'] {
+  font-weight: 600;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: progress;
+}

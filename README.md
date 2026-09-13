@@ -19,6 +19,7 @@ npm ci
 cp .env.example .env        # DATABASE_URL for the compose database (host port 55432)
 npm run db:up               # starts Postgres 17 and waits until it is healthy
 npm run db:migrate          # applies the migrations under drizzle/ (see docs/schema.md)
+npm run seed:reviewers      # the care team from REVIEWERS in .env (ADR-0014)
 npm run dev                 # http://localhost:3000
 ```
 
@@ -122,8 +123,8 @@ intakes from someone under 18.
 no I/O, no database and no clock, holding no threshold or term of its own. Thresholds, the two
 clinical term lists, the weight-related list and the precedence statement all come from
 `rules/v1.json`, which the schema validates at load, so the ruleset version stored with an
-evaluation is enough to reproduce it. One function serves both callers — the Part B intake flow, which has yet to be
-built, and the import-time history audit, which calls it over every legacy intake.
+evaluation is enough to reproduce it. One function serves both callers — the Part B intake flow and the import-time history audit,
+which calls it over every legacy intake.
 
 Every rule is evaluated — nothing short-circuits — and precedence resolves afterwards: age under
 18 rejects outright, while any other reject yields to a flag so that a human decides.
@@ -141,6 +142,74 @@ also read the intake's free-text answer, while the weight-related list — the o
 suppresses a flag — reads the structured answer only. Matching is split, tokenise, contiguous
 run, never a bare substring, so `hypothyreoidie` is not thyroid cancer and `levothyroxine` is not
 a GLP-1. Over the legacy export the matcher reproduces the counts ADR-0005 was accepted with.
+
+## Intake
+
+```sh
+npm run dev                 # http://localhost:3000/intake
+```
+
+Five steps — identity, height and weight, medication, conditions, consent — each saved to the
+server as it is answered, so the draft is a row in `intakes` with `state = 'draft'` from the first
+question. Nothing on the client decides anything: every message the patient sees under a field is
+the server's own, from the Zod schema at the boundary, and the plausibility bounds and the
+condition and GLP-1 checklists are read from `rules/v1.json`, so the form cannot disagree with the
+engine about what is valid or about what counts as a weight-related condition.
+
+Submitting is one transaction: it creates the patient (`prospect`), fills the intake, stores the
+evaluation with `shadow = false`, writes the consent event, moves the intake `draft → submitted →
+auto_*`, and runs two detectors. Consent is an explicit grant naming the version of the text the
+patient was shown (`v3`, the next in the sequence the export already uses); without it submit is
+`400` and **writes nothing at all**. What the patient typed is kept verbatim in `intakes.answers`,
+and every difference between that and the canonical patient row — a trimmed name, a lowercased
+email — has a normalisation record, produced by the importer's own normalisers.
+
+**The two detectors never block and never merge.** A submission sharing a candidate key with an
+existing patient raises a `POSSIBLE_EXISTING_PATIENT` review item and the intake carries on through
+the machine; whether two people are one person is a reviewer's decision and not worth making a
+patient wait for. A patient who reports current GLP-1 use and names a drug the ruleset does not
+know is flagged anyway — the yes/no answer is an engine input, so R-B6(d) holds whatever they call
+it — and a single `vocabulary` item asks whether to add the name in v2, once however many patients
+name the same drug.
+
+### The state machine
+
+Ten legal ordered pairs over twelve states, in `src/intake/machine.ts` (ADR-0014):
+
+```
+        → draft → submitted → auto_cleared ⟍
+                            → auto_flagged  →  in_review → approved
+                            → auto_rejected ⟋              → rejected
+                          legacy_pending ⟋
+```
+
+`transitionIntake` is the only code that writes `intakes.state`, and it writes the audit entry —
+actor, timestamp, from, to, reason, and the ruleset version on the engine's edges — in the same
+transaction. It is enforced **twice**: the pure table refuses an illegal pair, and a trigger on
+`intakes`, generated from that same table, refuses one from `psql` (R-B15, R-B16). Both are tested
+over the whole 144-pair grid: 10 accepted, 134 refused by the function, 110 by the trigger, which
+additionally allows an intake to stay put, and the importer to re-map one legacy state to another.
+
+`in_review` is entered only when a named reviewer claims the intake — never automatically — which
+also makes claiming exclusive, since `in_review → in_review` is not an edge. `approved` and
+`rejected` need role `doctor`, and `approved` is refused outright when the intake's evaluation
+matched an absolute reject: an under-age intake cannot be approved by anyone, which is why Q1 calls
+that rule absolute in the first place.
+
+### Deliberate scope cuts
+
+Each is a decision, not an omission (R-S4):
+
+- **No authentication of any kind.** A patient holds their intake's uuid; a reviewer asserts who
+  they are. `audit_entries.actor_reviewer_id` is the stable identity real auth would slot into, and
+  `reviewers` is seeded from the environment. Q8's documented default.
+- **The review console is not built on this branch** — no work queue, no conflict resolution, no
+  patient detail view, and no route offers the reviewer edges of the machine, although the edges
+  themselves are implemented and tested.
+- **An abandoned draft stays forever**, as a `draft` row with partial answers and no patient. No
+  expiry is built.
+- **Roles are recorded but not authorised beyond the two edges above**, and reviewer identity is
+  asserted rather than proven, so the role separates duties; it does not resist an attacker.
 
 ## Deploy
 
