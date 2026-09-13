@@ -53,3 +53,36 @@ describe('parseEnv', () => {
     );
   });
 });
+
+// A reviewer named after a named process would be audited like a machine (ADR-0008 item 1) and
+// have their field edits overwritten by the importer (ADR-0004, R-A17), so the name is refused at
+// the boundary rather than discovered later in the audit log.
+describe('REVIEWERS names that collide with a named process', () => {
+  const DATABASE_URL = 'postgres://wellis:wellis@localhost:5432/wellis';
+
+  it.each(['importer', 'legacy import', 'intake form', 'eligibility engine'])(
+    'refuses a reviewer called %s',
+    (name) => {
+      expect(() =>
+        parseEnv({ DATABASE_URL, REVIEWERS: JSON.stringify([{ name, role: 'doctor' }]) }),
+      ).toThrow(/named process/);
+    },
+  );
+
+  it('refuses one that is only padded with whitespace, because the name is trimmed first', () => {
+    expect(() =>
+      parseEnv({
+        DATABASE_URL,
+        REVIEWERS: JSON.stringify([{ name: '  importer  ', role: 'ops' }]),
+      }),
+    ).toThrow(/named process/);
+  });
+
+  it('still accepts a person whose name merely contains one', () => {
+    const env = parseEnv({
+      DATABASE_URL,
+      REVIEWERS: JSON.stringify([{ name: 'Dr Importer-Jansen', role: 'doctor' }]),
+    });
+    expect(env.REVIEWERS).toEqual([{ name: 'Dr Importer-Jansen', role: 'doctor' }]);
+  });
+});

@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { SYSTEM_ACTORS } from '@/import/actors';
+
 // Validated once, at the process boundary (CLAUDE.md §2, ADR-0003). Everything downstream
 // trusts the resulting type and never re-checks the raw environment.
 const postgresUrl = z.url({ protocol: /^postgres(ql)?$/ });
@@ -12,7 +14,18 @@ const optional = <T extends z.ZodType>(schema: T) =>
 // The care team, seeded by `npm run seed:reviewers` (ADR-0014 item 4). A JSON array so one
 // variable carries both fields; identification for the audit, never authentication (Q8, R-S4).
 const reviewerSeedSchema = z.object({
-  name: z.string().trim().min(1),
+  // A reviewer may not be named after a named process. `dedupeKeyFor` branches on SYSTEM_ACTORS to
+  // decide whether an audit entry gets a deterministic idempotency key (ADR-0008 item 1), so a
+  // reviewer called "importer" would have their decisions keyed like a machine's: repeating an
+  // identical decision would hit the unique constraint instead of recording a second event, and
+  // the importer would treat their edits as machine-owned and overwrite them (ADR-0004, R-A17).
+  name: z
+    .string()
+    .trim()
+    .min(1)
+    .refine((name) => !SYSTEM_ACTORS.has(name), {
+      message: 'is the name of a named process and cannot also be a reviewer',
+    }),
   role: z.enum(['doctor', 'ops']),
 });
 
