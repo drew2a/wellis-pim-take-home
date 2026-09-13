@@ -87,6 +87,7 @@ export const reviewItemTypeEnum = pgEnum('review_item_type', [
 ]);
 export const reviewItemScopeEnum = pgEnum('review_item_scope', ['row', 'vocabulary']);
 export const reviewItemStatusEnum = pgEnum('review_item_status', ['open', 'resolved', 'dismissed']);
+export type ReviewItemStatus = (typeof reviewItemStatusEnum.enumValues)[number];
 // Who a reviewer is allowed to be. `doctor` gates the medical decision — approving or rejecting an
 // intake — and nothing else; triage and review-item work are open to both (ADR-0014 item 3).
 export const reviewerRoleEnum = pgEnum('reviewer_role', ['doctor', 'ops']);

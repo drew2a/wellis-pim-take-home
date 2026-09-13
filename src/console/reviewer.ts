@@ -4,11 +4,10 @@
 //
 // No route schema declares an actor, a reviewer or a role, so there is no path from a request body
 // to `audit_entries.actor`. An audit entry is evidence, and a name the caller chose is not.
-import { eq } from 'drizzle-orm';
-
 import { getDb } from '@/db/client';
-import { reviewers, type ReviewerRole } from '@/db/schema';
+import type { ReviewerRole } from '@/db/schema';
 import { loadEnv } from '@/env';
+import { findReviewer } from '@/reviewers/repo';
 
 import { readCookie, SESSION_COOKIE, verifySession } from './session';
 
@@ -41,9 +40,5 @@ export async function currentReviewer(request?: Request): Promise<ConsoleReviewe
   if (reviewerId === null) return null;
 
   // The row is the identity, and it carries the role: the cookie never does (ADR-0021 item 2).
-  const [row] = await getDb()
-    .select({ id: reviewers.id, name: reviewers.name, role: reviewers.role })
-    .from(reviewers)
-    .where(eq(reviewers.id, reviewerId));
-  return row ?? null;
+  return findReviewer(getDb(), reviewerId);
 }

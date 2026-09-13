@@ -13,8 +13,17 @@ export { Badge, StateBadge } from './Badge';
 export { Button, ButtonRow, type ButtonVariant } from './Button';
 export { Card } from './Card';
 export { Choice, Field, TextAreaField, TextField } from './Field';
+export { FilterGroup, FilterLink, FilterPanel } from './Filters';
+export { Caption, PageHeader } from './Header';
 export { Page, PageTitle } from './Page';
 export { StepIndicator } from './Steps';
 export { Table, type Column } from './Table';
 export { ErrorText, Findings, Hint, Lead, Prose } from './Text';
-export { REVIEW_ITEM_TONES, STATE_TONES, humanise, toneForState, type Tone } from './tones';
+export {
+  REVIEW_ITEM_TONES,
+  STATE_TONES,
+  humanise,
+  toneForReviewItem,
+  toneForState,
+  type Tone,
+} from './tones';

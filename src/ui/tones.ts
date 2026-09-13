@@ -70,5 +70,10 @@ const BY_STATE: ReadonlyMap<string, Tone> = new Map(Object.entries(STATE_TONES))
 
 export const toneForState = (state: string): Tone => BY_STATE.get(state) ?? 'neutral';
 
+/** The same, for a review-item type that arrived as a plain `string` — a queue row's `type`. */
+const BY_ITEM_TYPE: ReadonlyMap<string, Tone> = new Map(Object.entries(REVIEW_ITEM_TONES));
+
+export const toneForReviewItem = (type: string): Tone => BY_ITEM_TYPE.get(type) ?? 'neutral';
+
 /** `auto_cleared` → `auto cleared`. The enum value is the vocabulary; this only makes it readable. */
 export const humanise = (value: string): string => value.replace(/_/g, ' ');

@@ -4,13 +4,12 @@
 // others never have to: what it returns is a signed cookie, and from then on `currentReviewer()`
 // answers who the caller is. The body carries a reviewer and a secret and **nothing else** — the
 // schema is strict, so a caller that tries to declare a role is refused rather than ignored.
-import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { secretMatches, sessionSetCookie, signSession } from '@/console/session';
 import { getDb } from '@/db/client';
-import { reviewers } from '@/db/schema';
 import { loadEnv } from '@/env';
+import { findReviewer } from '@/reviewers/repo';
 
 import { badRequest, issuesOf, json, serverError, unauthorized } from '../../http';
 
@@ -40,11 +39,8 @@ export async function POST(request: Request): Promise<Response> {
     // exists — and one answer for both failures, so the login page cannot be used to list the team.
     if (!secretMatches(parsed.data.secret, loadEnv().CONSOLE_SECRET)) return unauthorized();
 
-    const [reviewer] = await getDb()
-      .select({ id: reviewers.id, name: reviewers.name, role: reviewers.role })
-      .from(reviewers)
-      .where(eq(reviewers.id, parsed.data.reviewerId));
-    if (reviewer === undefined) return unauthorized();
+    const reviewer = await findReviewer(getDb(), parsed.data.reviewerId);
+    if (reviewer === null) return unauthorized();
 
     const session = signSession(reviewer.id, new Date(), loadEnv().CONSOLE_SECRET);
     return withCookie(json(reviewer), sessionSetCookie(session, { secure: secure() }));

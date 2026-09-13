@@ -4,7 +4,7 @@
 import type { ReactElement } from 'react';
 
 import { getDb } from '@/db/client';
-import { reviewers } from '@/db/schema';
+import { listReviewers } from '@/reviewers/repo';
 import { Lead, Page, PageTitle } from '@/ui';
 
 import { LoginForm } from './LoginForm';
@@ -12,10 +12,7 @@ import { LoginForm } from './LoginForm';
 export const dynamic = 'force-dynamic';
 
 export default async function LoginPage(): Promise<ReactElement> {
-  const team = await getDb()
-    .select({ id: reviewers.id, name: reviewers.name, role: reviewers.role })
-    .from(reviewers)
-    .orderBy(reviewers.name);
+  const team = await listReviewers(getDb());
   return (
     <Page>
       <PageTitle>Wellis review console</PageTitle>
