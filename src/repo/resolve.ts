@@ -43,6 +43,19 @@ export class ResolutionError extends Error {
   }
 }
 
+/**
+ * The item was closed between the caller's check and this transaction's lock — two reviewers with
+ * the same item open, which is what the lock is for. Its own class because the caller answers it
+ * with a 409 and not a 500: nothing is wrong with the server or with the request, the decision was
+ * simply taken by somebody else first.
+ */
+export class ItemClosedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ItemClosedError';
+  }
+}
+
 export interface FieldChange {
   readonly entityType: ResolvableEntity;
   /** The canonical uuid. Audit entries refer to canonical rows (ADR-0009 item 3). */
@@ -117,8 +130,16 @@ const wholeNumber = z
   .string()
   .regex(/^\d+$/, 'must be a whole number')
   .transform((value) => Number(value));
-/** `numeric(5,1)`: drizzle reads and writes it as text, so the text is kept as it arrived. */
-const oneDecimal = z.string().regex(/^\d+(\.\d)?$/, 'must be a number with at most one decimal');
+/**
+ * `numeric(5,1)`: drizzle reads and writes it as text, and Postgres gives it back at the column's
+ * own scale — `80` stored reads as `80.0`. The text is therefore canonicalised to that shape, or a
+ * reviewer typing `80` over a stored `80.0` would record a change the column never makes and leave
+ * an audit entry whose `to` is not what the row holds.
+ */
+const oneDecimal = z
+  .string()
+  .regex(/^\d+(\.\d)?$/, 'must be a number with at most one decimal')
+  .transform((value) => Number(value).toFixed(1));
 
 /**
  * What the console may write, and nothing else. A whitelist rather than "any column of these two
@@ -150,6 +171,10 @@ const FIELDS: Readonly<Record<ResolvableEntity, Readonly<Record<string, Resolvab
   intake: {
     // The orphan's resolution: an intake that referenced a patient who is not in the export.
     patient_id: { property: 'patientId', schema: nullable(z.uuid()) },
+    // The 11 dates the mapper could not read (ADR-0026 item 1). Writable on the intake and on
+    // nothing else: it is the intake's own column, and a `data_quality` item that names it also
+    // names the patient, which is why `writableTarget` asks which row owns the field.
+    submitted_at: { property: 'submittedAt', schema: nullable(calendarDate) },
     weight_kg: { property: 'weightKg', schema: nullable(oneDecimal) },
     height_cm: { property: 'heightCm', schema: nullable(wholeNumber) },
     alcohol_units_week: { property: 'alcoholUnitsWeek', schema: nullable(wholeNumber) },
@@ -162,8 +187,12 @@ const TABLES = { patient: patients, intake: intakes } as const;
  * How a stored value is written into an audit change, so `from` and `to` are comparable text.
  * Every resolvable column holds text or a number; anything else means the field table above and
  * the schema have drifted apart, which is a bug to surface rather than stringify (`CLAUDE.md` §2).
+ *
+ * Exported because a merge writes the same columns and has to compare them the same way: two
+ * writers of a patient column that disagree about what "unchanged" means would record changes the
+ * database does not make (ADR-0022).
  */
-function asText(value: unknown): string | null {
+export function asText(value: unknown): string | null {
   if (value === null || value === undefined) return null;
   if (typeof value === 'string') return value;
   if (typeof value === 'number') return String(value);
@@ -194,6 +223,32 @@ export function parseFieldValue(
   return { property: resolvable.property, parsed: parsed.data };
 }
 
+/**
+ * The row a change to `item.field` is written to, of the rows the item names, and the drizzle
+ * property behind that column — or null when neither row it names owns the field, which is a
+ * decision that can only be dismissed (ADR-0026 item 2).
+ *
+ * The patient is asked first, so a field both tables hold — `weight_kg`, `height_cm` — still
+ * corrects the patient's copy as it did before; a field only the intake has reaches the intake.
+ */
+export function writableTarget(item: {
+  readonly patientId: string | null;
+  readonly intakeId: string | null;
+  readonly field: string | null;
+}): { entityType: ResolvableEntity; entityId: string; property: string } | null {
+  if (item.field === null) return null;
+  const named: readonly (readonly [ResolvableEntity, string | null])[] = [
+    ['patient', item.patientId],
+    ['intake', item.intakeId],
+  ];
+  for (const [entityType, entityId] of named) {
+    if (entityId === null) continue;
+    const resolvable = FIELDS[entityType][item.field];
+    if (resolvable !== undefined) return { entityType, entityId, property: resolvable.property };
+  }
+  return null;
+}
+
 interface ParsedChange extends FieldChange, ParsedValue {}
 
 function parseChange(change: FieldChange): ParsedChange {
@@ -215,7 +270,9 @@ async function lockOpenItem(
     .for('update');
   if (item === undefined) throw new Error(`no review item ${itemId}`);
   if (item.status !== 'open') {
-    throw new Error(`review item ${itemId} is already ${item.status}; a decision is taken once`);
+    throw new ItemClosedError(
+      `review item ${itemId} is already ${item.status}; a decision is taken once`,
+    );
   }
   return item;
 }
@@ -305,9 +362,12 @@ export async function resolveReviewItem(
       const rowChanges: AuditChange[] = [];
       for (const change of group) {
         const from = asText((row as Record<string, unknown>)[change.property]);
-        if (from === change.value) continue; // Already what was chosen; nothing changed.
+        // The parsed value, not the text as typed: that is what the column will hold, so it is
+        // what "nothing changed" has to be judged against and what the entry has to record.
+        const to = asText(change.parsed);
+        if (from === to) continue; // Already what was chosen; nothing changed.
         patch[change.property] = change.parsed;
-        rowChanges.push({ field: change.field, from, to: change.value });
+        rowChanges.push({ field: change.field, from, to });
       }
       if (rowChanges.length === 0) continue;
 

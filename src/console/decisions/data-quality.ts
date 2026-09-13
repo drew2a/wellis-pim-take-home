@@ -10,7 +10,7 @@ import { z } from 'zod';
 
 import { elfproef } from '@/import/mapper/bsn';
 import type { reviewItems } from '@/db/schema';
-import type { FieldChange, ResolvableEntity } from '@/repo/resolve';
+import { writableTarget, type FieldChange, type ResolvableEntity } from '@/repo/resolve';
 
 import { DecisionError, type Decision } from './types';
 
@@ -51,14 +51,22 @@ export function proposalOf(
     : null;
 }
 
-/** Which row the item is about. A plausibility item on an orphan intake has no patient. */
+/**
+ * Which row the item is about: the one that **owns the field**, of the rows the item names, and
+ * not simply "the patient if there is one" (ADR-0026 item 2). An unreadable `submitted_at` names
+ * both the intake and its patient, and only the intake has that column.
+ *
+ * Null where no row it names owns the field at all — a consent event's `at`, which was never
+ * stored — and such an item can only be dismissed. `writableTarget` is the same function the
+ * screen asks, so what the console offers and what the server accepts cannot drift.
+ */
 function target(item: typeof reviewItems.$inferSelect): {
   entityType: ResolvableEntity;
   entityId: string;
 } {
-  if (item.patientId !== null) return { entityType: 'patient', entityId: item.patientId };
-  if (item.intakeId !== null) return { entityType: 'intake', entityId: item.intakeId };
-  throw new DecisionError(`review item ${item.id} names no row to correct`);
+  const found = writableTarget(item);
+  if (found === null) throw new DecisionError(`review item ${item.id} names no row to correct`);
+  return { entityType: found.entityType, entityId: found.entityId };
 }
 
 export function decideDataQuality(

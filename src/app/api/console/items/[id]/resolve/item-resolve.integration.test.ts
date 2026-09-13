@@ -561,6 +561,70 @@ describe('resolving a data_quality item', () => {
     expect(row?.weightKg).toBeNull();
     expect(closed?.status).toBe('dismissed');
   });
+
+  // One of the 11 unreadable submission dates. The item names the intake **and** the patient, and
+  // only the intake has the column: routing it to the patient made the correction impossible and
+  // answered every attempt with a 400 naming a column nobody could see (ADR-0026 item 1).
+  it('writes an unreadable submitted_at onto the intake the item names', async () => {
+    const patientId = await patient('recA', null);
+    const [intake] = await db
+      .insert(intakes)
+      .values({ ...intakeRow('INT-9903'), patientId, submittedAt: null })
+      .returning({ id: intakes.id });
+    const intakeId = intake?.id ?? '';
+    const itemId = await item({
+      type: 'data_quality',
+      field: 'submitted_at',
+      patientId,
+      intakeId,
+      title: 'submitted_at is not a date in a known shape',
+      payload: { intake_id: 'INT-9903', raw: '32/13/2024' },
+      dedupeKey: 'data_quality|row|legacy_intake:INT-9903|submitted_at|DATE_UNREADABLE_TO_NULL|x',
+    });
+
+    const response = await post(itemId, {
+      action: 'set_value',
+      value: '2024-12-03',
+      note: 'the consent line of that day dates it',
+    });
+    expect(response.status).toBe(200);
+
+    const [row] = await db.select().from(intakes).where(eq(intakes.id, intakeId));
+    expect(row?.submittedAt).toBe('2024-12-03');
+    const entries = await db.select().from(auditEntries).where(eq(auditEntries.entityId, intakeId));
+    expect(entries[0]?.changes).toEqual([{ field: 'submitted_at', from: null, to: '2024-12-03' }]);
+  });
+
+  // A consent event whose timestamp could not be read was never stored, and ADR-0007 does not let
+  // one be written. The screen offers no value form for it; the route refuses one anyway.
+  it('refuses to correct a consent event’s at, and still dismisses it', async () => {
+    const patientId = await patient('recA', null);
+    const atItem = () =>
+      item({
+        type: 'data_quality',
+        field: 'at',
+        patientId,
+        title: 'consent event time is unreadable; no event stored',
+        payload: { source_line: 12, raw: 'yesterday' },
+        dedupeKey: `data_quality|row|legacy_consent_event:${String(Math.random())}|at|TIMESTAMP_UNPARSED|x`,
+      });
+
+    const refused = await post(await atItem(), {
+      action: 'set_value',
+      value: '2024-03-01',
+      note: 'read from the mailbox',
+    });
+    expect(refused.status).toBe(400);
+
+    const dismissible = await atItem();
+    const dismissed = await post(dismissible, {
+      action: 'dismiss',
+      note: 'the line cannot be dated; the raw line is kept',
+    });
+    expect(dismissed.status).toBe(200);
+    const [closed] = await db.select().from(reviewItems).where(eq(reviewItems.id, dismissible));
+    expect(closed?.status).toBe('dismissed');
+  });
 });
 
 describe('resolving a consent item', () => {

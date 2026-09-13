@@ -9,7 +9,7 @@ import { humanOwnedFields } from '@/import/canonical/human-owned';
 import { createTestDatabase, type TestDatabase, type TestDb } from '@/test/database';
 import { intakeRow, patientRow, reviewItemRow } from '@/test/rows';
 
-import { resolveReviewItem, type FieldChange } from './resolve';
+import { ItemClosedError, resolveReviewItem, type FieldChange } from './resolve';
 
 let database: TestDatabase;
 let db: TestDb;
@@ -87,9 +87,13 @@ describe('a resolution is refused', () => {
   });
 
   // R-A17: a decision a human took is not taken again by anybody, importer or reviewer.
+  // `ItemClosedError` and not a plain one, because the route answers it with a 409: two reviewers
+  // with the same item open is the case the row lock exists for, and the loser of that race has
+  // not made a bad request and has not hit a broken server.
   it('for an item that is already closed', async () => {
     const itemId = await newItem();
     await resolve(itemId);
+    await expect(resolve(itemId)).rejects.toThrow(ItemClosedError);
     await expect(resolve(itemId)).rejects.toThrow(/already/);
   });
 
@@ -239,6 +243,34 @@ describe('a decision that changes a value', () => {
     const entries = await entriesFor(patientId);
     expect(entries).toHaveLength(1);
     expect(entries[0]?.changes).toBeNull();
+  });
+
+  // `numeric(5,1)` reads back at its own scale, so `80` and `80.0` are the same value written two
+  // ways. Comparing the text as typed recorded `80.0 → 80` and then stored `80.0` again: an audit
+  // entry whose `to` was not what the column held.
+  it('writes no change when a number is the stored one in another shape', async () => {
+    const patientId = await newPatient({ weightKg: '80.0' });
+    const itemId = await newItem({ patientId, field: 'weight_kg' });
+    await resolve(itemId, {
+      changes: [{ entityType: 'patient', entityId: patientId, field: 'weight_kg', value: '80' }],
+    });
+    const entries = await entriesFor(patientId);
+    expect(entries).toHaveLength(1);
+    expect(entries[0]?.changes).toBeNull();
+    const [patient] = await db.select().from(patients).where(eq(patients.id, patientId));
+    expect(patient?.weightKg).toBe('80.0');
+  });
+
+  it('records a number in the shape the column stores it', async () => {
+    const patientId = await newPatient({ weightKg: '80.0' });
+    const itemId = await newItem({ patientId, field: 'weight_kg' });
+    await resolve(itemId, {
+      changes: [{ entityType: 'patient', entityId: patientId, field: 'weight_kg', value: '81' }],
+    });
+    const [entry] = await entriesFor(patientId);
+    expect(entry?.changes).toEqual([{ field: 'weight_kg', from: '80.0', to: '81.0' }]);
+    const [patient] = await db.select().from(patients).where(eq(patients.id, patientId));
+    expect(patient?.weightKg).toBe('81.0');
   });
 
   it('blanks a value when that is the decision', async () => {

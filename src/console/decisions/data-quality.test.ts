@@ -120,6 +120,36 @@ describe('setting a value by hand', () => {
       ),
     ).toThrow(/no row/);
   });
+
+  // The 11 unreadable submission dates: the item names the intake **and** its patient, and only
+  // the intake has the column. Correcting the patient is not a thing the server can do, and
+  // before ADR-0026 item 2 the screen offered it anyway.
+  it('corrects submitted_at on the intake, though the item names a patient too', () => {
+    const decision = decideDataQuality(
+      item({ patientId: PATIENT, intakeId: INTAKE, field: 'submitted_at' }),
+      request({ action: 'set_value', value: '2024-12-03' }),
+    );
+    expect(decision.changes).toEqual([
+      { entityType: 'intake', entityId: INTAKE, field: 'submitted_at', value: '2024-12-03' },
+    ]);
+  });
+
+  // A consent event whose timestamp could not be read was never stored, and ADR-0007 does not let
+  // one be written. There is no row to correct, so the only honest answer is to dismiss.
+  it('refuses to correct a consent event’s at, which no stored row holds', () => {
+    expect(() =>
+      decideDataQuality(
+        item({ field: 'at', intakeId: null }),
+        request({ action: 'set_value', value: '2024-03-01T10:00:00Z' }),
+      ),
+    ).toThrow(/no row/);
+  });
+
+  it('still dismisses one, which is what such an item is for', () => {
+    expect(
+      decideDataQuality(item({ field: 'at', intakeId: null }), request({ action: 'dismiss' })),
+    ).toMatchObject({ outcome: 'dismissed', changes: [] });
+  });
 });
 
 describe('leaving the value empty', () => {
