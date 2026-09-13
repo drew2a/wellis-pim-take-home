@@ -3,6 +3,8 @@
 // The body says **what the reviewer chose**, never what to write: which values a choice implies is
 // decided on the server, from the item the importer raised (`@/console/decisions`, R-T4). The
 // actor is the session's reviewer and is never read from the body (ADR-0021).
+import { consentRequestSchema, decideConsent } from '@/console/decisions/consent';
+import { dataQualityRequestSchema, decideDataQuality } from '@/console/decisions/data-quality';
 import {
   decideDuplicate,
   duplicateRequestSchema,
@@ -26,7 +28,7 @@ import {
   patientsByLegacyId,
 } from '@/repo/items';
 import { mergePatients } from '@/repo/merge';
-import { closeReviewItem, resolveReviewItem } from '@/repo/resolve';
+import { closeReviewItem, ResolutionError, resolveReviewItem } from '@/repo/resolve';
 import { CONSENT_TYPE_DATA_PROCESSING } from '@/consent/text';
 import type { Decision } from '@/console/decisions/types';
 
@@ -133,6 +135,18 @@ export async function POST(request: Request, context: RouteContext): Promise<Res
         decision = decideDuplicate(view.item, parsed.data, canonical);
         break;
       }
+      case 'data_quality': {
+        const parsed = dataQualityRequestSchema.safeParse(raw);
+        if (!parsed.success) return badRequest('that is not a decision', issuesOf(parsed.error));
+        decision = decideDataQuality(view.item, parsed.data);
+        break;
+      }
+      case 'consent': {
+        const parsed = consentRequestSchema.safeParse(raw);
+        if (!parsed.success) return badRequest('that is not a decision', issuesOf(parsed.error));
+        decision = decideConsent(view.item, parsed.data);
+        break;
+      }
       default:
         // Each type lands with its own screen and its own decider; until then the route says so
         // rather than accepting a decision it cannot carry out.
@@ -150,7 +164,11 @@ export async function POST(request: Request, context: RouteContext): Promise<Res
     });
     return json({ status: decision.outcome, changed: result.changes.length });
   } catch (error) {
-    if (error instanceof DecisionError) return badRequest(error.message);
+    // Both mean the reviewer asked for something that cannot be written, which is a 400: the
+    // decider refused the choice, or the resolution path refused the value.
+    if (error instanceof DecisionError || error instanceof ResolutionError) {
+      return badRequest(error.message);
+    }
     return serverError(`resolving review item ${id.data} failed`, error);
   }
 }

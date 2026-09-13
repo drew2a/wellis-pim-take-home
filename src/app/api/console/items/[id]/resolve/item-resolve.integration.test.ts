@@ -6,6 +6,8 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 
 import {
   auditEntries,
+  consentEvents,
+  consentStates,
   intakes,
   patientLegacyIds,
   patients,
@@ -471,5 +473,141 @@ describe('resolving a same-day pair', () => {
       intakeId: 'INT-0001',
     });
     expect(response.status).toBe(400);
+  });
+});
+
+describe('resolving a data_quality item', () => {
+  const weightItem = (patientId: string, proposal: unknown) =>
+    item({
+      type: 'data_quality',
+      field: 'weight_kg',
+      patientId,
+      title: 'weight_kg outside the plausible range',
+      payload: { raw: '7.8' },
+      proposedResolution: proposal,
+      dedupeKey: `data_quality|row|legacy_patient:recA|weight_kg|IMPLAUSIBLE|7.8`,
+    });
+
+  it('accepts the detector’s proposal and records the change', async () => {
+    const patientId = await patient('recA', null);
+    const itemId = await weightItem(patientId, {
+      field: 'weight_kg',
+      proposed_value: '78.0',
+      rule: 'DECIMAL_SHIFT',
+    });
+
+    const response = await post(itemId, {
+      action: 'accept_proposal',
+      note: 'the intakes agree with 78',
+    });
+    expect(response.status).toBe(200);
+
+    const [row] = await db.select().from(patients).where(eq(patients.id, patientId));
+    expect(row?.weightKg).toBe('78.0');
+    const entries = await db
+      .select()
+      .from(auditEntries)
+      .where(eq(auditEntries.entityId, patientId));
+    expect(entries[0]?.changes).toEqual([{ field: 'weight_kg', from: null, to: '78.0' }]);
+  });
+
+  it('writes a value the reviewer establishes instead', async () => {
+    const patientId = await patient('recA', null);
+    const itemId = await weightItem(patientId, null);
+    await post(itemId, { action: 'set_value', value: '81.4', note: 'weighed at the clinic' });
+
+    const [row] = await db.select().from(patients).where(eq(patients.id, patientId));
+    expect(row?.weightKg).toBe('81.4');
+  });
+
+  it('refuses a value the column cannot hold, and writes nothing', async () => {
+    const patientId = await patient('recA', null);
+    const itemId = await weightItem(patientId, null);
+    const response = await post(itemId, { action: 'set_value', value: 'heavy', note: 'ok' });
+    expect(response.status).toBe(400);
+    const refusal = (await response.json()) as { error: string };
+    expect(refusal.error).toContain('weight_kg');
+
+    const [row] = await db.select().from(patients).where(eq(patients.id, patientId));
+    const [open] = await db.select().from(reviewItems).where(eq(reviewItems.id, itemId));
+    expect(row?.weightKg).toBeNull();
+    expect(open?.status).toBe('open');
+  });
+
+  it('writes a bsn and its check together', async () => {
+    const patientId = await patient('recA', null);
+    const itemId = await item({
+      type: 'data_quality',
+      field: 'bsn',
+      patientId,
+      title: 'bsn fails the elfproef',
+      payload: { raw_masked: '******333' },
+      dedupeKey: 'data_quality|row|legacy_patient:recA|bsn|ELFPROEF|x',
+    });
+    await post(itemId, { action: 'set_value', value: '111222333', note: 'read from the passport' });
+
+    const [row] = await db.select().from(patients).where(eq(patients.id, patientId));
+    expect(row).toMatchObject({ bsn: '111222333', bsnCheck: 'valid' });
+  });
+
+  it('leaves the value empty when that is the decision', async () => {
+    const patientId = await patient('recA', null);
+    const itemId = await weightItem(patientId, null);
+    await post(itemId, { action: 'dismiss', note: 'the patient cannot be reached' });
+
+    const [row] = await db.select().from(patients).where(eq(patients.id, patientId));
+    const [closed] = await db.select().from(reviewItems).where(eq(reviewItems.id, itemId));
+    expect(row?.weightKg).toBeNull();
+    expect(closed?.status).toBe('dismissed');
+  });
+});
+
+describe('resolving a consent item', () => {
+  const consentItem = (patientId: string) =>
+    item({
+      type: 'consent',
+      field: 'data_processing',
+      patientId,
+      title: 'consent revoked for a patient who is active',
+      payload: { consent_state: 'revoked', patient_status: 'active' },
+      dedupeKey: 'consent|row|legacy_patient:recA|data_processing|CONSENT_REVOKED_WHILE_ACTIVE|x',
+    });
+
+  it('records what was done outside the system, against the patient', async () => {
+    const patientId = await patient('recA', null);
+    const itemId = await consentItem(patientId);
+
+    const response = await post(itemId, {
+      action: 'resolve',
+      note: 'patient contacted; processing paused until consent is re-obtained',
+    });
+    expect(response.status).toBe(200);
+
+    const entries = await db
+      .select()
+      .from(auditEntries)
+      .where(eq(auditEntries.entityId, patientId));
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({
+      actorReviewerId: reviewerId,
+      reason: 'patient contacted; processing paused until consent is re-obtained',
+      reviewItemId: itemId,
+    });
+  });
+
+  // An event is what the patient did. Nothing a reviewer types becomes one (CLAUDE.md §5).
+  it('writes no consent event and changes no consent state', async () => {
+    const patientId = await patient('recA', null);
+    const itemId = await consentItem(patientId);
+    await post(itemId, { action: 'resolve', note: 'consent re-obtained on paper' });
+
+    expect(await db.select().from(consentEvents)).toEqual([]);
+    expect(await db.select().from(consentStates)).toEqual([]);
+  });
+
+  it('needs a note', async () => {
+    const patientId = await patient('recA', null);
+    const itemId = await consentItem(patientId);
+    expect((await post(itemId, { action: 'resolve', note: '  ' })).status).toBe(400);
   });
 });

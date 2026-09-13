@@ -31,6 +31,18 @@ import { isCalendarDate } from '@/intake/today';
 
 export type ResolvableEntity = 'patient' | 'intake';
 
+/**
+ * The reviewer asked for something this path will not write: a value the column cannot hold, a
+ * field that is not theirs to change, a missing note. Its own class because the caller answers it
+ * with a 400 — the request was wrong, not the server — while everything else here is a 500.
+ */
+export class ResolutionError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ResolutionError';
+  }
+}
+
 export interface FieldChange {
   readonly entityType: ResolvableEntity;
   /** The canonical uuid. Audit entries refer to canonical rows (ADR-0009 item 3). */
@@ -165,10 +177,10 @@ export function parseFieldValue(
 ): ParsedValue {
   const resolvable = FIELDS[entityType][field];
   if (resolvable === undefined) {
-    throw new Error(`${field} is not a field the console may write on a ${entityType}`);
+    throw new ResolutionError(`${field} is not a field the console may write on a ${entityType}`);
   }
   const parsed = resolvable.schema.safeParse(value);
-  if (!parsed.success) throw new Error(`${field}: ${z.prettifyError(parsed.error)}`);
+  if (!parsed.success) throw new ResolutionError(`${field}: ${z.prettifyError(parsed.error)}`);
   return { property: resolvable.property, parsed: parsed.data };
 }
 
@@ -221,7 +233,9 @@ function closeItem(tx: Queryable, request: CloseRequest): Promise<unknown> {
  */
 export async function closeReviewItem(db: Queryable, request: CloseRequest): Promise<void> {
   if (request.note.trim() === '') {
-    throw new Error(`closing review item ${request.itemId} needs a note saying why (R-C6)`);
+    throw new ResolutionError(
+      `closing review item ${request.itemId} needs a note saying why (R-C6)`,
+    );
   }
   await lockOpenItem(db, request.itemId);
   await closeItem(db, request);
@@ -239,7 +253,7 @@ export async function resolveReviewItem(
 ): Promise<ResolveResult> {
   const { itemId, reviewer, note } = request;
   if (note.trim() === '') {
-    throw new Error(`resolving review item ${itemId} needs a note saying why (R-C6)`);
+    throw new ResolutionError(`resolving review item ${itemId} needs a note saying why (R-C6)`);
   }
   const changes = (request.changes ?? []).map(parseChange);
 

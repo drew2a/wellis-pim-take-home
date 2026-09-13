@@ -12,8 +12,9 @@ import { poundsRowsOf } from '@/console/decisions/vocabulary';
 import { requireReviewer } from '@/console/guard';
 import { getDb } from '@/db/client';
 import { dayOf } from '@/intake/today';
+import { proposalOf } from '@/console/decisions/data-quality';
 import { COMPARED_FIELDS, conflictView, DECIDABLE_FIELDS } from '@/repo/identity';
-import { findReviewItem, type ReviewItemView } from '@/repo/items';
+import { consentTimeline, currentValueOf, findReviewItem, type ReviewItemView } from '@/repo/items';
 import {
   Badge,
   Caption,
@@ -29,9 +30,11 @@ import {
   type Definition,
 } from '@/ui';
 
+import { ConsentDecision } from './ConsentDecision';
 import { DuplicateDecision, type PairedIntake } from './DuplicateDecision';
 import { IdentityDecision } from './IdentityDecision';
 import { OrphanDecision } from './OrphanDecision';
+import { ValueDecision } from './ValueDecision';
 import { VocabularyDecision, type ExcludableRow } from './VocabularyDecision';
 
 export const dynamic = 'force-dynamic';
@@ -171,6 +174,41 @@ async function IdentityConflict({
   );
 }
 
+/**
+ * The consent log, in `at` order, next to the state derived from it. The log is evidence and the
+ * state is what we act on, and a reviewer deciding what to do needs to see both (`CLAUDE.md` §6).
+ */
+async function ConsentItem({ view }: { readonly view: ReviewItemView }): Promise<ReactElement> {
+  const timeline = await consentTimeline(getDb(), view.item);
+  const derived = (view.item.payload as { consent_state?: unknown }).consent_state;
+
+  return (
+    <>
+      <SectionTitle>The consent log for this patient</SectionTitle>
+      <Card>
+        {timeline.length === 0 ? (
+          <Hint>No event at all. That is what the item is about.</Hint>
+        ) : (
+          <Definitions
+            items={timeline.map((event, index) => ({
+              term: String(index + 1),
+              value: `${event.at} · ${event.type} ${event.action}${
+                event.version === null ? '' : ` (${event.version})`
+              }`,
+            }))}
+          />
+        )}
+        <Hint>
+          {`Derived state: ${typeof derived === 'string' ? derived : 'unknown'}. The log is evidence;
+            the state is what we act on.`}
+        </Hint>
+      </Card>
+      <SectionTitle>Your decision</SectionTitle>
+      <ConsentDecision itemId={view.item.id} pendingDecision={derived === 'conflict'} />
+    </>
+  );
+}
+
 export default async function ReviewItemPage({
   params,
 }: {
@@ -240,6 +278,20 @@ export default async function ReviewItemPage({
         </>
       )}
 
+      {item.type === 'data_quality' && (
+        <>
+          <SectionTitle>Your decision</SectionTitle>
+          <ValueDecision
+            itemId={item.id}
+            field={item.field ?? 'the value'}
+            current={await currentValueOf(getDb(), item)}
+            proposal={proposalOf(item)}
+          />
+        </>
+      )}
+
+      {item.type === 'consent' && <ConsentItem view={view} />}
+
       {item.type === 'duplicate_intake' && (
         <>
           <SectionTitle>The two intakes, side by side</SectionTitle>
@@ -287,7 +339,13 @@ export default async function ReviewItemPage({
           />
         </>
       ) : (
-        !['identity_conflict', 'orphan_intake', 'duplicate_intake'].includes(item.type) && (
+        ![
+          'identity_conflict',
+          'orphan_intake',
+          'duplicate_intake',
+          'data_quality',
+          'consent',
+        ].includes(item.type) && (
           <>
             <SectionTitle>Your decision</SectionTitle>
             <Card>

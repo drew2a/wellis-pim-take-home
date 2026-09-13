@@ -6,7 +6,8 @@ import type { Queryable } from '@/db/queryable';
 import { intakes, patients, reviewItems } from '@/db/schema';
 import { ruleOf } from '@/import/review/items';
 
-import { survivorOf } from './membership';
+import { maskIdentifier } from './mask';
+import { consentEventsOf, survivorOf } from './membership';
 
 export interface ReviewItemView {
   readonly item: typeof reviewItems.$inferSelect;
@@ -45,6 +46,61 @@ export async function findReviewItem(db: Queryable, id: string): Promise<ReviewI
   }
 
   return { item, rule: ruleOf(item.dedupeKey), patient, intake };
+}
+
+/** The value a `data_quality` item is about, as it stands now — usually null, the mapper's blank. */
+export async function currentValueOf(
+  db: Queryable,
+  item: typeof reviewItems.$inferSelect,
+): Promise<string | null> {
+  if (item.field === null) return null;
+  // A plausibility item on an orphan intake has no patient, so both are tried in that order.
+  if (item.patientId === null && item.intakeId === null) return null;
+  const [table, id] =
+    item.patientId !== null
+      ? ([patients, item.patientId] as const)
+      : ([intakes, item.intakeId ?? ''] as const);
+  const [row] = await db.select().from(table).where(eq(table.id, id));
+  const value = (row as Record<string, unknown> | undefined)?.[PROPERTY_OF[item.field] ?? ''];
+  // Every field a data_quality item names holds text or a number; anything else means this table
+  // and the schema have drifted apart (`CLAUDE.md` §2).
+  if (value === null || value === undefined) return null;
+  if (typeof value !== 'string' && typeof value !== 'number') {
+    throw new Error(`${item.field} holds a ${typeof value}, which has no text form`);
+  }
+  // bsn is masked wherever the console shows it (`./mask.ts`).
+  return item.field === 'bsn' ? maskIdentifier(String(value)) : String(value);
+}
+
+/** Column name to drizzle property, for the handful of fields a `data_quality` item names. */
+const PROPERTY_OF: Readonly<Record<string, string>> = {
+  bsn: 'bsn',
+  dob: 'dob',
+  email: 'email',
+  height_cm: 'heightCm',
+  weight_kg: 'weightKg',
+  signup_date: 'signupDate',
+  phone: 'phone',
+  full_name: 'fullName',
+  city: 'city',
+  alcohol_units_week: 'alcoholUnitsWeek',
+};
+
+/** Every consent event the item's patient owns, through membership, oldest first (ADR-0008). */
+export async function consentTimeline(
+  db: Queryable,
+  item: typeof reviewItems.$inferSelect,
+): Promise<{ at: string; type: string; action: string; version: string | null }[]> {
+  if (item.patientId === null) return [];
+  const events = await consentEventsOf(db, item.patientId);
+  return events
+    .map((event) => ({
+      at: event.at.toISOString(),
+      type: event.type,
+      action: event.action,
+      version: event.version,
+    }))
+    .sort((left, right) => left.at.localeCompare(right.at));
 }
 
 /** Whether a patient a reviewer named still exists, before a decision references it. */
