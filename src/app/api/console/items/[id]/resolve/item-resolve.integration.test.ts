@@ -731,3 +731,57 @@ describe('establishing a consent state', () => {
     );
   });
 });
+
+describe('resolving a clinical_history item', () => {
+  async function historyItem(): Promise<{ itemId: string; intakeId: string }> {
+    const [intake] = await db
+      .insert(intakes)
+      .values({ ...intakeRow('INT-9400'), state: 'legacy_approved', outcome: 'approved' })
+      .returning({ id: intakes.id });
+    const intakeId = intake?.id ?? '';
+    const itemId = await item({
+      type: 'clinical_history',
+      intakeId,
+      title: 'GLP-1 medication reported in free text',
+      reason: 'flagged: current GLP-1 medication (rybelsus 7 mg)',
+      payload: { legacy_outcome: 'approved', shadow_outcome: 'auto_flagged' },
+      dedupeKey: 'clinical_history|row|legacy_intake:INT-9400||HISTORY_GLP1_MEDICATION|v1',
+    });
+    return { itemId, intakeId };
+  }
+
+  // CLAUDE.md §5: detectors must not rewrite historical outcomes, and neither may a reviewer here.
+  it('records what was done and leaves the legacy outcome exactly as it was', async () => {
+    const { itemId, intakeId } = await historyItem();
+    const response = await post(itemId, {
+      action: 'resolve',
+      note: 'patient contacted; already off the medication',
+    });
+    expect(response.status).toBe(200);
+
+    const [row] = await db.select().from(intakes).where(eq(intakes.id, intakeId));
+    expect(row).toMatchObject({ state: 'legacy_approved', outcome: 'approved' });
+
+    const entries = await db.select().from(auditEntries).where(eq(auditEntries.entityId, intakeId));
+    expect(entries).toHaveLength(1);
+    // Something happened; nothing transitioned (ADR-0014 item 7).
+    expect(entries[0]).toMatchObject({
+      fromState: null,
+      toState: null,
+      actorReviewerId: reviewerId,
+      reviewItemId: itemId,
+    });
+  });
+
+  it('dismisses when no action is needed', async () => {
+    const { itemId } = await historyItem();
+    await post(itemId, { action: 'dismiss', note: 'the note already says it was discussed' });
+    const [row] = await db.select().from(reviewItems).where(eq(reviewItems.id, itemId));
+    expect(row?.status).toBe('dismissed');
+  });
+
+  it('needs a note', async () => {
+    const { itemId } = await historyItem();
+    expect((await post(itemId, { action: 'resolve', note: '' })).status).toBe(400);
+  });
+});

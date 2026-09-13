@@ -5,6 +5,10 @@
 // actor is the session's reviewer and is never read from the body (ADR-0021).
 import { establishConsentState } from '@/consent/states';
 import { CONSENT_TYPE_DATA_PROCESSING } from '@/consent/text';
+import {
+  clinicalHistoryRequestSchema,
+  decideClinicalHistory,
+} from '@/console/decisions/clinical-history';
 import { consentRequestSchema, decideConsent } from '@/console/decisions/consent';
 import { dataQualityRequestSchema, decideDataQuality } from '@/console/decisions/data-quality';
 import {
@@ -172,10 +176,18 @@ export async function POST(request: Request, context: RouteContext): Promise<Res
         });
         return json({ status: 'resolved', established: establish.state });
       }
-      default:
-        // Each type lands with its own screen and its own decider; until then the route says so
-        // rather than accepting a decision it cannot carry out.
-        return badRequest(`a ${view.item.type} item cannot be resolved from the console yet`);
+      case 'clinical_history': {
+        const parsed = clinicalHistoryRequestSchema.safeParse(raw);
+        if (!parsed.success) return badRequest('that is not a decision', issuesOf(parsed.error));
+        decision = decideClinicalHistory(view.item, parsed.data);
+        break;
+      }
+      default: {
+        // Exhaustive over `review_item_type`: a type added without a decider fails `tsc` here,
+        // rather than reaching a reviewer as a refusal nobody wrote.
+        const unhandled: never = view.item.type;
+        return badRequest(`a ${String(unhandled)} item cannot be resolved from the console`);
+      }
     }
 
     const result = await resolveReviewItem(db, {

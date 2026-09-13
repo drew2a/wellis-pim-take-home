@@ -36,6 +36,7 @@ import {
   type Definition,
 } from '@/ui';
 
+import { ClinicalHistoryDecision } from './ClinicalHistoryDecision';
 import { ConsentDecision } from './ConsentDecision';
 import { DuplicateDecision, type PairedIntake } from './DuplicateDecision';
 import { IdentityDecision } from './IdentityDecision';
@@ -299,6 +300,40 @@ export default async function ReviewItemPage({
 
       {item.type === 'consent' && <ConsentItem view={view} />}
 
+      {item.type === 'clinical_history' && (
+        <>
+          <SectionTitle>The intake this is about</SectionTitle>
+          <Card>
+            <Definitions
+              items={[
+                ...(view.intake === null
+                  ? []
+                  : [
+                      {
+                        term: 'intake',
+                        value: (
+                          <Link href={`/console/intakes/${view.intake.id}`}>
+                            {view.intake.intakeId ?? view.intake.id}
+                          </Link>
+                        ),
+                      },
+                      { term: 'state', value: humanise(view.intake.state) },
+                    ]),
+                ...Object.entries(item.payload as Record<string, unknown>)
+                  .filter(([key]) => key !== 'note')
+                  .map(([term, given]) => ({ term, value: shown(given) })),
+              ]}
+            />
+            <Hint>
+              The legacy process decided this and its outcome stands. What is open is what to do
+              about it now.
+            </Hint>
+          </Card>
+          <SectionTitle>Your decision</SectionTitle>
+          <ClinicalHistoryDecision itemId={item.id} />
+        </>
+      )}
+
       {item.type === 'duplicate_intake' && (
         <>
           <SectionTitle>The two intakes, side by side</SectionTitle>
@@ -352,12 +387,13 @@ export default async function ReviewItemPage({
           'duplicate_intake',
           'data_quality',
           'consent',
+          'clinical_history',
         ].includes(item.type) && (
           <>
             <SectionTitle>Your decision</SectionTitle>
             <Card>
               <Hint>
-                {`The screen for a ${humanise(item.type)} item is not built yet. Nothing here can be
+                {`The screen for a ${humanise(item.type)} item is not built. Nothing here can be
                 decided until it is, and the API refuses a decision it cannot carry out.`}
               </Hint>
             </Card>
