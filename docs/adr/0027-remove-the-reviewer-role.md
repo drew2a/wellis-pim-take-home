@@ -1,6 +1,6 @@
 # ADR-0027: Remove the reviewer role
 
-- **Status:** proposed
+- **Status:** accepted
 - **Date:** 2026-09-13
 - **Deciders:** Andrei Andreev
 - **Requirements:** R-B15, R-B16, R-B20, R-T4, R-S4 · **Relates to:** Q8 (reviewer identity) ·

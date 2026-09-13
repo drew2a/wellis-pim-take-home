@@ -1,6 +1,6 @@
 # ADR-0028: The review console is three panes, and the queue never leaves the screen
 
-- **Status:** proposed
+- **Status:** accepted
 - **Date:** 2026-09-13
 - **Deciders:** Andrei Andreev
 - **Requirements:** R-C1, R-C2, R-C3, R-C4, R-C5, R-C6, R-S4 · **Amends:** ADR-0018 (extends the

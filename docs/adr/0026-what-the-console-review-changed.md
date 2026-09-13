@@ -1,6 +1,6 @@
 # ADR-0026: What a reviewer may correct, and which two records a merge joins
 
-- **Status:** proposed
+- **Status:** accepted
 - **Date:** 2026-09-13
 - **Deciders:** Andrei Andreev
 - **Requirements:** R-C4, R-C5, R-C6, R-A7, R-A8, R-A17, R-B20 · **Relates to:** ADR-0022
