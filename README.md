@@ -223,8 +223,10 @@ not decide and the intakes waiting for a person, oldest first. On this export th
 items and 6 flagged intakes**, with every count taken from the database rather than from the page.
 
 The filters are the URL: the rail's kinds, the scope (open / resolved / dismissed) and the age are
-query parameters, so a filtered queue survives a reload and can be kept in a tab. `j` and `k` move
-down and up it, and the key printed on each decision button also takes it. The design is the repo
+query parameters, so a filtered queue survives a reload and can be kept in a tab. A kind narrows to
+itself on the first click, adds to the selection on the next, and clicking the last one still lit
+goes back to everything. `j` and `k` move down and up the queue, and the key printed on each
+decision button also takes it. The design is the repo
 owner's, recorded in [`docs/design/`](docs/design/).
 
 Every kind of item has a screen and a decision:

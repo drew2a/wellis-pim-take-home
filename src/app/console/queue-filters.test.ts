@@ -75,16 +75,28 @@ describe('toggled', () => {
     expect(url).toContain('age=week');
   });
 
-  it('says an empty selection out loud, so it is not read as the default view', () => {
-    expect(toggled({ type: 'consent' }, 'type', 'consent')).toBe('/console?type=');
+  // The default view is what a reviewer sees before they choose, not a selection they made. Read
+  // as one, the first click on a kind selected the other six types and both intake states.
+  it('selects just that kind on the first click from the default view', () => {
+    expect(toggled({}, 'type', 'consent')).toBe('/console?type=consent');
+    expect(toggled({}, 'state', 'in_review')).toBe('/console?state=in_review');
   });
 
-  // The first click from the default view unticks one of the seven types, not all of them.
-  it('toggles out of the default view by removing just that one', () => {
-    const url = toggled({}, 'type', 'consent');
-    expect(url).not.toContain('type=consent');
-    expect(url).toContain('type=data_quality');
-    expect(url).toContain('state=auto_flagged');
+  // Clicking the row you are already on is how anyone undoes a filter; landing on an empty queue
+  // is not an undo. The empty selection stays sayable in a URL — `filtersFrom` honours `type=` —
+  // it is just not somewhere a click puts you.
+  it('goes back to the default view when the only selected kind is clicked again', () => {
+    expect(toggled({ type: 'consent' }, 'type', 'consent')).toBe('/console');
+    expect(toggled({ state: 'in_review' }, 'state', 'in_review')).toBe('/console');
+  });
+
+  it('keeps the rest of the selection when one of several is clicked off', () => {
+    expect(toggled({ type: ['consent', 'vocabulary'] }, 'type', 'vocabulary')).toBe(
+      '/console?type=consent',
+    );
+    expect(toggled({ type: 'consent', state: 'in_review' }, 'type', 'consent')).toBe(
+      '/console?state=in_review',
+    );
   });
 });
 

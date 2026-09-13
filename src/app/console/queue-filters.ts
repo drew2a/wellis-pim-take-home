@@ -72,22 +72,35 @@ export function filtersFrom(params: SearchParams): QueueFilters {
   };
 }
 
-/** The URL for the queue with one selection toggled, everything else as it is. */
+/**
+ * The URL for the queue with one kind toggled — what a row of the rail links to.
+ *
+ * Two things it is careful about, both of them the difference between a filter and a trap:
+ *
+ * - **The default view is not a selection.** It is what a reviewer sees *before* they make one, so
+ *   the first click on a kind means "show me this kind", not "all of them except this one". Read
+ *   from `DEFAULT_FILTERS` instead, clicking Consent on the queue as it opens selected the other
+ *   six types and both intake states, and lit up eight rows of the rail.
+ * - **Clicking the only selected kind goes back.** Unticking the last one would otherwise mean the
+ *   empty selection, which is a legitimate thing for a URL to say (`filtersFrom` honours `type=`)
+ *   and a dead end to arrive at by clicking the row you are already on.
+ */
 export function toggled(params: SearchParams, key: 'type' | 'state', value: string): string {
+  const chosen = params.type !== undefined || params.state !== undefined;
   const current = filtersFrom(params);
-  const selected = new Set<string>(key === 'type' ? current.types : current.states);
+  const mine = chosen ? (key === 'type' ? current.types : current.states) : [];
+  const other = chosen ? (key === 'type' ? current.states : current.types) : [];
+
+  const selected = new Set<string>(mine);
   if (selected.has(value)) selected.delete(value);
   else selected.add(value);
+  if (selected.size === 0 && other.length === 0) return '/console';
 
-  const other = key === 'type' ? current.states : current.types;
   const query = new URLSearchParams();
   for (const each of selected) query.append(key, each);
   for (const each of other) query.append(key === 'type' ? 'state' : 'type', each);
   if (current.status !== DEFAULT_FILTERS.status) query.set('status', current.status);
   if (current.age !== undefined) query.set('age', current.age);
-  // With nothing selected the URL would read as "no filters" and mean "the default view", so the
-  // empty selection is said out loud.
-  if (selected.size === 0 && other.length === 0) query.set(key, '');
   return `/console?${query.toString()}`;
 }
 
