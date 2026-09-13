@@ -131,11 +131,13 @@ export const eligibilityEvaluationRow = (
   rulesetVersion: 'v1',
   engineOutcome: 'auto_cleared',
   reasons: ['cleared: no rejecting or flagging rule matched'],
+  matched: [],
   inputs: {
     ageYears: 40,
     weightKg: 90,
     heightCm: 170,
     bmi: 31.14186851211073,
+    glp1Declared: false,
     glp1: [],
     flagConditions: [],
     weightRelated: [],

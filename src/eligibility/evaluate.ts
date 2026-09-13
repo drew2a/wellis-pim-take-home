@@ -112,10 +112,14 @@ export function evaluate(input: EligibilityInput, rules: Rules): EligibilityResu
     }
   }
 
-  if (glp1.length > 0) {
+  // The rule fires on the patient's own answer as well as on a matched term (ADR-0015 item 6):
+  // the ruleset's list defines which drugs we recognise, not whether the patient is taking one.
+  // When both are present the matched text is the better evidence and is what the reason quotes.
+  if (input.glp1Declared || glp1.length > 0) {
     flagged = true;
     matched.push('glp1_medication');
-    reasons.push(`flagged: current GLP-1 medication (${quote(glp1)})`);
+    const evidence = glp1.length > 0 ? quote(glp1) : 'declared by patient';
+    reasons.push(`flagged: current GLP-1 medication (${evidence})`);
   }
 
   if (flagConditions.length > 0) {
@@ -134,7 +138,16 @@ export function evaluate(input: EligibilityInput, rules: Rules): EligibilityResu
     outcome,
     reasons,
     matched,
-    inputs: { ageYears, weightKg, heightCm, bmi, glp1, flagConditions, weightRelated },
+    inputs: {
+      ageYears,
+      weightKg,
+      heightCm,
+      bmi,
+      glp1Declared: input.glp1Declared,
+      glp1,
+      flagConditions,
+      weightRelated,
+    },
     rulesetVersion: rules.version,
   };
 }

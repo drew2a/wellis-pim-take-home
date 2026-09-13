@@ -15,6 +15,7 @@ const CLEARED: EligibilityInput = {
   ageYears: 40,
   weightKg: 140,
   heightCm: 200,
+  glp1Declared: false,
   medications: [],
   conditions: [],
   conditionsOther: [],
@@ -168,6 +169,56 @@ describe('GLP-1 medication', () => {
   });
 });
 
+// ADR-0015 item 6: the form's yes/no is an engine input, so a patient who reports current GLP-1
+// use is never cleared — whatever they call the drug, and whether or not the ruleset knows it.
+describe('a declared GLP-1 (ADR-0015 item 6)', () => {
+  it('flags on the declaration alone, naming the patient as the source', () => {
+    expect(
+      evaluateWith({ glp1Declared: true, medications: ['een of ander prikje'] }),
+    ).toMatchObject({
+      outcome: 'auto_flagged',
+      reasons: ['flagged: current GLP-1 medication (declared by patient)'],
+      matched: ['glp1_medication'],
+    });
+  });
+
+  it('flags on the declaration even when nothing was named', () => {
+    expect(evaluateWith({ glp1Declared: true })).toMatchObject({
+      outcome: 'auto_flagged',
+      reasons: ['flagged: current GLP-1 medication (declared by patient)'],
+    });
+  });
+
+  it('quotes the matched terms when there are any, in preference to the declaration', () => {
+    expect(evaluateWith({ glp1Declared: true, medications: ['Ozempic 0,5 mg'] }).reasons).toEqual([
+      'flagged: current GLP-1 medication (Ozempic 0,5 mg)',
+    ]);
+  });
+
+  it('records the declaration in the stored inputs', () => {
+    expect(evaluateWith({ glp1Declared: true }).inputs.glp1Declared).toBe(true);
+    expect(evaluateWith({}).inputs.glp1Declared).toBe(false);
+  });
+
+  it('pre-empts a BMI reject exactly as a matched term does (Q1)', () => {
+    expect(evaluateWith({ weightKg: 96.4, glp1Declared: true })).toMatchObject({
+      outcome: 'auto_flagged',
+      matched: ['bmi_below_minimum', 'glp1_medication'],
+    });
+  });
+
+  it('cannot rescue an absolute reject', () => {
+    expect(evaluateWith({ ageYears: 16, glp1Declared: true }).outcome).toBe('auto_rejected');
+  });
+
+  // `resolve()` returns on a flag before it looks at what could not be evaluated, so a declared
+  // GLP-1 with a missing height is `auto_flagged`, not `not_evaluable`. The old name claimed the
+  // opposite of what the assertion proves and of what the engine does.
+  it('outranks a rule that could not run for want of an input', () => {
+    expect(evaluateWith({ heightCm: null, glp1Declared: true }).outcome).toBe('auto_flagged');
+  });
+});
+
 describe('flag conditions', () => {
   it('flags with ADR-0005’s wording, quoting the text as typed', () => {
     expect(evaluateWith({ conditions: ['schildklierkanker (2019)'] })).toMatchObject({
@@ -201,6 +252,7 @@ describe('matched rules', () => {
         ageYears: 16,
         weightKg: 60,
         heightCm: 170,
+        glp1Declared: false,
         medications: ['Ozempic 0,5 mg'],
         conditions: ['pancreatitis 2022'],
         conditionsOther: [],
@@ -221,6 +273,7 @@ describe('matched rules', () => {
       ageYears: 40,
       weightKg: 80,
       heightCm: 170,
+      glp1Declared: false,
       medications: [],
       conditionsOther: [],
     };
@@ -237,6 +290,7 @@ describe('matched rules', () => {
         ageYears: 40,
         weightKg: 100,
         heightCm: 170,
+        glp1Declared: false,
         medications: [],
         conditions: [],
         conditionsOther: [],

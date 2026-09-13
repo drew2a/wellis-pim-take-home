@@ -52,6 +52,9 @@ export function evaluateHistory(
           ageYears: ageAt(dob, submittedAt),
           weightKg: intake.canonical.weightKg === null ? null : Number(intake.canonical.weightKg),
           heightCm: intake.canonical.heightCm,
+          // The legacy questionnaire never asked the question, and inventing a "yes" from free
+          // text is what `matchTerms` already does honestly (ADR-0015 item 6).
+          glp1Declared: false,
           medications:
             intake.canonical.medsCurrentRaw === null ? [] : [intake.canonical.medsCurrentRaw],
           conditions:

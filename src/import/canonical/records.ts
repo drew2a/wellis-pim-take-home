@@ -11,8 +11,14 @@ import { IMPORTER_VERSION } from '../version';
 
 export type LegacyEntityType = 'legacy_patient' | 'legacy_intake' | 'legacy_consent_event';
 
+/**
+ * A legacy row is named by its natural key; a row the new flow created has none and is named by
+ * its canonical uuid, with the entity type saying which convention applies (ADR-0009 item 3).
+ */
+export type NormalisationEntityType = LegacyEntityType | 'patient' | 'intake';
+
 export interface EntityRecords {
-  readonly entityType: LegacyEntityType;
+  readonly entityType: NormalisationEntityType;
   readonly entityId: string;
   readonly records: readonly RecordDraft[];
 }
@@ -22,7 +28,9 @@ const CHUNK = 500;
 /** Inserts every draft, ignoring the ones a previous run already wrote. Returns the inserted count. */
 export async function insertNormalisationRecords(
   db: Queryable,
-  runId: number,
+  // Null for a record written outside an import run — the intake form canonicalising a name or an
+  // email applies the same rules and writes the same kind of row (ADR-0015 item 5).
+  runId: number | null,
   entities: readonly EntityRecords[],
 ): Promise<number> {
   const rows = entities.flatMap((entity) =>

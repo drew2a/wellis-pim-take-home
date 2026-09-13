@@ -37,6 +37,7 @@ export async function writeShadowEvaluations(
       rulesetVersion: evaluation.result.rulesetVersion,
       engineOutcome: evaluation.result.outcome,
       reasons: [...evaluation.result.reasons],
+      matched: [...evaluation.result.matched],
       inputs: evaluation.result.inputs,
       shadow: true,
       importRunId: runId,
@@ -54,6 +55,7 @@ export async function writeShadowEvaluations(
         set: {
           engineOutcome: sql`excluded.engine_outcome`,
           reasons: sql`excluded.reasons`,
+          matched: sql`excluded.matched`,
           inputs: sql`excluded.inputs`,
           evaluatedAt: sql`now()`,
           importRunId: sql`excluded.import_run_id`,

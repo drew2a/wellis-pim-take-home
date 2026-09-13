@@ -5,6 +5,7 @@
 import { sql } from 'drizzle-orm';
 import {
   type AnyPgColumn,
+  bigint,
   boolean,
   check,
   date,
@@ -22,7 +23,8 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core';
 
-import { ELIGIBILITY_OUTCOMES, type EvaluatedInputs } from '@/eligibility/types';
+import { ELIGIBILITY_OUTCOMES, type EvaluatedInputs, type MatchedRule } from '@/eligibility/types';
+import type { DraftAnswers } from '@/intake/answers';
 
 // ---------------------------------------------------------------------------------------------
 // Enums
@@ -85,6 +87,10 @@ export const reviewItemTypeEnum = pgEnum('review_item_type', [
 ]);
 export const reviewItemScopeEnum = pgEnum('review_item_scope', ['row', 'vocabulary']);
 export const reviewItemStatusEnum = pgEnum('review_item_status', ['open', 'resolved', 'dismissed']);
+// Who a reviewer is allowed to be. `doctor` gates the medical decision — approving or rejecting an
+// intake — and nothing else; triage and review-item work are open to both (ADR-0014 item 3).
+export const reviewerRoleEnum = pgEnum('reviewer_role', ['doctor', 'ops']);
+export type ReviewerRole = (typeof reviewerRoleEnum.enumValues)[number];
 
 // ---------------------------------------------------------------------------------------------
 // Shared column builders
@@ -263,7 +269,9 @@ export const intakes = pgTable(
   'intakes',
   {
     id: uuidPrimaryKey(),
-    intakeId: text('intake_id').notNull().unique(),
+    // As exported, and null for an intake the new flow created: a new intake has no exported key,
+    // and the canonical uuid identifies it (ADR-0015 item 1).
+    intakeId: text('intake_id').unique(),
     // As exported; null for intakes submitted through the new flow.
     legacyPatientId: text('legacy_patient_id'),
     // Null for the orphans whose legacy patient does not exist (ADR-0006).
@@ -284,12 +292,26 @@ export const intakes = pgTable(
     state: intakeStateEnum('state').notNull(),
     // Null for legacy intakes; Part B fills it from the ruleset that evaluated the intake.
     rulesetVersion: text('ruleset_version'),
+    // The new flow's raw layer: what the patient typed, step by step, before anything is
+    // interpreted. Null for an imported row, whose raw is its `legacy_intakes_raw` row. Frozen by
+    // the state-machine trigger once the intake leaves `draft` (ADR-0015 item 1, ADR-0014 item 6).
+    answers: jsonb('answers').$type<DraftAnswers>(),
     // Null for intakes submitted through the new flow (ADR-0008).
     createdByRun: importRunRef('created_by_run'),
   },
   (table) => [
     check('intakes_weight_kg_positive', sql`${table.weightKg} > 0`),
     check('intakes_height_cm_positive', sql`${table.heightCm} > 0`),
+    // An imported row keeps its exported key; only the new flow may be without one.
+    check(
+      'intakes_legacy_rows_keep_their_intake_id',
+      sql`${table.createdByRun} is null or ${table.intakeId} is not null`,
+    ),
+    // ...and only the new flow has answers: the importer never writes them (ADR-0015 item 1).
+    check(
+      'intakes_answers_only_for_new_flow',
+      sql`${table.answers} is null or ${table.createdByRun} is null`,
+    ),
     index('intakes_patient_id_idx').on(table.patientId),
     index('intakes_created_by_run_idx').on(table.createdByRun),
     // The console's work queue and status filter select on state (ADR-0004).
@@ -358,6 +380,10 @@ export const eligibilityEvaluations = pgTable(
     // The engine's verdict, in the engine's vocabulary (ADR-0011 item 1).
     engineOutcome: engineOutcomeEnum('engine_outcome').notNull(),
     reasons: jsonb('reasons').$type<string[]>().notNull(),
+    // The rules that fired, in the engine's fixed rule order. Stored rather than re-derived from
+    // the thresholds, which would be a second implementation of the rules (ADR-0011 item 21), and
+    // read by the age carve-out on `in_review → approved` (ADR-0014 item 3).
+    matched: jsonb('matched').$type<MatchedRule[]>().notNull(),
     // What the rules saw: age, weight, height, the unrounded BMI and the matched terms with the
     // text that matched them, so the row explains itself without re-running the engine (ADR-0010).
     inputs: jsonb('inputs').$type<EvaluatedInputs>().notNull(),
@@ -467,19 +493,41 @@ export const reviewItems = pgTable(
   ],
 );
 
+// The care team, and the only human actors the state machine accepts (ADR-0014 item 4). Seeded
+// from the environment by `npm run seed:reviewers`; this is identification, not authentication,
+// which is a deliberate scope cut (Q8 default A, R-S4).
+export const reviewers = pgTable('reviewers', {
+  id: uuidPrimaryKey(),
+  // Unique so the seed can upsert by it, and so an audit entry's actor text names one person.
+  name: text('name').notNull().unique(),
+  role: reviewerRoleEnum('role').notNull(),
+  createdAt: timestamptz('created_at').notNull().defaultNow(),
+});
+
 // Append-only (R-B21): UPDATE, DELETE and TRUNCATE are rejected by trigger (ADR-0007).
 export const auditEntries = pgTable(
   'audit_entries',
   {
     id: uuidPrimaryKey(),
-    // Human identity or named process such as `legacy import` (R-B20).
+    // The order entries were written in. `at` defaults to now(), which is the *transaction*
+    // timestamp, so the three entries of one submission share it — true, since one transaction is
+    // one instant, but the console still has to render them in order (ADR-0014 item 5).
+    seq: bigint('seq', { mode: 'number' }).generatedAlwaysAsIdentity().notNull().unique(),
+    // Human identity or named process such as `legacy import` (R-B20). For a reviewer it is their
+    // name *as it was at the time*: the entry is evidence and must still say who decided after the
+    // person is renamed or removed.
     actor: text('actor').notNull(),
+    // The stable identity behind a human actor; null for a named process (ADR-0014 item 4).
+    actorReviewerId: uuid('actor_reviewer_id').references(() => reviewers.id),
     at: timestamptz('at').notNull().defaultNow(),
     entityType: text('entity_type').notNull(),
     entityId: text('entity_id').notNull(),
     fromState: text('from_state'),
     toState: text('to_state'),
     reason: text('reason').notNull(),
+    // The ruleset in force when the entry was written: required on the engine's transitions, so
+    // the timeline says which rules produced the verdict without a join (R-B8, ADR-0014 item 5).
+    rulesetVersion: text('ruleset_version'),
     reviewItemId: uuid('review_item_id').references(() => reviewItems.id),
     // `{field, from, to, source_legacy_id}` per changed value: human edits, and the field-level
     // provenance of the importer's tier-1 merges (ADR-0006).
@@ -492,6 +540,7 @@ export const auditEntries = pgTable(
   },
   (table) => [
     index('audit_entries_review_item_id_idx').on(table.reviewItemId),
+    index('audit_entries_actor_reviewer_id_idx').on(table.actorReviewerId),
     // The patient detail view reads the audit timeline by entity, and this table only grows.
     index('audit_entries_entity_idx').on(table.entityType, table.entityId),
   ],

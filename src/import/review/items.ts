@@ -88,7 +88,9 @@ const CHUNK = 200;
 /** Returns the number of items this run created; the rest already existed. */
 export async function insertReviewItems(
   db: Queryable,
-  runId: number,
+  // Null for an item raised outside an import run: a detector on a new submission raises the same
+  // kind of item, and `created_by_run` says which run raised it or that none did (ADR-0015 item 7).
+  runId: number | null,
   drafts: readonly ReviewItemDraft[],
 ): Promise<number> {
   const seen = new Set<string>();
