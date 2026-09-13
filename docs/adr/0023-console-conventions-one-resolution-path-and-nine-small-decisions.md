@@ -1,6 +1,6 @@
 # ADR-0023: Console conventions: one resolution path, and nine small decisions
 
-- **Status:** proposed
+- **Status:** accepted
 - **Date:** 2026-09-13
 - **Deciders:** Andrei Andreev
 - **Requirements:** R-C2, R-C3, R-C4, R-C6, R-C9, R-A17, R-B20, R-S4 · **Relates to:** ADR-0005

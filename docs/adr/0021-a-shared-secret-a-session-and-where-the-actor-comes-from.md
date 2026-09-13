@@ -1,6 +1,6 @@
 # ADR-0021: A shared secret, a session, and where the actor comes from
 
-- **Status:** proposed
+- **Status:** accepted
 - **Date:** 2026-09-13
 - **Deciders:** Andrei Andreev
 - **Requirements:** R-B16, R-B19, R-B20, R-C8, R-S4, R-T4 · **Resolves:** Q8 (neither A nor B: A
@@ -35,7 +35,7 @@ be shut to someone who has not been given the key.
   (`CLAUDE.md` §2, R-T4, R-B16).
 - A public URL over patient data gets a lock, however simple.
 - A missing secret must fail loudly, never fail open (`CLAUDE.md` §2).
-- YAGNI: a seven-day assignment does not get user management, password reset or SSO, and what it
+- YAGNI: a one-day assignment does not get user management, password reset or SSO, and what it
   does get must be described honestly rather than dressed up as authentication (R-S4).
 
 ## Considered options

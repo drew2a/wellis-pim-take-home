@@ -1,6 +1,6 @@
 # ADR-0022: What a reviewer's merge may change
 
-- **Status:** proposed
+- **Status:** accepted
 - **Date:** 2026-09-13
 - **Deciders:** Andrei Andreev
 - **Requirements:** R-A7, R-A17, R-A31, R-C4, R-C5, R-C6, R-B20 · **Amends:** ADR-0006 (the
