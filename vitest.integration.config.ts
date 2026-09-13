@@ -14,6 +14,11 @@ export default defineConfig({
   resolve: { tsconfigPaths: true },
   test: {
     include: ['src/**/*.integration.test.ts'],
+    // These tests talk to a real Postgres and the slowest of them run the whole importer
+    // twice; on a CI runner that is several seconds, well past Vitest's 5s default. The
+    // limit is here to catch a hang, not to time the hardware.
+    testTimeout: 60_000,
+    hookTimeout: 60_000,
     // Files may run in parallel: each creates and migrates its own database through
     // src/test/database.ts (a database per file, see the rationale there), so no two files
     // share tables.
