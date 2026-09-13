@@ -32,5 +32,21 @@ export default defineConfig(
     files: ['**/*.mjs'],
     extends: [tseslint.configs.disableTypeChecked],
   },
+  {
+    // Styling is reviewable only if it lives in one place: utility classes belong to the
+    // components in `src/ui/`, and every other file composes those (see `src/ui/index.ts`).
+    files: ['src/**/*.tsx'],
+    ignores: ['src/ui/**'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: 'JSXAttribute[name.name="className"]',
+          message:
+            'Utility classes live only in src/ui/. Compose a component from src/ui instead of styling here.',
+        },
+      ],
+    },
+  },
   prettier,
 );

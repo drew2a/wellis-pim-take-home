@@ -2,17 +2,35 @@
 
 // The patient-facing intake form (R-B1, R-B4): five steps, one per screen, saved to the server
 // after each one. The first step creates the draft, so nothing is written until the patient has
-// answered something (ADR-0016). Plain on purpose — the brief asks for correct, not polished.
+// answered something (ADR-0016).
 //
 // It carries no business rules. Every message under a field is the server's own, from the Zod
 // schema at the boundary, so there is exactly one definition of what a valid answer is and the
 // client cannot disagree with it (`CLAUDE.md` §2, R-T4). The only client-side validation is the
 // browser's `required`, which is a convenience.
-import { useCallback, useState, type ReactElement, type ReactNode } from 'react';
+//
+// It carries no styling either: every element on the screen is a component from `@/ui`, so how
+// this form looks is decided there and not here (`src/ui/index.ts`).
+import { useCallback, useState, type ReactElement } from 'react';
 
 import { CONSENT_TEXT, CONSENT_TEXT_VERSION } from '@/consent/text';
 import type { IntakeStep } from '@/intake/answers';
 import { CONDITION_OPTIONS, GLP1_OPTIONS } from '@/intake/options';
+import {
+  Button,
+  ButtonRow,
+  Card,
+  Choice,
+  ErrorText,
+  Field,
+  Findings,
+  Hint,
+  Prose,
+  StateBadge,
+  StepIndicator,
+  TextArea,
+  TextInput,
+} from '@/ui';
 
 export interface Bounds {
   readonly heightCm: { readonly min: number; readonly max: number };
@@ -159,7 +177,7 @@ export function IntakeForm({ bounds }: { bounds: Bounds }): ReactElement {
   if (submitted !== null) return <Result submitted={submitted} />;
 
   const current = STEPS[index];
-  if (current === undefined) return <p className="error">This form has no such step.</p>;
+  if (current === undefined) return <ErrorText>This form has no such step.</ErrorText>;
 
   return (
     <form
@@ -168,92 +186,89 @@ export function IntakeForm({ bounds }: { bounds: Bounds }): ReactElement {
         void advance();
       }}
     >
-      <p className="progress">
-        Step {index + 1} of {STEPS.length}
-      </p>
-      <h2>{current.title}</h2>
+      <StepIndicator index={index} count={STEPS.length} title={current.title} />
 
-      {current.step === 'identity' && (
-        <>
-          <Field label="Full name" issue={issueFor(issues, 'fullName')}>
-            <input
-              value={fullName}
-              onChange={(e) => {
-                setFullName(e.target.value);
-              }}
-              required
-            />
-          </Field>
-          <Field label="Email address" issue={issueFor(issues, 'email')}>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => {
-                setEmail(e.target.value);
-              }}
-              required
-            />
-          </Field>
-          <Field label="Date of birth" issue={issueFor(issues, 'dob')}>
-            <input
-              type="date"
-              min={bounds.dob.min}
-              max={bounds.dob.max}
-              value={dob}
-              onChange={(e) => {
-                setDob(e.target.value);
-              }}
-              required
-            />
-          </Field>
-        </>
-      )}
+      <Card>
+        {current.step === 'identity' && (
+          <>
+            <Field label="Full name" message={messageFor(issues, 'fullName')}>
+              <TextInput
+                value={fullName}
+                onChange={(e) => {
+                  setFullName(e.target.value);
+                }}
+                required
+              />
+            </Field>
+            <Field label="Email address" message={messageFor(issues, 'email')}>
+              <TextInput
+                type="email"
+                value={email}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                }}
+                required
+              />
+            </Field>
+            <Field label="Date of birth" message={messageFor(issues, 'dob')}>
+              <TextInput
+                type="date"
+                min={bounds.dob.min}
+                max={bounds.dob.max}
+                value={dob}
+                onChange={(e) => {
+                  setDob(e.target.value);
+                }}
+                required
+              />
+            </Field>
+          </>
+        )}
 
-      {current.step === 'metrics' && (
-        <>
-          <Field
-            label="Height in centimetres"
-            hint={`Between ${bounds.heightCm.min} and ${bounds.heightCm.max}.`}
-            issue={issueFor(issues, 'heightCm')}
-          >
-            <input
-              type="number"
-              inputMode="numeric"
-              value={heightCm}
-              onChange={(e) => {
-                setHeightCm(e.target.value);
-              }}
-              required
-            />
-          </Field>
-          <Field
-            label="Weight in kilograms"
-            hint={`Between ${bounds.weightKg.min} and ${bounds.weightKg.max}, one decimal place.`}
-            issue={issueFor(issues, 'weightKg')}
-          >
-            <input
-              type="number"
-              step="0.1"
-              inputMode="decimal"
-              value={weightKg}
-              onChange={(e) => {
-                setWeightKg(e.target.value);
-              }}
-              required
-            />
-          </Field>
-        </>
-      )}
+        {current.step === 'metrics' && (
+          <>
+            <Field
+              label="Height in centimetres"
+              hint={`Between ${bounds.heightCm.min} and ${bounds.heightCm.max}.`}
+              message={messageFor(issues, 'heightCm')}
+            >
+              <TextInput
+                type="number"
+                inputMode="numeric"
+                value={heightCm}
+                onChange={(e) => {
+                  setHeightCm(e.target.value);
+                }}
+                required
+              />
+            </Field>
+            <Field
+              label="Weight in kilograms"
+              hint={`Between ${bounds.weightKg.min} and ${bounds.weightKg.max}, one decimal place.`}
+              message={messageFor(issues, 'weightKg')}
+            >
+              <TextInput
+                type="number"
+                step="0.1"
+                inputMode="decimal"
+                value={weightKg}
+                onChange={(e) => {
+                  setWeightKg(e.target.value);
+                }}
+                required
+              />
+            </Field>
+          </>
+        )}
 
-      {current.step === 'medications' && (
-        <>
-          <Field
-            label="Are you currently using a GLP-1 medication?"
-            hint="These are medicines such as Ozempic, Wegovy, Mounjaro, Saxenda or Trulicity."
-            issue={issueFor(issues, 'glp1Declared')}
-          >
-            <label className="choice">
-              <input
+        {current.step === 'medications' && (
+          <>
+            <Field
+              label="Are you currently using a GLP-1 medication?"
+              hint="These are medicines such as Ozempic, Wegovy, Mounjaro, Saxenda or Trulicity."
+              message={messageFor(issues, 'glp1Declared')}
+            >
+              <Choice
                 type="radio"
                 name="glp1Declared"
                 checked={glp1Declared === true}
@@ -261,11 +276,10 @@ export function IntakeForm({ bounds }: { bounds: Bounds }): ReactElement {
                   setGlp1Declared(true);
                 }}
                 required
-              />
-              Yes
-            </label>
-            <label className="choice">
-              <input
+              >
+                Yes
+              </Choice>
+              <Choice
                 type="radio"
                 name="glp1Declared"
                 checked={glp1Declared === false}
@@ -273,129 +287,126 @@ export function IntakeForm({ bounds }: { bounds: Bounds }): ReactElement {
                   setGlp1Declared(false);
                   setGlp1([]);
                 }}
-              />
-              No
-            </label>
-          </Field>
+              >
+                No
+              </Choice>
+            </Field>
 
-          {glp1Declared === true && (
-            <Field label="Which one?" issue={issueFor(issues, 'glp1')}>
-              {GLP1_OPTIONS.map((option) => (
-                <label key={option.value} className="choice">
-                  <input
+            {glp1Declared === true && (
+              <Field label="Which one?" message={messageFor(issues, 'glp1')}>
+                {GLP1_OPTIONS.map((option) => (
+                  <Choice
+                    key={option.value}
                     type="checkbox"
                     checked={glp1.includes(option.value)}
                     onChange={() => {
                       setGlp1(toggle(glp1, option.value));
                     }}
-                  />
-                  {option.label}
-                </label>
-              ))}
+                  >
+                    {option.label}
+                  </Choice>
+                ))}
+              </Field>
+            )}
+
+            <Field
+              label="Any other medication you take"
+              hint={
+                glp1Declared === true
+                  ? 'If your GLP-1 medication is not in the list above, write its name here.'
+                  : 'Leave this empty if there is none.'
+              }
+              message={messageFor(issues, 'otherMedications')}
+            >
+              <TextArea
+                rows={3}
+                value={otherMedications}
+                onChange={(e) => {
+                  setOtherMedications(e.target.value);
+                }}
+              />
             </Field>
-          )}
+          </>
+        )}
 
-          <Field
-            label="Any other medication you take"
-            hint={
-              glp1Declared === true
-                ? 'If your GLP-1 medication is not in the list above, write its name here.'
-                : 'Leave this empty if there is none.'
-            }
-            issue={issueFor(issues, 'otherMedications')}
-          >
-            <textarea
-              rows={3}
-              value={otherMedications}
-              onChange={(e) => {
-                setOtherMedications(e.target.value);
-              }}
-            />
-          </Field>
-        </>
-      )}
-
-      {current.step === 'conditions' && (
-        <>
-          <Field
-            label="Has a doctor diagnosed you with any of these?"
-            issue={issueFor(issues, 'conditions')}
-          >
-            {CONDITION_OPTIONS.map((option) => (
-              <label key={option.value} className="choice">
-                <input
+        {current.step === 'conditions' && (
+          <>
+            <Field
+              label="Has a doctor diagnosed you with any of these?"
+              message={messageFor(issues, 'conditions')}
+            >
+              {CONDITION_OPTIONS.map((option) => (
+                <Choice
+                  key={option.value}
                   type="checkbox"
                   checked={conditions.includes(option.value)}
                   onChange={() => {
                     setConditions(toggle(conditions, option.value));
                   }}
-                />
-                {option.label}
-              </label>
-            ))}
-          </Field>
-          <Field
-            label="Anything else we should know about your health"
-            hint="Leave this empty if there is nothing."
-            issue={issueFor(issues, 'otherConditions')}
-          >
-            <textarea
-              rows={3}
-              value={otherConditions}
-              onChange={(e) => {
-                setOtherConditions(e.target.value);
-              }}
-            />
-          </Field>
-        </>
-      )}
+                >
+                  {option.label}
+                </Choice>
+              ))}
+            </Field>
+            <Field
+              label="Anything else we should know about your health"
+              hint="Leave this empty if there is nothing."
+              message={messageFor(issues, 'otherConditions')}
+            >
+              <TextArea
+                rows={3}
+                value={otherConditions}
+                onChange={(e) => {
+                  setOtherConditions(e.target.value);
+                }}
+              />
+            </Field>
+          </>
+        )}
 
-      {current.step === 'consent' && (
-        <>
-          <p className="consent">{CONSENT_TEXT}</p>
-          <p className="hint">Consent text version {CONSENT_TEXT_VERSION}.</p>
-          <Field label="" issue={issueFor(issues, 'granted')}>
-            <label className="choice">
-              <input
+        {current.step === 'consent' && (
+          <>
+            <Prose text={CONSENT_TEXT} />
+            <Hint>Consent text version {CONSENT_TEXT_VERSION}.</Hint>
+            <Field label="" message={messageFor(issues, 'granted')}>
+              <Choice
                 type="checkbox"
                 checked={granted}
                 onChange={(e) => {
                   setGranted(e.target.checked);
                 }}
-              />
-              I have read the statement above and I agree.
-            </label>
-          </Field>
-        </>
-      )}
+              >
+                I have read the statement above and I agree.
+              </Choice>
+            </Field>
+          </>
+        )}
 
-      {/* An issue no field on this step owns — a whole-step refinement, or a step still missing at
-          submit — is shown here rather than swallowed. */}
-      {issues
-        .filter((issue) => !FIELDS[current.step].includes(issue.path))
-        .map((issue) => (
-          <p key={`${issue.path}:${issue.message}`} className="error">
-            {issue.message}
-          </p>
-        ))}
-      {failure !== null && <p className="error">{failure}</p>}
+        {/* An issue no field on this step owns — a whole-step refinement, or a step still missing
+            at submit — is shown here rather than swallowed. */}
+        {issues
+          .filter((issue) => !FIELDS[current.step].includes(issue.path))
+          .map((issue) => (
+            <ErrorText key={`${issue.path}:${issue.message}`}>{issue.message}</ErrorText>
+          ))}
+        {failure !== null && <ErrorText>{failure}</ErrorText>}
+      </Card>
 
-      <div className="actions">
+      <ButtonRow>
         {index > 0 && (
-          <button
-            type="button"
+          <Button
             onClick={() => {
               setIndex(index - 1);
             }}
             disabled={busy}
           >
             Back
-          </button>
+          </Button>
         )}
-        <button type="submit" disabled={busy}>
+        <Button type="submit" variant="primary" busy={busy}>
           {index < STEPS.length - 1 ? 'Next' : 'Submit'}
-        </button>
-      </div>
+        </Button>
+      </ButtonRow>
     </form>
   );
 }
@@ -408,38 +419,12 @@ function Result({ submitted }: { submitted: Submitted }): ReactElement {
     auto_rejected: 'Thank you. Based on your answers, our programme is not suitable for you.',
   };
   return (
-    <section>
-      <h2>{headline[submitted.state] ?? 'Thank you.'}</h2>
+    <Card title={headline[submitted.state] ?? 'Thank you.'}>
+      <StateBadge state={submitted.state} />
+      <Findings items={submitted.reasons} />
       <p>A doctor makes the final decision; nothing here is one.</p>
-      <h3>What the rules found</h3>
-      <ul>
-        {submitted.reasons.map((reason) => (
-          <li key={reason}>{reason}</li>
-        ))}
-      </ul>
-      <p className="hint">Assessed with ruleset {submitted.rulesetVersion}.</p>
-    </section>
-  );
-}
-
-function Field({
-  label,
-  hint,
-  issue,
-  children,
-}: {
-  label: string;
-  hint?: string;
-  issue?: Issue | undefined;
-  children: ReactNode;
-}): ReactElement {
-  return (
-    <div className="field">
-      {label !== '' && <label className="label">{label}</label>}
-      {hint !== undefined && <p className="hint">{hint}</p>}
-      {children}
-      {issue !== undefined && <p className="error">{issue.message}</p>}
-    </div>
+      <Hint>Assessed with ruleset {submitted.rulesetVersion}.</Hint>
+    </Card>
   );
 }
 
@@ -452,8 +437,8 @@ const FIELDS: Record<IntakeStep, readonly string[]> = {
   consent: ['granted', 'textVersion'],
 };
 
-const issueFor = (issues: readonly Issue[], path: string): Issue | undefined =>
-  issues.find((issue) => issue.path === path);
+const messageFor = (issues: readonly Issue[], path: string): string | undefined =>
+  issues.find((issue) => issue.path === path)?.message;
 
 const toggle = (values: readonly string[], value: string): string[] =>
   values.includes(value) ? values.filter((v) => v !== value) : [...values, value];
