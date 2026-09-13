@@ -32,6 +32,15 @@ traces are the full record.
 (orphans), `meds_current`, `conditions`, `outcome`, the consent log, and the duplicate-patient
 tiers. On those I read the facts, then wrote the decision myself; the agent recorded it.
 
+**Ran it myself.** From the sixth branch on I stopped approving plans and let the agent proceed
+from the files, so my own time went into using the thing. Three defects came out of clicking
+through the running app that no test had caught, because each one was a page doing the right thing
+twice or saying the wrong sentence about it: the intake form created a draft on page load and then
+aborted its own request, so it never left "Starting your intake…"; a wrong console secret answered
+"sign in to the console first", the redirect message, to someone already trying to sign in; and the
+patient timeline printed every normalisation twice, once as prose and once as a code pill. Tests
+assert that a fact reaches the screen, not that it reaches it once.
+
 **Stopped it.**
 
 - It launched the profiling subagent right after presenting the plan, before I had accepted it. I
