@@ -7,14 +7,14 @@
 // `CLAUDE.md` §2). A browser posts *what the reviewer chose* — confirm, reject, exclude these
 // rows — never the rows to write. Which values follow from a choice is decided here, on the
 // server, from the item the importer raised.
-import type { FieldChange } from '@/repo/resolve';
+import type { FieldChange, ResolutionSubject } from '@/repo/resolve';
 
 export interface Decision {
   readonly outcome: 'resolved' | 'dismissed';
   readonly note: string;
   readonly changes: readonly FieldChange[];
   /** Rows the decision is about though it changes none of them (see `ResolveRequest.subjects`). */
-  readonly subjects?: readonly { readonly entityType: string; readonly entityId: string }[];
+  readonly subjects?: readonly ResolutionSubject[];
   /** Stored on the item: what was chosen, in enough detail to read back years later. */
   readonly resolution: Readonly<Record<string, unknown>>;
 }

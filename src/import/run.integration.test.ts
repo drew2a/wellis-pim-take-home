@@ -232,6 +232,29 @@ describe('npm run import', () => {
     expect(Number(orphaned?.n)).toBe(0);
   });
 
+  // ADR-0025 rests on this count, so it is asserted against the imported database rather than
+  // written into the ADR and left to go stale. If it is ever not zero, a merge could drop a
+  // human-established state and the decision returns to ADR-0025 before the code changes.
+  it('has no conflict patient on either side of a merged pair (ADR-0025 item 2a)', async () => {
+    const [both] = await database.sql<{ n: string }[]>`
+      select count(*)::text as n from consent_states cs
+       where cs.state = 'conflict'
+         and (exists (select 1 from patients p where p.merged_into = cs.patient_id)
+              or cs.patient_id in (select merged_into from patients where merged_into is not null))
+    `;
+    expect(Number(both?.n)).toBe(0);
+
+    // ...and none of them draws an event from a row that was merged away, which is the other way
+    // a merge could change what the seven were decided over.
+    const [viaMember] = await database.sql<{ n: string }[]>`
+      select count(distinct cs.patient_id)::text as n from consent_states cs
+      join patients loser on loser.merged_into = cs.patient_id
+      join consent_events e on e.patient_id = loser.id
+     where cs.state = 'conflict'
+    `;
+    expect(Number(viaMember?.n)).toBe(0);
+  });
+
   // ADR-0005's consent states, over the 2466 legacy rows and over the surviving patients.
   it('derives a consent state for every surviving patient', async () => {
     expect(first.consentStatesWritten).toBe(2466 - 28);

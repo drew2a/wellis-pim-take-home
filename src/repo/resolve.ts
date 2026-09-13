@@ -71,10 +71,20 @@ export interface ResolveRequest {
    * pair, where marking one as the record of note says something about both and rewrites neither.
    * Each gets the decision's audit entry. Ignored when there are changes, which name their own rows.
    */
-  readonly subjects?:
-    readonly { readonly entityType: string; readonly entityId: string }[] | undefined;
+  readonly subjects?: readonly ResolutionSubject[] | undefined;
   /** What was chosen, stored on the item: the action, the excluded rows, the accepted proposal. */
   readonly resolution?: unknown;
+}
+
+/**
+ * A row a decision is about though it writes no column of it, and what it records against that row:
+ * `changes` for something that is not a column at all — a consent state a reviewer established
+ * (ADR-0025) — and nothing for a decision that only needs to be on the record.
+ */
+export interface ResolutionSubject {
+  readonly entityType: string;
+  readonly entityId: string;
+  readonly changes?: readonly AuditChange[] | undefined;
 }
 
 export interface CloseRequest {
@@ -310,8 +320,15 @@ export async function resolveReviewItem(
     if (drafts.length === 0) {
       const subjects = request.subjects ?? [];
       if (subjects.length > 0) {
-        for (const subject of subjects)
-          drafts.push(entry(subject.entityType, subject.entityId, null));
+        for (const subject of subjects) {
+          drafts.push(
+            entry(
+              subject.entityType,
+              subject.entityId,
+              subject.changes === undefined ? null : [...subject.changes],
+            ),
+          );
+        }
       } else {
         drafts.push(entry(...subjectOf(item)));
       }

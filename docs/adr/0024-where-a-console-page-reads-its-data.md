@@ -1,6 +1,6 @@
 # ADR-0024: Where a console page reads its data
 
-- **Status:** proposed
+- **Status:** accepted
 - **Date:** 2026-09-13
 - **Deciders:** Andrei Andreev
 - **Requirements:** R-T4, R-C1, R-C9, R-T7 · **Amends:** ADR-0003 ("No React component imports the

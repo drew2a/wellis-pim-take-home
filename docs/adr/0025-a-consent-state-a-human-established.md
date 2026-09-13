@@ -1,6 +1,6 @@
 # ADR-0025: A consent state a human established
 
-- **Status:** proposed
+- **Status:** accepted
 - **Date:** 2026-09-13
 - **Deciders:** Andrei Andreev
 - **Requirements:** R-A20, R-A21, R-A22, R-C6, R-B20 · **Amends:** ADR-0005 (consent state:
@@ -70,22 +70,61 @@ A state a reviewer establishes is written with **`derivation_version = 'human'`*
 The audit entry is where the decision lives. The `consent_states` row is a cache of it, which is
 why losing the row would be recoverable and why the entry is written first.
 
-### 2. What the recomputation does with it
+### 2. What the recomputation does with it, and when it stops
 
-`recomputeConsentStates` **keeps a row whose `derivation_version` is `'human'`** and recomputes
-every other row as before. It is the same rule as `humanOwnedFields` one table over: the importer
-and the derivation do not overwrite a decision a person took.
+**A human establishes a state over the events that existed when they decided.** The row therefore
+records which those were: `derived_from_event_id` is the **last event in the derivation's own
+order** at the moment of the decision (`byTimeThenRevokedLast`, the same total order the pure
+function uses, so the two cannot disagree about which event is last).
 
-Two consequences are accepted and named:
+`recomputeConsentStates` then applies one rule per row:
 
-- A later consent **event** does not change a human-established state. That is correct for a
-  revocation-first log, and it is a trap for a patient who later grants consent properly. So the
-  console shows the established state **next to the events that arrived after it**, and the item's
-  resolution is visible on the patient's page; a reviewer who sees a newer event can establish the
-  state again, which writes a second audit entry. No automatic re-derivation, because the case that
-  made this necessary is exactly one a rule cannot judge.
-- The pure derivation in `src/consent/derive.ts` is untouched and stays pure. The human state is
-  applied by `recomputeConsentStates`, which already reads the database.
+| the last event for that patient and type is… | what happens |
+|---|---|
+| still the one the decision was taken over | the human row is **kept**; the derivation's answer is discarded |
+| a different one — an event orders after it | the human row is **superseded**: the derivation's answer is written, and the decision stays in the audit entry |
+
+So a patient who later grants consent properly has that grant read as new evidence, and their state
+returns to `granted` without anyone doing anything. A future-dated revocation that was already in
+the log when the reviewer decided is not new evidence — it was in front of them — and the decision
+stands, which is the revocation-first case this exists for.
+
+Three consequences are accepted and named:
+
+- **Superseded is not silent.** The patient's page shows the superseded decision beside the event
+  that superseded it, so the history reads as what happened rather than as a state that changed by
+  itself. No review item is raised: nothing is wrong, the evidence simply moved on.
+- **An event that arrives with an earlier timestamp does not supersede a decision**, because it
+  does not order after the event the decision was taken over. The log is append-only and this
+  export backfills nothing; a decision is superseded by evidence that postdates what it was taken
+  over, which is the thing the reviewer could not have seen.
+- The pure derivation in `src/consent/derive.ts` is untouched and stays pure — it gains one
+  exported helper, `latestEvent`, which is the ordering it already uses. The human state is applied
+  by `recomputeConsentStates`, which already reads the database.
+
+### 2a. Merges, counted rather than assumed
+
+A merge recomputes the survivor's states and deletes the loser's rows (ADR-0011 item 13), so a
+human-established state on either side of a pair is a case worth checking before writing code for
+it. Settled the way ADR-0011 item 9 was settled — **by counting first**:
+
+```sh
+psql "$DATABASE_URL" -c "select count(*) from consent_states cs where cs.state = 'conflict'
+   and (exists (select 1 from patients p where p.merged_into = cs.patient_id)
+        or cs.patient_id in (select merged_into from patients where merged_into is not null))"
+```
+
+Over this export the count is **zero**. None of the seven conflict patients
+(`recAeApEtGG3IDTEk`, `recCrLpb3IgX4T1sI`, `recDrQ5x0Luft849M`, `recenANRwekdIbTiB`,
+`receXkNIPBKcCURlA`, `recrji0nd3KzVGPAJ`, `recSs73t0Grgp7ZJC`) is a member or a survivor of any of
+the 28 tier-1 pairs, in either direction, and none of them draws a consent event from a merged-away
+row. **The merge path is therefore left exactly as it is.**
+
+What would happen if the count were not zero is written down rather than guessed at: the survivor's
+recomputation would re-derive over the union of both memberships' events, and a human row on the
+loser would be deleted with the loser's other rows. The decision would survive in the audit entry
+and the state would not. A future export with a non-zero count reopens this, and the decision
+returns here before the code chooses — as ADR-0011 item 9 says for its own count.
 
 ### 3. What it is not for
 
@@ -103,8 +142,12 @@ business acts on. The console offers no way to turn a clear `revoked` into a `gr
 - Good: no migration. `derivation_version` already exists and is already written per row.
 - Bad: `recomputeConsentStates` stops being a pure rewrite, and a reader has to know that one value
   of `derivation_version` is load-bearing. Accepted: it is one condition, in one function, tested.
-- Bad: a human state does not respond to later events. Named above, surfaced on the screen, and
-  deliberately not automated.
+- Good: a human state does respond to later events, because a later event is new evidence. Nothing
+  has to be remembered or re-opened for a patient who consents properly afterwards.
+- Bad: the rule turns on the identity of one event, so a reader has to know that
+  `derived_from_event_id` means something different on a human row (the last event seen) from what
+  it means on a derived one (the event the state follows from — for a `conflict`, the first). Both
+  are documented on the column and asserted by tests.
 - Neutral: the import report's consent-state counts now include human-established rows. They are
   counted separately so the report still says what the rules derived.
 
@@ -112,6 +155,11 @@ business acts on. The console offers no way to turn a clear `revoked` into a `gr
 
 - Integration test: a reviewer establishes `granted` on a `conflict`; a full
   `recomputeConsentStates` afterwards leaves the row untouched, and every other row is rewritten.
+- Integration test: an event that orders after the one the decision was taken over supersedes it —
+  the next recomputation writes the derived state, and the decision is still in `audit_entries`.
+- Integration test: an event that orders *before* it does not supersede the decision.
+- The merge count above is zero, and a test asserts it over the imported database so the claim
+  fails the build rather than going stale.
 - Integration test: the audit entry carries the actor, the reviewer id, the note, the item and the
   `consent_state:<type>` change; the item closes with the established state in `resolution`.
 - Integration test: establishing a state on an item whose derived state is not `conflict` is

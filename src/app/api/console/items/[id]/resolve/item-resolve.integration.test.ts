@@ -14,6 +14,7 @@ import {
   reviewItems,
   reviewers,
 } from '@/db/schema';
+import { recomputeConsentStates } from '@/consent/states';
 import { loadEnv } from '@/env';
 import { createTestDatabase, type TestDatabase, type TestDb } from '@/test/database';
 import { intakeRow, patientRow, reviewItemRow } from '@/test/rows';
@@ -609,5 +610,124 @@ describe('resolving a consent item', () => {
     const patientId = await patient('recA', null);
     const itemId = await consentItem(patientId);
     expect((await post(itemId, { action: 'resolve', note: '  ' })).status).toBe(400);
+  });
+});
+
+// ADR-0025: the seven logs that contradict themselves, where no rule can say what is true.
+describe('establishing a consent state', () => {
+  async function conflicted(): Promise<{ itemId: string; patientId: string }> {
+    const patientId = await patient('recA', null, { signupDate: '2025-01-01' });
+    await db.insert(consentEvents).values([
+      {
+        patientId,
+        type: 'data_processing',
+        action: 'revoked',
+        at: new Date('2025-02-01T10:00:00Z'),
+      },
+      {
+        patientId,
+        type: 'data_processing',
+        action: 'granted',
+        at: new Date('2025-02-09T10:00:00Z'),
+      },
+    ]);
+    await recomputeConsentStates(db, { declaredTypes: ['data_processing'] });
+    const itemId = await item({
+      type: 'consent',
+      field: 'data_processing',
+      patientId,
+      title: 'the consent log contradicts itself',
+      payload: { consent_state: 'conflict' },
+      dedupeKey: 'consent|row|legacy_patient:recA|data_processing|CONSENT_CONFLICT|conflict',
+    });
+    return { itemId, patientId };
+  }
+
+  it('writes the state, the audit entry and the closed item together', async () => {
+    const { itemId, patientId } = await conflicted();
+
+    const response = await post(itemId, {
+      action: 'set_state',
+      state: 'granted',
+      note: 'reached the patient; consent given on paper on 2026-09-11',
+    });
+    expect(response.status).toBe(200);
+
+    const [state] = await db
+      .select()
+      .from(consentStates)
+      .where(eq(consentStates.patientId, patientId));
+    expect(state).toMatchObject({ state: 'granted', derivationVersion: 'human' });
+
+    const entries = await db
+      .select()
+      .from(auditEntries)
+      .where(eq(auditEntries.entityId, patientId));
+    expect(entries).toHaveLength(1);
+    expect(entries[0]?.changes).toEqual([
+      { field: 'consent_state:data_processing', from: 'conflict', to: 'granted' },
+    ]);
+    expect(entries[0]?.actorReviewerId).toBe(reviewerId);
+
+    const [row] = await db.select().from(reviewItems).where(eq(reviewItems.id, itemId));
+    expect(row?.resolution).toMatchObject({ state: 'granted', was: 'conflict' });
+  });
+
+  // No consent event is ever written from this screen (CLAUDE.md §5).
+  it('adds no consent event', async () => {
+    const { itemId } = await conflicted();
+    const before = await db.select().from(consentEvents);
+    await post(itemId, { action: 'set_state', state: 'revoked', note: 'the patient confirmed' });
+    expect(await db.select().from(consentEvents)).toHaveLength(before.length);
+  });
+
+  // A revocation that is unambiguous is acted on, not overridden (ADR-0025 §3).
+  it('refuses a state over a log that does not contradict itself, and writes nothing', async () => {
+    const patientId = await patient('recA', null, { signupDate: '2025-01-01' });
+    await db.insert(consentEvents).values({
+      patientId,
+      type: 'data_processing',
+      action: 'revoked',
+      at: new Date('2025-03-02T10:00:00Z'),
+    });
+    // One event, and it is a revocation, so the first event is a revocation: that is a conflict by
+    // ADR-0011 item 15. A grant first makes the log unambiguous.
+    await db.insert(consentEvents).values({
+      patientId,
+      type: 'data_processing',
+      action: 'granted',
+      at: new Date('2025-01-05T10:00:00Z'),
+    });
+    await recomputeConsentStates(db, { declaredTypes: ['data_processing'] });
+    const itemId = await item({
+      type: 'consent',
+      field: 'data_processing',
+      patientId,
+      title: 'consent revoked for a patient who is active',
+      payload: { consent_state: 'revoked' },
+      dedupeKey: 'consent|row|legacy_patient:recA|data_processing|CONSENT_REVOKED_WHILE_ACTIVE|x',
+    });
+
+    const response = await post(itemId, {
+      action: 'set_state',
+      state: 'granted',
+      note: 'they said it was fine',
+    });
+    expect(response.status).toBe(400);
+
+    const [state] = await db
+      .select()
+      .from(consentStates)
+      .where(eq(consentStates.patientId, patientId));
+    expect(state).toMatchObject({ state: 'revoked', derivationVersion: '1' });
+    const [row] = await db.select().from(reviewItems).where(eq(reviewItems.id, itemId));
+    expect(row?.status).toBe('open');
+  });
+
+  it('needs a note', async () => {
+    const { itemId } = await conflicted();
+    expect((await post(itemId, { action: 'set_state', state: 'granted', note: ' ' })).status).toBe(
+      400,
+    );
   });
 });

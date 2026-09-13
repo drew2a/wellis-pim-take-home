@@ -10,24 +10,24 @@ import { Button, ButtonRow, Caption, Card, ErrorText, TextAreaField } from '@/ui
 
 export function ConsentDecision({
   itemId,
-  pendingDecision,
+  conflicted,
 }: {
   readonly itemId: string;
-  /** Shown on the seven self-contradicting logs, where establishing the state waits on ADR-0025. */
-  readonly pendingDecision: boolean;
+  /** True on the seven self-contradicting logs, the only ones a state may be established over. */
+  readonly conflicted: boolean;
 }): ReactElement {
   const router = useRouter();
   const [note, setNote] = useState('');
   const [failure, setFailure] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
 
-  const send = async (action: string): Promise<void> => {
-    setBusy(action);
+  const send = async (action: string, state?: 'granted' | 'revoked'): Promise<void> => {
+    setBusy(`${action}${state ?? ''}`);
     setFailure(null);
     try {
       const response = await fetch(`/api/console/items/${itemId}/resolve`, {
         method: 'POST',
-        body: JSON.stringify({ action, note }),
+        body: JSON.stringify(state === undefined ? { action, note } : { action, note, state }),
       });
       if (!response.ok) {
         const answer = (await response.json()) as { error?: string };
@@ -47,11 +47,11 @@ export function ConsentDecision({
 
   return (
     <Card>
-      {pendingDecision && (
+      {conflicted && (
         <Caption>
-          This log contradicts itself, so no rule can say what is true. Setting the state by hand is
-          not built yet — see ADR-0025 — so for now record what you did and leave the state as it
-          is.
+          This log contradicts itself — it revokes a consent that was never given — so no rule can
+          say what is true. If you have established which it is, set it below. It holds until an
+          event later than the ones you saw arrives, which is new evidence and takes over.
         </Caption>
       )}
       <TextAreaField
@@ -69,8 +69,22 @@ export function ConsentDecision({
         Recorded against the patient. No consent event is written: the log is what the patient did.
       </Caption>
       <ButtonRow>
+        {conflicted &&
+          (['granted', 'revoked'] as const).map((state) => (
+            <Button
+              key={state}
+              variant="primary"
+              busy={busy === `set_state${state}`}
+              disabled={!noted || busy !== null}
+              onClick={() => {
+                void send('set_state', state);
+              }}
+            >
+              {`Consent is ${state}`}
+            </Button>
+          ))}
         <Button
-          variant="primary"
+          variant={conflicted ? 'secondary' : 'primary'}
           busy={busy === 'resolve'}
           disabled={!noted || busy !== null}
           onClick={() => {

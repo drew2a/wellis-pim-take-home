@@ -14,7 +14,13 @@ import { getDb } from '@/db/client';
 import { dayOf } from '@/intake/today';
 import { proposalOf } from '@/console/decisions/data-quality';
 import { COMPARED_FIELDS, conflictView, DECIDABLE_FIELDS } from '@/repo/identity';
-import { consentTimeline, currentValueOf, findReviewItem, type ReviewItemView } from '@/repo/items';
+import {
+  consentTimeline,
+  currentValueOf,
+  derivedConsentState,
+  findReviewItem,
+  type ReviewItemView,
+} from '@/repo/items';
 import {
   Badge,
   Caption,
@@ -180,7 +186,9 @@ async function IdentityConflict({
  */
 async function ConsentItem({ view }: { readonly view: ReviewItemView }): Promise<ReactElement> {
   const timeline = await consentTimeline(getDb(), view.item);
-  const derived = (view.item.payload as { consent_state?: unknown }).consent_state;
+  // The state as it stands now, not the one the payload snapshotted at import: a reviewer may
+  // already have established it, and the buttons below depend on which it is (ADR-0025).
+  const derived = await derivedConsentState(getDb(), view.item);
 
   return (
     <>
@@ -199,12 +207,11 @@ async function ConsentItem({ view }: { readonly view: ReviewItemView }): Promise
           />
         )}
         <Hint>
-          {`Derived state: ${typeof derived === 'string' ? derived : 'unknown'}. The log is evidence;
-            the state is what we act on.`}
+          {`State now: ${derived ?? 'none'}. The log is evidence; the state is what we act on.`}
         </Hint>
       </Card>
       <SectionTitle>Your decision</SectionTitle>
-      <ConsentDecision itemId={view.item.id} pendingDecision={derived === 'conflict'} />
+      <ConsentDecision itemId={view.item.id} conflicted={derived === 'conflict'} />
     </>
   );
 }

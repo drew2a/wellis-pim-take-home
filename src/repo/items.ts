@@ -1,9 +1,9 @@
 // Reading one review item with the context a reviewer needs to decide it (ADR-0024): the item, the
 // rule that raised it, and the rows it is about.
-import { eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 
 import type { Queryable } from '@/db/queryable';
-import { intakes, patients, reviewItems } from '@/db/schema';
+import { consentStates, intakes, patients, reviewItems } from '@/db/schema';
 import { ruleOf } from '@/import/review/items';
 
 import { maskIdentifier } from './mask';
@@ -101,6 +101,20 @@ export async function consentTimeline(
       version: event.version,
     }))
     .sort((left, right) => left.at.localeCompare(right.at));
+}
+
+/** The consent state stored for the item's patient and type right now, or null. */
+export async function derivedConsentState(
+  db: Queryable,
+  item: typeof reviewItems.$inferSelect,
+): Promise<string | null> {
+  if (item.patientId === null || item.field === null) return null;
+  const survivor = await survivorOf(db, item.patientId);
+  const [row] = await db
+    .select({ state: consentStates.state })
+    .from(consentStates)
+    .where(and(eq(consentStates.patientId, survivor), eq(consentStates.type, item.field)));
+  return row?.state ?? null;
 }
 
 /** Whether a patient a reviewer named still exists, before a decision references it. */

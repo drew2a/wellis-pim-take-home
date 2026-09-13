@@ -3,6 +3,8 @@
 // The body says **what the reviewer chose**, never what to write: which values a choice implies is
 // decided on the server, from the item the importer raised (`@/console/decisions`, R-T4). The
 // actor is the session's reviewer and is never read from the body (ADR-0021).
+import { establishConsentState } from '@/consent/states';
+import { CONSENT_TYPE_DATA_PROCESSING } from '@/consent/text';
 import { consentRequestSchema, decideConsent } from '@/console/decisions/consent';
 import { dataQualityRequestSchema, decideDataQuality } from '@/console/decisions/data-quality';
 import {
@@ -22,6 +24,7 @@ import { currentReviewer } from '@/console/reviewer';
 import { getDb } from '@/db/client';
 import { conflictView } from '@/repo/identity';
 import {
+  derivedConsentState,
   findReviewItem,
   intakesByExportedId,
   patientExists,
@@ -29,7 +32,6 @@ import {
 } from '@/repo/items';
 import { mergePatients } from '@/repo/merge';
 import { closeReviewItem, ResolutionError, resolveReviewItem } from '@/repo/resolve';
-import { CONSENT_TYPE_DATA_PROCESSING } from '@/consent/text';
 import type { Decision } from '@/console/decisions/types';
 
 import {
@@ -144,8 +146,31 @@ export async function POST(request: Request, context: RouteContext): Promise<Res
       case 'consent': {
         const parsed = consentRequestSchema.safeParse(raw);
         if (!parsed.success) return badRequest('that is not a decision', issuesOf(parsed.error));
-        decision = decideConsent(view.item, parsed.data);
-        break;
+        const consent = decideConsent(
+          view.item,
+          parsed.data,
+          await derivedConsentState(db, view.item),
+        );
+        if (consent.establish === null) {
+          decision = consent.decision;
+          break;
+        }
+        // The audit entry is the decision; the `consent_states` row is its cache, so they are
+        // written together or not at all (ADR-0025 item 1).
+        const { establish } = consent;
+        await db.transaction(async (tx) => {
+          await resolveReviewItem(tx, {
+            itemId: view.item.id,
+            reviewer,
+            outcome: consent.decision.outcome,
+            note: consent.decision.note,
+            changes: consent.decision.changes,
+            subjects: consent.decision.subjects,
+            resolution: consent.decision.resolution,
+          });
+          await establishConsentState(tx, establish);
+        });
+        return json({ status: 'resolved', established: establish.state });
       }
       default:
         // Each type lands with its own screen and its own decider; until then the route says so
