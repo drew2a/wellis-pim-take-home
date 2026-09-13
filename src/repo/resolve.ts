@@ -58,6 +58,14 @@ export interface ResolveRequest {
   readonly resolution?: unknown;
 }
 
+export interface CloseRequest {
+  readonly itemId: string;
+  readonly reviewer: ResolutionActor;
+  readonly outcome: 'resolved' | 'dismissed';
+  readonly note: string;
+  readonly resolution?: unknown;
+}
+
 export interface ResolveResult {
   /** One audit entry per changed row, plus the decision's own entry when nothing changed. */
   readonly auditEntryIds: readonly string[];
@@ -164,6 +172,55 @@ function parseChange(change: FieldChange): ParsedChange {
 }
 
 /**
+ * Locks one open review item, or throws. Locked for the same reason an intake is: two reviewers may
+ * have the same item open, and a decision is taken once (R-A17).
+ */
+async function lockOpenItem(
+  tx: Queryable,
+  itemId: string,
+): Promise<typeof reviewItems.$inferSelect> {
+  const [item] = await tx
+    .select()
+    .from(reviewItems)
+    .where(eq(reviewItems.id, itemId))
+    .for('update');
+  if (item === undefined) throw new Error(`no review item ${itemId}`);
+  if (item.status !== 'open') {
+    throw new Error(`review item ${itemId} is already ${item.status}; a decision is taken once`);
+  }
+  return item;
+}
+
+function closeItem(tx: Queryable, request: CloseRequest): Promise<unknown> {
+  return tx
+    .update(reviewItems)
+    .set({
+      status: request.outcome,
+      // The name as it is now, like `audit_entries.actor`: the row is a record of a decision and
+      // must still say who took it after the person is renamed (ADR-0023 item 6).
+      resolvedBy: request.reviewer.name,
+      resolvedAt: sql`now()`,
+      resolutionNote: request.note,
+      resolution: request.resolution ?? null,
+    })
+    .where(eq(reviewItems.id, request.itemId));
+}
+
+/**
+ * Closes an item whose decision wrote its own audit trail — today only a merge, the one deliberate
+ * exception to this path (ADR-0022). It writes no audit entry of its own, because the merge's two
+ * entries already carry the actor, the note and the field provenance, and both reference the item.
+ * The caller runs it inside the same transaction as that write.
+ */
+export async function closeReviewItem(db: Queryable, request: CloseRequest): Promise<void> {
+  if (request.note.trim() === '') {
+    throw new Error(`closing review item ${request.itemId} needs a note saying why (R-C6)`);
+  }
+  await lockOpenItem(db, request.itemId);
+  await closeItem(db, request);
+}
+
+/**
  * Resolves or dismisses one review item. Throws having written nothing when the note is empty, the
  * item is missing or already closed, a field is not the console's to write, a value is not one the
  * column can hold, or the row it names does not exist — `CLAUDE.md` §2: inside the server, fail
@@ -180,16 +237,7 @@ export async function resolveReviewItem(
   const changes = (request.changes ?? []).map(parseChange);
 
   return db.transaction(async (tx) => {
-    // Locked for the same reason an intake is: two reviewers may have the same item open.
-    const [item] = await tx
-      .select()
-      .from(reviewItems)
-      .where(eq(reviewItems.id, itemId))
-      .for('update');
-    if (item === undefined) throw new Error(`no review item ${itemId}`);
-    if (item.status !== 'open') {
-      throw new Error(`review item ${itemId} is already ${item.status}; a decision is taken once`);
-    }
+    const item = await lockOpenItem(tx, itemId);
 
     const entry = (
       entityType: string,
@@ -242,18 +290,7 @@ export async function resolveReviewItem(
 
     const written = await tx.insert(auditEntries).values(drafts).returning({ id: auditEntries.id });
 
-    await tx
-      .update(reviewItems)
-      .set({
-        status: request.outcome,
-        // The name as it is now, like `audit_entries.actor`: the row is a record of a decision and
-        // must still say who took it after the person is renamed (ADR-0023 item 6).
-        resolvedBy: reviewer.name,
-        resolvedAt: sql`now()`,
-        resolutionNote: note,
-        resolution: request.resolution ?? null,
-      })
-      .where(eq(reviewItems.id, itemId));
+    await closeItem(tx, { ...request, reviewer, note });
 
     return { auditEntryIds: written.map((row) => row.id), changes: applied };
   });

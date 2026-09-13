@@ -72,15 +72,24 @@ export const MERGED_INTO = 'merged_into';
 /** One change per repointed alias row: legacy id X stopped resolving to the loser. */
 const ALIAS = 'patient_id';
 
-/** Where a decided value came from. Recorded, not inferred: `loser` and `edited` can produce the
+/**
+ * Where a decided value came from. Recorded, not inferred: `loser` and `edited` can produce the
  * same string, and the audit has to say whether a reviewer chose a value that was in the data or
- * typed one that was not (ADR-0022 item 1). */
+ * typed one that was not (ADR-0022 item 1).
+ */
 export type FieldSource = 'survivor' | 'loser' | 'edited';
 
-export interface FieldDecision {
-  readonly value: string | null;
-  readonly source: FieldSource;
-}
+/**
+ * A reviewer's pick for one field. Picking a **row** carries no value: this function has both rows
+ * and reads it from the one that was named. That is not only tidier — the console masks `bsn`
+ * everywhere (`./mask.ts`), so a screen that sent back the value it displayed would write
+ * `******333` into the column. Only an edit carries text, because only an edit is text the
+ * reviewer typed.
+ */
+export type FieldDecision =
+  | { readonly source: 'survivor' }
+  | { readonly source: 'loser' }
+  | { readonly source: 'edited'; readonly value: string | null };
 
 /** A reviewer's per-field picks. The importer passes none, and its merges are unchanged. */
 export type FieldDecisions = Readonly<Partial<Record<PersonField, FieldDecision>>>;
@@ -183,7 +192,7 @@ async function mergeInTransaction(db: Queryable, request: MergeRequest): Promise
   const sourceLegacyId = repointedLegacyIds[0];
 
   const decisions = request.fieldDecisions ?? {};
-  const decided = fieldsDecided(survivor, decisions, sourceLegacyId);
+  const decided = fieldsDecided(survivor, loser, decisions, sourceLegacyId);
   // A decided field wins; an undecided one keeps ADR-0006's rule. `bsn_check` follows `bsn`.
   const decidedColumns = new Set(decided.map((change) => change.field));
   if (decisions.bsn !== undefined) decidedColumns.add('bsn_check');
@@ -191,7 +200,7 @@ async function mergeInTransaction(db: Queryable, request: MergeRequest): Promise
     (change) => !decidedColumns.has(change.field),
   );
 
-  const patch = { ...patchFrom(loser, gained), ...patchFromDecisions(decisions) };
+  const patch = { ...patchFrom(loser, gained), ...patchFromDecisions(survivor, loser, decisions) };
   if (Object.keys(patch).length > 0)
     await db.update(patients).set(patch).where(eq(patients.id, survivorId));
 
@@ -349,8 +358,20 @@ function fieldsGained(
  * `source_legacy_id` is set only where the value came from the loser's row: an edited value came
  * from the reviewer, and claiming a row supplied it would be a false provenance record.
  */
+/** The value a pick names: the row's own, or the text the reviewer typed. */
+function chosenValue(
+  field: PersonField,
+  survivor: PatientRow,
+  loser: PatientRow,
+  decision: FieldDecision,
+): string | null {
+  if (decision.source === 'edited') return decision.value;
+  return text(decision.source === 'loser' ? loser[field] : survivor[field]);
+}
+
 function fieldsDecided(
   survivor: PatientRow,
+  loser: PatientRow,
   decisions: FieldDecisions,
   sourceLegacyId: string | undefined,
 ): AuditChange[] {
@@ -362,12 +383,13 @@ function fieldsDecided(
     const field = key as PersonField;
     const decision = decisions[field];
     if (decision === undefined) continue;
+    const value = chosenValue(field, survivor, loser, decision);
     // Validated by the same declaration the resolution path uses, so the two writers of a patient
     // column cannot disagree about what it may hold (ADR-0023).
-    parseFieldValue('patient', PERSON_FIELDS[field].column, decision.value);
+    parseFieldValue('patient', PERSON_FIELDS[field].column, value);
 
     const current = text(survivor[field]);
-    if (current === decision.value) continue;
+    if (current === value) continue;
     const shown = (value: string | null): string | null =>
       field === 'bsn' && value !== null ? maskIdentifier(value) : value;
     const provenance =
@@ -377,7 +399,7 @@ function fieldsDecided(
     changes.push({
       field: PERSON_FIELDS[field].column,
       from: shown(current),
-      to: shown(decision.value),
+      to: shown(value),
       ...provenance,
       chosen: decision.source,
     });
@@ -385,7 +407,7 @@ function fieldsDecided(
       changes.push({
         field: 'bsn_check',
         from: survivor.bsnCheck,
-        to: bsnCheckFor(decision.value),
+        to: bsnCheckFor(value),
         ...provenance,
         chosen: decision.source,
       });
@@ -399,18 +421,19 @@ const bsnCheckFor = (bsn: string | null): string =>
   bsn === null ? 'absent' : elfproef(bsn) ? 'valid' : 'invalid';
 
 /** The survivor's patch for the reviewer's picks, in the columns' own types. */
-function patchFromDecisions(decisions: FieldDecisions): Partial<PatientRow> {
+function patchFromDecisions(
+  survivor: PatientRow,
+  loser: PatientRow,
+  decisions: FieldDecisions,
+): Partial<PatientRow> {
   const patch: Partial<PatientRow> = {};
   for (const field of Object.keys(decisions) as PersonField[]) {
     const decision = decisions[field];
     if (decision === undefined) continue;
-    const { property, parsed } = parseFieldValue(
-      'patient',
-      PERSON_FIELDS[field].column,
-      decision.value,
-    );
+    const value = chosenValue(field, survivor, loser, decision);
+    const { property, parsed } = parseFieldValue('patient', PERSON_FIELDS[field].column, value);
     Object.assign(patch, { [property]: parsed });
-    if (field === 'bsn') patch.bsnCheck = bsnCheckFor(decision.value) as PatientRow['bsnCheck'];
+    if (field === 'bsn') patch.bsnCheck = bsnCheckFor(value) as PatientRow['bsnCheck'];
   }
   return patch;
 }

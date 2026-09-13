@@ -8,10 +8,11 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import type { ReactElement, ReactNode } from 'react';
 
-import { requireReviewer } from '@/console/guard';
 import { poundsRowsOf } from '@/console/decisions/vocabulary';
+import { requireReviewer } from '@/console/guard';
 import { getDb } from '@/db/client';
 import { dayOf } from '@/intake/today';
+import { COMPARED_FIELDS, conflictView, DECIDABLE_FIELDS } from '@/repo/identity';
 import { findReviewItem, type ReviewItemView } from '@/repo/items';
 import {
   Badge,
@@ -28,6 +29,7 @@ import {
   type Definition,
 } from '@/ui';
 
+import { IdentityDecision } from './IdentityDecision';
 import { VocabularyDecision, type ExcludableRow } from './VocabularyDecision';
 
 export const dynamic = 'force-dynamic';
@@ -89,6 +91,54 @@ function excludable(rows: ReturnType<typeof poundsRowsOf>): ExcludableRow[] {
   }));
 }
 
+/**
+ * The competing versions of the truth, side by side (R-C4). The values come from the canonical
+ * rows as they are now, not from the item's payload snapshot, because that is what a merge will
+ * write; the payload says why the item was raised.
+ */
+async function IdentityConflict({
+  view,
+}: {
+  readonly view: ReviewItemView;
+}): Promise<ReactElement> {
+  const conflict = await conflictView(getDb(), view.item);
+  const decidable = new Set<string>(DECIDABLE_FIELDS);
+  const differing = new Set<string>(conflict.differing);
+
+  return (
+    <>
+      <SectionTitle>Why these two are together</SectionTitle>
+      <Card>
+        <Definitions
+          items={[
+            { term: 'matched on', value: conflict.matchedKeys.join(', ') || '—' },
+            { term: 'contradicts on', value: conflict.contradictions.join(', ') || '—' },
+            { term: 'tier', value: conflict.tier === null ? '—' : String(conflict.tier) },
+          ]}
+        />
+      </Card>
+
+      <SectionTitle>Your decision</SectionTitle>
+      <IdentityDecision
+        itemId={view.item.id}
+        candidates={conflict.candidates.map((candidate) => ({
+          patientId: candidate.patientId,
+          label: candidate.fields.full_name ?? candidate.patientId,
+          intakeCount: candidate.intakeCount,
+          consent: Object.values(candidate.consentStates).join(', ') || 'no record',
+          legacyIds: candidate.legacyIds,
+        }))}
+        rows={COMPARED_FIELDS.map((field) => ({
+          field,
+          values: conflict.candidates.map((candidate) => candidate.fields[field]),
+          differs: differing.has(field),
+          decidable: decidable.has(field),
+        }))}
+      />
+    </>
+  );
+}
+
 export default async function ReviewItemPage({
   params,
 }: {
@@ -131,6 +181,8 @@ export default async function ReviewItemPage({
         />
       </Card>
 
+      {item.type === 'identity_conflict' && <IdentityConflict view={view} />}
+
       {item.type === 'vocabulary' ? (
         <>
           {rows.length > 0 && (
@@ -162,15 +214,17 @@ export default async function ReviewItemPage({
           />
         </>
       ) : (
-        <>
-          <SectionTitle>Your decision</SectionTitle>
-          <Card>
-            <Hint>
-              {`The screen for a ${humanise(item.type)} item is not built yet. Nothing here can be
+        item.type !== 'identity_conflict' && (
+          <>
+            <SectionTitle>Your decision</SectionTitle>
+            <Card>
+              <Hint>
+                {`The screen for a ${humanise(item.type)} item is not built yet. Nothing here can be
                 decided until it is, and the API refuses a decision it cannot carry out.`}
-            </Hint>
-          </Card>
-        </>
+              </Hint>
+            </Card>
+          </>
+        )
       )}
     </Page>
   );

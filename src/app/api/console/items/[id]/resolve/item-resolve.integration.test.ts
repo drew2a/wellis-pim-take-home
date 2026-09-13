@@ -4,7 +4,7 @@
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { auditEntries, patients, reviewItems, reviewers } from '@/db/schema';
+import { auditEntries, patientLegacyIds, patients, reviewItems, reviewers } from '@/db/schema';
 import { loadEnv } from '@/env';
 import { createTestDatabase, type TestDatabase, type TestDb } from '@/test/database';
 import { patientRow, reviewItemRow } from '@/test/rows';
@@ -55,12 +55,20 @@ const post = (id: string, body: unknown, session = true): Promise<Response> =>
     params(id),
   );
 
-async function patient(legacyId: string, weightKg: string | null): Promise<string> {
+async function patient(
+  legacyId: string,
+  weightKg: string | null,
+  overrides: Partial<typeof patients.$inferInsert> = {},
+): Promise<string> {
   const [row] = await db
     .insert(patients)
-    .values({ ...patientRow(), createdFromLegacyId: legacyId, weightKg })
+    .values({ ...patientRow(), createdFromLegacyId: legacyId, weightKg, ...overrides })
     .returning({ id: patients.id });
-  return row?.id ?? '';
+  const id = row?.id ?? '';
+  // Every imported patient has one, and a merge repoints it: it is what puts source_legacy_id on
+  // the field provenance (ADR-0006).
+  await db.insert(patientLegacyIds).values({ legacyId, patientId: id });
+  return id;
 }
 
 async function item(overrides: Partial<typeof reviewItems.$inferInsert>): Promise<string> {
@@ -224,5 +232,123 @@ describe('an item type whose screen is not built', () => {
     expect(response.status).toBe(400);
     const [row] = await db.select().from(reviewItems).where(eq(reviewItems.id, id));
     expect(row?.status).toBe('open');
+  });
+});
+
+describe('resolving an identity conflict', () => {
+  const identityItem = (legacyIds: readonly string[]) =>
+    item({
+      type: 'identity_conflict',
+      title: 'two patient records share a key but contradict each other',
+      payload: {
+        rows: legacyIds.map((legacy_id) => ({ legacy_id })),
+        tier: 3,
+        matched_keys: ['bsn'],
+        contradictions: ['dob'],
+      },
+      dedupeKey: `identity_conflict|row|legacy_patient:${legacyIds.join('+')}||IDENTITY_TIER_3|bsn`,
+    });
+
+  it('merges, with the reviewer’s picks and the whole audit trail', async () => {
+    const survivor = await patient('recS', null, { fullName: 'Bram Nair', city: 'Utrecht' });
+    const loser = await patient('recL', null, { fullName: 'Braam Nair', city: 'Delft' });
+    const id = await identityItem(['recS', 'recL']);
+
+    const response = await post(id, {
+      action: 'merge',
+      note: 'one person; the spelling on the passport is Braam',
+      survivorId: survivor,
+      loserId: loser,
+      decisions: { full_name: { source: 'loser' } },
+    });
+    expect(response.status).toBe(200);
+
+    const [survivorRow] = await db.select().from(patients).where(eq(patients.id, survivor));
+    const [loserRow] = await db.select().from(patients).where(eq(patients.id, loser));
+    expect(survivorRow?.fullName).toBe('Braam Nair');
+    expect(loserRow?.mergedInto).toBe(survivor);
+
+    const entries = await db.select().from(auditEntries).where(eq(auditEntries.entityId, survivor));
+    expect(entries).toHaveLength(1);
+    expect(entries[0]?.actorReviewerId).toBe(reviewerId);
+    expect(entries[0]?.reviewItemId).toBe(id);
+    expect(entries[0]?.changes).toContainEqual({
+      field: 'full_name',
+      from: 'Bram Nair',
+      to: 'Braam Nair',
+      source_legacy_id: 'recL',
+      chosen: 'loser',
+    });
+
+    const [row] = await db.select().from(reviewItems).where(eq(reviewItems.id, id));
+    expect(row).toMatchObject({ status: 'resolved', resolvedBy: 'Sanne Bakker' });
+  });
+
+  it('dismisses two records that are not the same person, and merges nothing', async () => {
+    const first = await patient('recS', null);
+    const second = await patient('recL', null);
+    const id = await identityItem(['recS', 'recL']);
+
+    const response = await post(id, {
+      action: 'not_the_same_person',
+      note: 'a shared household phone; different dates of birth',
+    });
+    expect(response.status).toBe(200);
+
+    for (const patientId of [first, second]) {
+      const [row] = await db.select().from(patients).where(eq(patients.id, patientId));
+      expect(row?.mergedInto).toBeNull();
+    }
+    const [row] = await db.select().from(reviewItems).where(eq(reviewItems.id, id));
+    expect(row?.status).toBe('dismissed');
+  });
+
+  // A uuid in a request must never be able to merge two patients that were never compared.
+  it('refuses to merge a record the item does not compare', async () => {
+    const survivor = await patient('recS', null);
+    await patient('recL', null);
+    const elsewhere = await patient('recX', null);
+    const id = await identityItem(['recS', 'recL']);
+
+    const response = await post(id, {
+      action: 'merge',
+      note: 'ok',
+      survivorId: survivor,
+      loserId: elsewhere,
+    });
+    expect(response.status).toBe(400);
+    const [row] = await db.select().from(patients).where(eq(patients.id, elsewhere));
+    expect(row?.mergedInto).toBeNull();
+  });
+
+  it('needs a note to merge', async () => {
+    const survivor = await patient('recS', null);
+    const loser = await patient('recL', null);
+    const id = await identityItem(['recS', 'recL']);
+    const response = await post(id, {
+      action: 'merge',
+      note: '  ',
+      survivorId: survivor,
+      loserId: loser,
+    });
+    expect(response.status).toBe(400);
+  });
+
+  // The item and the merge close together or not at all (ADR-0022 item 4).
+  it('leaves the item open when the merge is refused', async () => {
+    const survivor = await patient('recS', null);
+    const loser = await patient('recL', null);
+    const id = await identityItem(['recS', 'recL']);
+    await post(id, {
+      action: 'merge',
+      note: 'ok',
+      survivorId: survivor,
+      loserId: loser,
+      decisions: { dob: { source: 'edited', value: '2023-02-30' } },
+    });
+    const [row] = await db.select().from(reviewItems).where(eq(reviewItems.id, id));
+    const [loserRow] = await db.select().from(patients).where(eq(patients.id, loser));
+    expect(row?.status).toBe('open');
+    expect(loserRow?.mergedInto).toBeNull();
   });
 });

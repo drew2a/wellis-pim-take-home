@@ -400,7 +400,7 @@ describe('mergePatients / unmergePatient (ADR-0006)', () => {
     it('writes the loser’s value over one the survivor already holds', async () => {
       const survivor = await insertPatient('recS', { fullName: 'Bram Nair' });
       const loser = await insertPatient('recL', { fullName: 'Braam Nair' });
-      await mergeWith(survivor, loser, { fullName: { value: 'Braam Nair', source: 'loser' } });
+      await mergeWith(survivor, loser, { fullName: { source: 'loser' } });
 
       const [row] = await database.db.select().from(patients).where(eq(patients.id, survivor));
       expect(row?.fullName).toBe('Braam Nair');
@@ -431,9 +431,7 @@ describe('mergePatients / unmergePatient (ADR-0006)', () => {
     it('writes no change for a decision that is already the value', async () => {
       const survivor = await insertPatient('recS', { city: 'Utrecht' });
       const loser = await insertPatient('recL', { city: 'Utrecht' });
-      const outcome = await mergeWith(survivor, loser, {
-        city: { value: 'Utrecht', source: 'survivor' },
-      });
+      const outcome = await mergeWith(survivor, loser, { city: { source: 'survivor' } });
       expect(outcome.decided).toEqual([]);
     });
 
@@ -450,8 +448,8 @@ describe('mergePatients / unmergePatient (ADR-0006)', () => {
 
     it('checks a decided bsn, because nothing else will', async () => {
       const survivor = await insertPatient('recS');
-      const loser = await insertPatient('recL');
-      await mergeWith(survivor, loser, { bsn: { value: '111222333', source: 'loser' } });
+      const loser = await insertPatient('recL', { bsn: '111222333', bsnCheck: 'valid' });
+      await mergeWith(survivor, loser, { bsn: { source: 'loser' } });
 
       const [row] = await database.db.select().from(patients).where(eq(patients.id, survivor));
       expect(row).toMatchObject({ bsn: '111222333', bsnCheck: 'valid' });
@@ -506,7 +504,7 @@ describe('mergePatients / unmergePatient (ADR-0006)', () => {
     it('gives a chosen value back on unmerge', async () => {
       const survivor = await insertPatient('recS', { city: 'Utrecht' });
       const loser = await insertPatient('recL', { city: 'Delft' });
-      await mergeWith(survivor, loser, { city: { value: 'Delft', source: 'loser' } });
+      await mergeWith(survivor, loser, { city: { source: 'loser' } });
       await unmergePatient(database.db, {
         loserId: loser,
         actor: REVIEWER,

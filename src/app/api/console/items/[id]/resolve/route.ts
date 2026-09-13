@@ -3,16 +3,20 @@
 // The body says **what the reviewer chose**, never what to write: which values a choice implies is
 // decided on the server, from the item the importer raised (`@/console/decisions`, R-T4). The
 // actor is the session's reviewer and is never read from the body (ADR-0021).
-import { currentReviewer } from '@/console/reviewer';
+import { decideIdentity, identityRequestSchema } from '@/console/decisions/identity';
 import { DecisionError } from '@/console/decisions/types';
 import {
   decideVocabulary,
   legacyIdsOf,
   vocabularyRequestSchema,
 } from '@/console/decisions/vocabulary';
+import { currentReviewer } from '@/console/reviewer';
 import { getDb } from '@/db/client';
+import { conflictView } from '@/repo/identity';
 import { findReviewItem, patientsByLegacyId } from '@/repo/items';
-import { resolveReviewItem } from '@/repo/resolve';
+import { mergePatients } from '@/repo/merge';
+import { closeReviewItem, resolveReviewItem } from '@/repo/resolve';
+import { CONSENT_TYPE_DATA_PROCESSING } from '@/consent/text';
 import type { Decision } from '@/console/decisions/types';
 
 import {
@@ -60,6 +64,48 @@ export async function POST(request: Request, context: RouteContext): Promise<Res
         const patientOf = await patientsByLegacyId(db, legacyIdsOf(view.item, view.rule));
         decision = decideVocabulary(view.item, view.rule, parsed.data, patientOf);
         break;
+      }
+      case 'identity_conflict': {
+        const parsed = identityRequestSchema.safeParse(raw);
+        if (!parsed.success) return badRequest('that is not a decision', issuesOf(parsed.error));
+        const identity = decideIdentity(await conflictView(db, view.item), parsed.data);
+        if (identity.kind === 'dismiss') {
+          decision = {
+            outcome: 'dismissed',
+            note: identity.note,
+            changes: [],
+            resolution: identity.resolution,
+          };
+          break;
+        }
+        // A merge is the one decision that does not go through the resolution path: its own two
+        // audit entries carry the actor, the note and the field provenance, and both reference
+        // this item (ADR-0022). Item and merge close together or not at all.
+        const outcome = await db.transaction(async (tx) => {
+          const merged = await mergePatients(tx, {
+            survivorId: identity.survivorId,
+            loserId: identity.loserId,
+            actor: reviewer.name,
+            actorReviewerId: reviewer.id,
+            reason: identity.note,
+            declaredConsentTypes: [CONSENT_TYPE_DATA_PROCESSING],
+            reviewItemId: view.item.id,
+            fieldDecisions: identity.fieldDecisions,
+          });
+          await closeReviewItem(tx, {
+            itemId: view.item.id,
+            reviewer,
+            outcome: 'resolved',
+            note: identity.note,
+            resolution: { ...identity.resolution, applied: merged.merged },
+          });
+          return merged;
+        });
+        return json({
+          status: 'resolved',
+          merged: outcome.merged,
+          changed: outcome.decided.length + outcome.gained.length,
+        });
       }
       default:
         // Each type lands with its own screen and its own decider; until then the route says so
