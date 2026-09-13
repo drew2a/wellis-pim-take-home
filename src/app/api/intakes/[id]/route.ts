@@ -1,5 +1,6 @@
 // `GET /api/intakes/:id` — the intake as the patient sees it — and
-// `PATCH /api/intakes/:id` — saving one step of the form (ADR-0015 item 3).
+// `PATCH /api/intakes/:id` — saving one step of the form (ADR-0015 item 3). The first step is not
+// saved here: it arrives with `POST /api/intakes`, which creates the draft from it (ADR-0016).
 //
 // Saving a step is not a transition: the state stays `draft` and no audit entry is written, because
 // R-B18 audits state changes and an entry per keystroke would bury the ones that matter
@@ -10,6 +11,7 @@ import { z } from 'zod';
 import { getDb } from '@/db/client';
 import { eligibilityEvaluations, intakes } from '@/db/schema';
 import { INTAKE_STEPS, stepSchemas, type DraftAnswers, type IntakeStep } from '@/intake/answers';
+import { todayIso } from '@/intake/today';
 import { currentRules } from '@/rules/load';
 
 import { badRequest, conflict, intakeIdSchema, issuesOf, notFound, serverError } from '../http';
@@ -19,8 +21,6 @@ interface RouteContext {
 }
 
 const bodySchema = z.object({ step: z.enum(INTAKE_STEPS), answers: z.unknown() });
-
-const todayIso = (): string => new Date().toISOString().slice(0, 10);
 
 export async function GET(_request: Request, context: RouteContext): Promise<Response> {
   const id = intakeIdSchema.safeParse((await context.params).id);

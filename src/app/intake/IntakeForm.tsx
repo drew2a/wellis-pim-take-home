@@ -1,13 +1,14 @@
 'use client';
 
 // The patient-facing intake form (R-B1, R-B4): five steps, one per screen, saved to the server
-// after each one. Plain on purpose — the brief asks for correct, not polished.
+// after each one. The first step creates the draft, so nothing is written until the patient has
+// answered something (ADR-0016). Plain on purpose — the brief asks for correct, not polished.
 //
 // It carries no business rules. Every message under a field is the server's own, from the Zod
 // schema at the boundary, so there is exactly one definition of what a valid answer is and the
 // client cannot disagree with it (`CLAUDE.md` §2, R-T4). The only client-side validation is the
 // browser's `required`, which is a convenience.
-import { useCallback, useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react';
+import { useCallback, useState, type ReactElement, type ReactNode } from 'react';
 
 import { CONSENT_TEXT, CONSENT_TEXT_VERSION } from '@/consent/text';
 import type { IntakeStep } from '@/intake/answers';
@@ -16,6 +17,8 @@ import { CONDITION_OPTIONS, GLP1_OPTIONS } from '@/intake/options';
 export interface Bounds {
   readonly heightCm: { readonly min: number; readonly max: number };
   readonly weightKg: { readonly min: number; readonly max: number };
+  /** `YYYY-MM-DD`, from the server's day, so the date picker cannot offer a year the API refuses. */
+  readonly dob: { readonly min: string; readonly max: string };
 }
 
 interface Issue {
@@ -66,34 +69,6 @@ export function IntakeForm({ bounds }: { bounds: Bounds }): ReactElement {
   // Consent
   const [granted, setGranted] = useState(false);
 
-  // React runs effects twice in development, which would leave an abandoned draft behind on every
-  // page load. The ref is not an optimisation: a draft is a row, and creating two for one patient
-  // is exactly the kind of quiet duplication this system exists to avoid.
-  const started = useRef(false);
-
-  // The draft exists server-side before the first question is answered, so every step has
-  // somewhere to be saved (ADR-0015 item 3). An abort rather than a flag: if the patient navigates
-  // away mid-request, the request goes with them.
-  useEffect(() => {
-    if (started.current) return undefined;
-    started.current = true;
-    const aborter = new AbortController();
-    void (async () => {
-      try {
-        const response = await fetch('/api/intakes', { method: 'POST', signal: aborter.signal });
-        if (!response.ok) throw new Error(`the server answered ${response.status}`);
-        const body = (await response.json()) as { id: string };
-        setIntakeId(body.id);
-      } catch (error) {
-        if (error instanceof Error && error.name === 'AbortError') return;
-        setFailure('We could not start your intake. Please reload the page.');
-      }
-    })();
-    return () => {
-      aborter.abort();
-    };
-  }, []);
-
   const answersFor = useCallback(
     (step: IntakeStep): StepAnswers => {
       switch (step) {
@@ -124,19 +99,32 @@ export function IntakeForm({ bounds }: { bounds: Bounds }): ReactElement {
     ],
   );
 
-  /** Saves the current step and, on the last one, submits. The server decides both. */
+  /**
+   * Saves the current step and, on the last one, submits. The server decides both.
+   *
+   * The first step creates the draft; every later one saves into it (ADR-0016). A page view is not
+   * an intake, so nothing is sent until the patient has answered something, and re-entry is held
+   * off by `busy` alone — React flushes that state update before it processes the next click.
+   */
   const advance = useCallback(async (): Promise<void> => {
     const current = STEPS[index];
-    if (intakeId === null || current === undefined) return;
+    if (current === undefined) return;
     setBusy(true);
     setIssues([]);
     setFailure(null);
     try {
-      const saved = await fetch(`/api/intakes/${intakeId}`, {
-        method: 'PATCH',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ step: current.step, answers: answersFor(current.step) }),
-      });
+      const saved =
+        intakeId === null
+          ? await fetch('/api/intakes', {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify(answersFor(current.step)),
+            })
+          : await fetch(`/api/intakes/${intakeId}`, {
+              method: 'PATCH',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ step: current.step, answers: answersFor(current.step) }),
+            });
       if (saved.status === 400) {
         const body = (await saved.json()) as { issues?: Issue[] };
         setIssues(body.issues ?? []);
@@ -144,12 +132,16 @@ export function IntakeForm({ bounds }: { bounds: Bounds }): ReactElement {
       }
       if (!saved.ok) throw new Error(`the server answered ${saved.status}`);
 
+      // The draft's id comes back from the request that created it; later steps echo it.
+      const { id } = (await saved.json()) as { id: string };
+      if (intakeId === null) setIntakeId(id);
+
       if (index < STEPS.length - 1) {
         setIndex(index + 1);
         return;
       }
 
-      const response = await fetch(`/api/intakes/${intakeId}/submit`, { method: 'POST' });
+      const response = await fetch(`/api/intakes/${id}/submit`, { method: 'POST' });
       if (response.status === 400) {
         const body = (await response.json()) as { issues?: Issue[] };
         setIssues(body.issues ?? []);
@@ -158,14 +150,12 @@ export function IntakeForm({ bounds }: { bounds: Bounds }): ReactElement {
       if (!response.ok) throw new Error(`the server answered ${response.status}`);
       setSubmitted((await response.json()) as Submitted);
     } catch {
-      setFailure('We could not reach the server. Your answers so far are saved; please try again.');
+      setFailure('We could not reach the server. Your answers are still here; please try again.');
     } finally {
       setBusy(false);
     }
   }, [answersFor, index, intakeId]);
 
-  if (failure !== null && intakeId === null) return <p className="error">{failure}</p>;
-  if (intakeId === null) return <p>Starting your intake…</p>;
   if (submitted !== null) return <Result submitted={submitted} />;
 
   const current = STEPS[index];
@@ -207,6 +197,8 @@ export function IntakeForm({ bounds }: { bounds: Bounds }): ReactElement {
           <Field label="Date of birth" issue={issueFor(issues, 'dob')}>
             <input
               type="date"
+              min={bounds.dob.min}
+              max={bounds.dob.max}
               value={dob}
               onChange={(e) => {
                 setDob(e.target.value);

@@ -4,6 +4,7 @@
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import IntakePage from '@/app/intake/page';
 import { CONSENT_TEXT_VERSION } from '@/consent/text';
 import { auditEntries, intakes } from '@/db/schema';
 import type { IntakeStep } from '@/intake/answers';
@@ -46,8 +47,12 @@ const patch = (id: string, step: IntakeStep, answers: unknown): Promise<Response
     params(id),
   );
 
+const post = (body: string): Promise<Response> =>
+  createDraft(new Request('http://localhost/api/intakes', { method: 'POST', body }));
+
 async function newDraft(): Promise<string> {
-  const response = await createDraft();
+  const response = await post(JSON.stringify(STEPS.identity));
+  if (response.status !== 201) throw new Error(`creating a draft failed: ${await response.text()}`);
   const body = (await response.json()) as { id: string };
   return body.id;
 }
@@ -76,8 +81,8 @@ const issues = async (response: Response): Promise<{ path: string; message: stri
 };
 
 describe('POST /api/intakes', () => {
-  it('creates a draft and records that it was created', async () => {
-    const response = await createDraft();
+  it('creates a draft from the first step and records that it was created', async () => {
+    const response = await post(JSON.stringify(STEPS.identity));
     expect(response.status).toBe(201);
     const body = (await response.json()) as { id: string; state: string };
     expect(body.state).toBe('draft');
@@ -90,9 +95,39 @@ describe('POST /api/intakes', () => {
       outcome: 'pending',
       patientId: null,
     });
+    // The first step is saved by the same request that creates the row (ADR-0016 item 1).
+    expect(row?.answers?.identity).toEqual(STEPS.identity);
 
     const [entry] = await db.select().from(auditEntries).where(eq(auditEntries.entityId, body.id));
     expect(entry).toMatchObject({ actor: 'intake form', fromState: null, toState: 'draft' });
+  });
+
+  // A page view is not an intake (ADR-0016): rendering the page is what a crawler, a link preview
+  // and every refresh do, and none of them has answered a question.
+  it('writes nothing when the intake page is rendered', async () => {
+    IntakePage();
+    expect(await db.select().from(intakes)).toHaveLength(0);
+    expect(await db.select().from(auditEntries)).toHaveLength(0);
+  });
+
+  it('refuses a first step that does not validate, and writes nothing', async () => {
+    const response = await post(
+      JSON.stringify({ ...(STEPS.identity as object), dob: '2999-01-01' }),
+    );
+
+    expect(response.status).toBe(400);
+    expect(await issues(response)).toContainEqual(
+      expect.objectContaining({
+        path: 'dob',
+        message: expect.stringContaining('in the past') as unknown,
+      }),
+    );
+    expect(await db.select().from(intakes)).toHaveLength(0);
+  });
+
+  it('refuses a body that is not JSON, and writes nothing', async () => {
+    expect((await post('not json')).status).toBe(400);
+    expect(await db.select().from(intakes)).toHaveLength(0);
   });
 });
 

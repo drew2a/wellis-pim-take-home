@@ -1,6 +1,7 @@
 # ADR-0015: What a submission is: the new-flow schema, the consent gate, and the detectors that run at submit
 
 - **Status:** accepted
+- **Amended by:** [ADR-0016](0016-a-draft-begins-with-the-first-answer-not-the-page-load.md) (items 2 and 3: `POST /api/intakes` carries the identity step and creates the draft from it, so a page load writes nothing)
 - **Date:** 2026-09-13
 - **Deciders:** Andrei Andreev
 - **Requirements:** R-B1, R-B2, R-B3, R-B4, R-B5, R-B6, R-B7, R-B8, R-B9, R-B11, R-B12, R-A7,
