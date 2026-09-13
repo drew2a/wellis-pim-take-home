@@ -27,6 +27,7 @@ export {
   EvidenceCard,
   Explainer,
   FindingsCard,
+  Folded,
   type CompareRow,
   type EvidenceRow,
   type Finding,

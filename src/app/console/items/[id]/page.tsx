@@ -30,6 +30,7 @@ import {
   DetailPane,
   EvidenceCard,
   Explainer,
+  Folded,
   Mono,
   Raw,
   humanise,
@@ -87,12 +88,39 @@ function payloadRows(payload: unknown): readonly Record<string, unknown>[] {
   return Array.isArray(rows) ? (rows as Record<string, unknown>[]) : [];
 }
 
+/**
+ * How long a value may be before it is folded rather than laid out flat. Roughly two lines of the
+ * evidence column: past that one field starts hiding the fields under it.
+ */
+const LONG = 160;
+
+/** What a folded value says about itself while folded — its size, in its own units. */
+function sizeOf(value: object, json: string): string {
+  if (Array.isArray(value)) return `${value.length} entries · ${json.length} characters`;
+  return `${Object.keys(value).length} keys · ${json.length} characters`;
+}
+
 /** Anything a payload holds, rendered as what it is rather than as `[object Object]`. */
 const shown = (value: unknown): ReactNode => {
   if (value === null || value === undefined) return '—';
-  if (typeof value === 'string') return <Raw>{value}</Raw>;
   if (typeof value === 'number' || typeof value === 'boolean') return <Raw>{String(value)}</Raw>;
-  return <Raw>{JSON.stringify(value)}</Raw>;
+  if (typeof value === 'string') {
+    return value.length > LONG ? (
+      <Folded summary={`${value.length} characters`}>
+        <Raw>{value}</Raw>
+      </Folded>
+    ) : (
+      <Raw>{value}</Raw>
+    );
+  }
+  const json = JSON.stringify(value);
+  return json.length > LONG ? (
+    <Folded summary={sizeOf(value, json)}>
+      <Raw>{json}</Raw>
+    </Folded>
+  ) : (
+    <Raw>{json}</Raw>
+  );
 };
 
 function evidenceOf(item: ReviewItemView['item']): EvidenceRow[] {

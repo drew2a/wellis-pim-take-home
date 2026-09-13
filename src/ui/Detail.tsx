@@ -163,6 +163,34 @@ function PanelHead({
   );
 }
 
+/**
+ * A value too long to sit in a row, folded behind its own size.
+ *
+ * One payload field can be a 69-element array, and a value like that fills the pane and hides the
+ * five fields under it. Cutting it would hide evidence, which is the one thing this card exists to
+ * show, and capping every row so it can scroll gives a one-word value a scrollbar — so the long
+ * value, and only the long value, says how big it is and opens where it sits.
+ */
+export function Folded({
+  summary,
+  children,
+}: {
+  readonly summary: string;
+  readonly children: ReactNode;
+}): ReactElement {
+  return (
+    <details className="group">
+      <summary className="inline-flex cursor-pointer items-center gap-1.5 font-mono text-[12.5px] text-grey-600 marker:content-[''] hover:text-grey-900">
+        <span aria-hidden="true" className="text-[9px] group-open:rotate-90">
+          ▶
+        </span>
+        {summary}
+      </summary>
+      <div className="mt-1.5 max-h-72 overflow-y-auto pr-1">{children}</div>
+    </details>
+  );
+}
+
 export interface EvidenceRow {
   readonly key?: string;
   readonly term: string;
@@ -198,10 +226,7 @@ export function EvidenceCard({
             <dt className="w-38 shrink-0 font-mono text-[11.5px] [overflow-wrap:anywhere] text-grey-600">
               {row.term}
             </dt>
-            {/* Capped and scrolled rather than truncated: one payload field can be a 69-element
-                array, and a value that fills the pane hides the five fields under it — but cutting
-                it would hide evidence, which is the one thing this card exists to show. */}
-            <dd className="m-0 max-h-40 min-w-0 flex-1 basis-50 overflow-y-auto text-[13.5px] leading-5 break-words text-grey-900">
+            <dd className="m-0 min-w-0 flex-1 basis-50 text-[13.5px] leading-5 break-words text-grey-900">
               {row.value}
             </dd>
           </div>
