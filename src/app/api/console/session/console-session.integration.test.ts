@@ -33,8 +33,8 @@ beforeEach(async () => {
   await database.truncateAll();
 });
 
-async function seed(name: string, role: 'doctor' | 'ops'): Promise<string> {
-  const [row] = await db.insert(reviewers).values({ name, role }).returning({ id: reviewers.id });
+async function seed(name: string): Promise<string> {
+  const [row] = await db.insert(reviewers).values({ name }).returning({ id: reviewers.id });
   if (row === undefined) throw new Error('the reviewer was not seeded');
   return row.id;
 }
@@ -55,14 +55,10 @@ const cookieValue = (response: Response): string | undefined => {
 
 describe('POST /api/console/session', () => {
   it('signs a reviewer in and hands back a session their next request is accepted with', async () => {
-    const reviewerId = await seed('Dr Vermeer', 'doctor');
+    const reviewerId = await seed('Dr Vermeer');
     const response = await post({ reviewerId, secret: SECRET });
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({
-      id: reviewerId,
-      name: 'Dr Vermeer',
-      role: 'doctor',
-    });
+    await expect(response.json()).resolves.toEqual({ id: reviewerId, name: 'Dr Vermeer' });
 
     const value = cookieValue(response);
     expect(value).toBeDefined();
@@ -73,7 +69,7 @@ describe('POST /api/console/session', () => {
   });
 
   it('sets the session httpOnly, same-site and scoped to the console', async () => {
-    const reviewerId = await seed('Dr Vermeer', 'doctor');
+    const reviewerId = await seed('Dr Vermeer');
     const header = (await post({ reviewerId, secret: SECRET })).headers.get('set-cookie') ?? '';
     expect(header).toContain('HttpOnly');
     expect(header).toContain('SameSite=Lax');
@@ -81,7 +77,7 @@ describe('POST /api/console/session', () => {
   });
 
   it('refuses a wrong secret and sets nothing', async () => {
-    const reviewerId = await seed('Dr Vermeer', 'doctor');
+    const reviewerId = await seed('Dr Vermeer');
     const response = await post({ reviewerId, secret: 'z'.repeat(SECRET.length) });
     expect(response.status).toBe(401);
     expect(response.headers.get('set-cookie')).toBeNull();
@@ -90,7 +86,7 @@ describe('POST /api/console/session', () => {
   // A login page that said "no such reviewer" would enumerate the care team for anyone with the
   // URL, so the two failures are one answer.
   it('refuses an unknown reviewer with the same answer as a wrong secret', async () => {
-    await seed('Dr Vermeer', 'doctor');
+    await seed('Dr Vermeer');
     const unknown = await post({
       reviewerId: '00000000-0000-4000-8000-000000000000',
       secret: SECRET,
@@ -104,8 +100,8 @@ describe('POST /api/console/session', () => {
   });
 
   // The whole reason the session exists: the caller may not say who they are or what they may do.
-  it('refuses a body that tries to declare a role', async () => {
-    const reviewerId = await seed('Sanne Bakker', 'ops');
+  it('refuses a body that tries to declare anything but a reviewer and a secret', async () => {
+    const reviewerId = await seed('Sanne Bakker');
     const response = await post({ reviewerId, secret: SECRET, role: 'doctor' });
     expect(response.status).toBe(400);
     expect(response.headers.get('set-cookie')).toBeNull();
@@ -121,7 +117,7 @@ describe('POST /api/console/session', () => {
   });
 
   it('never echoes the secret back, right or wrong', async () => {
-    const reviewerId = await seed('Dr Vermeer', 'doctor');
+    const reviewerId = await seed('Dr Vermeer');
     const ok = await (await post({ reviewerId, secret: SECRET })).text();
     const bad = await (await post({ reviewerId, secret: 'wrong' })).text();
     expect(ok).not.toContain(SECRET);

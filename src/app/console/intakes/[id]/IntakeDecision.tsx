@@ -21,14 +21,12 @@ export function IntakeDecision({
   intakeId,
   canClaim,
   canDecide,
-  isDoctor,
   approvalBlockedBy,
 }: {
   readonly intakeId: string;
   readonly canClaim: boolean;
   /** True once a named person has it: `in_review` is the only state a decision is taken from. */
   readonly canDecide: boolean;
-  readonly isDoctor: boolean;
   /** The rules the ruleset calls absolute that this intake matched, if any (Q1). */
   readonly approvalBlockedBy: readonly string[];
 }): ReactElement {
@@ -97,56 +95,46 @@ export function IntakeDecision({
 
   return (
     <Card>
-      {!isDoctor && (
+      {blocked && (
         <Caption>
-          Approving and rejecting are a doctor&rsquo;s. You can claim, open the patient, and work
-          every review item.
+          {`The rules rejected this absolutely (${approvalBlockedBy.join(', ')}), which a reviewer
+            cannot resolve in the patient's favour. Rejecting, and leaving it open, are still
+            yours.`}
         </Caption>
       )}
-      {isDoctor && (
-        <>
-          {blocked && (
-            <Caption>
-              {`The rules rejected this absolutely (${approvalBlockedBy.join(', ')}), which a
-                reviewer cannot resolve in the patient's favour. Rejecting, and leaving it open, are
-                still yours.`}
-            </Caption>
-          )}
-          <TextAreaField
-            label="Your decision, in a sentence"
-            hint="Recorded as the reason on the audit entry, with your name and the time."
-            rows={3}
-            value={note}
-            onChange={(e) => {
-              setNote(e.target.value);
-            }}
-            required
-          />
-          {failure !== null && <ErrorText>{failure}</ErrorText>}
-          <ButtonRow reason={note.trim() === '' ? NEEDS_A_NOTE : undefined}>
-            <Button
-              variant="primary"
-              busy={busy === 'approved'}
-              disabled={note.trim() === '' || blocked || busy !== null}
-              onClick={() => {
-                void move('approved');
-              }}
-            >
-              Approve
-            </Button>
-            <Button
-              variant="danger"
-              busy={busy === 'rejected'}
-              disabled={note.trim() === '' || busy !== null}
-              onClick={() => {
-                void move('rejected');
-              }}
-            >
-              Reject
-            </Button>
-          </ButtonRow>
-        </>
-      )}
+      <TextAreaField
+        label="Your decision, in a sentence"
+        hint="Recorded as the reason on the audit entry, with your name and the time."
+        rows={3}
+        value={note}
+        onChange={(e) => {
+          setNote(e.target.value);
+        }}
+        required
+      />
+      {failure !== null && <ErrorText>{failure}</ErrorText>}
+      <ButtonRow reason={note.trim() === '' ? NEEDS_A_NOTE : undefined}>
+        <Button
+          variant="primary"
+          busy={busy === 'approved'}
+          disabled={note.trim() === '' || blocked || busy !== null}
+          onClick={() => {
+            void move('approved');
+          }}
+        >
+          Approve
+        </Button>
+        <Button
+          variant="danger"
+          busy={busy === 'rejected'}
+          disabled={note.trim() === '' || busy !== null}
+          onClick={() => {
+            void move('rejected');
+          }}
+        >
+          Reject
+        </Button>
+      </ButtonRow>
     </Card>
   );
 }

@@ -19,8 +19,8 @@ const { SESSION_COOKIE, signSession } = await import('@/console/session');
 
 let database: TestDatabase;
 let db: TestDb;
-let doctor: string;
-let ops: string;
+let vermeer: string;
+let bakker: string;
 
 beforeAll(async () => {
   database = await createTestDatabase();
@@ -37,16 +37,14 @@ beforeEach(async () => {
   await database.truncateAll();
   const seeded = await db
     .insert(reviewers)
-    .values([
-      { name: 'Dr Vermeer', role: 'doctor' },
-      { name: 'Sanne Bakker', role: 'ops' },
-    ])
-    .returning({ id: reviewers.id, role: reviewers.role });
-  doctor = seeded.find((row) => row.role === 'doctor')?.id ?? '';
-  ops = seeded.find((row) => row.role === 'ops')?.id ?? '';
+    .values([{ name: 'Dr Vermeer' }, { name: 'Sanne Bakker' }])
+    .returning({ id: reviewers.id, name: reviewers.name });
+  const idOf = (name: string): string => seeded.find((row) => row.name === name)?.id ?? '';
+  vermeer = idOf('Dr Vermeer');
+  bakker = idOf('Sanne Bakker');
 });
 
-const post = (id: string, body: unknown, reviewerId: string | null = doctor): Promise<Response> =>
+const post = (id: string, body: unknown, reviewerId: string | null = vermeer): Promise<Response> =>
   move(
     new Request(`http://localhost/api/console/intakes/${id}/transition`, {
       method: 'POST',
@@ -113,14 +111,14 @@ describe('without a session', () => {
 describe('claiming an intake', () => {
   it('moves it into in_review with the reviewer as the actor', async () => {
     const id = await intake('auto_flagged');
-    expect((await post(id, { to: 'in_review' }, ops)).status).toBe(200);
+    expect((await post(id, { to: 'in_review' }, bakker)).status).toBe(200);
     expect(await stateOf(id)).toBe('in_review');
 
     const entries = await entriesFor(id);
     expect(entries).toHaveLength(1);
     expect(entries[0]).toMatchObject({
       actor: 'Sanne Bakker',
-      actorReviewerId: ops,
+      actorReviewerId: bakker,
       fromState: 'auto_flagged',
       toState: 'in_review',
       // A human decision is a new event and must never collide with another (ADR-0008 item 1).
@@ -128,24 +126,23 @@ describe('claiming an intake', () => {
     });
   });
 
-  // Triage is open to both roles; only the medical decision is not (ADR-0014 item 3).
-  it('is open to an ops reviewer', async () => {
+  it('is open to any reviewer', async () => {
     const id = await intake('auto_rejected');
-    expect((await post(id, { to: 'in_review' }, ops)).status).toBe(200);
+    expect((await post(id, { to: 'in_review' }, bakker)).status).toBe(200);
   });
 
   // Exclusive claiming falls out of the acyclic graph: in_review → in_review is not an edge.
   it('cannot be done twice', async () => {
     const id = await intake('auto_flagged');
-    await post(id, { to: 'in_review' }, ops);
-    const second = await post(id, { to: 'in_review' }, doctor);
+    await post(id, { to: 'in_review' }, bakker);
+    const second = await post(id, { to: 'in_review' }, vermeer);
     expect(second.status).toBe(409);
     expect(await entriesFor(id)).toHaveLength(1);
   });
 
   it('opens the one legacy state that has a door', async () => {
     const id = await intake('legacy_pending');
-    expect((await post(id, { to: 'in_review' }, doctor)).status).toBe(200);
+    expect((await post(id, { to: 'in_review' }, vermeer)).status).toBe(200);
   });
 
   it('is refused for a legacy state that has none', async () => {
@@ -162,7 +159,7 @@ describe('claiming an intake', () => {
 describe('approving and rejecting', () => {
   async function claimed(matched: string[] = []): Promise<string> {
     const id = await intake('auto_flagged', matched);
-    await post(id, { to: 'in_review' }, doctor);
+    await post(id, { to: 'in_review' }, vermeer);
     return id;
   }
 
@@ -172,7 +169,7 @@ describe('approving and rejecting', () => {
     expect(await stateOf(id)).toBe('in_review');
   });
 
-  it('records the doctor’s own words as the reason', async () => {
+  it('records the reviewer’s own words as the reason', async () => {
     const id = await claimed();
     expect((await post(id, { to: 'approved', note: 'BMI and history reviewed' })).status).toBe(200);
     expect(await stateOf(id)).toBe('approved');
@@ -180,22 +177,38 @@ describe('approving and rejecting', () => {
     const entries = await entriesFor(id);
     expect(entries.at(-1)).toMatchObject({
       actor: 'Dr Vermeer',
-      actorReviewerId: doctor,
+      actorReviewerId: vermeer,
       fromState: 'in_review',
       toState: 'approved',
       reason: 'BMI and history reviewed',
     });
   });
 
-  // The one place the seeded role decides something (ADR-0014 item 3).
-  it.each(['approved', 'rejected'] as const)('is refused to an ops reviewer for %s', async (to) => {
+  // ADR-0027: no reviewer is sorted out of the medical decision, because the console cannot tell
+  // reviewers apart in the first place (ADR-0021).
+  it.each(['approved', 'rejected'] as const)('is open to any reviewer for %s', async (to) => {
     const id = await claimed();
-    const response = await post(id, { to, note: 'looks fine to me' }, ops);
-    expect(response.status).toBe(403);
-    const body = (await response.json()) as { error: string };
-    expect(body.error).toContain('doctor');
-    expect(await stateOf(id)).toBe('in_review');
-    expect(await entriesFor(id)).toHaveLength(1);
+    expect((await post(id, { to, note: 'looks fine to me' }, bakker)).status).toBe(200);
+    expect(await stateOf(id)).toBe(to);
+  });
+
+  // What 403 means now, and the only thing it means: the rules closed this approval, for
+  // everybody (Q1's absolute age reject, ADR-0014 item 3's carve-out).
+  it('refuses an approval the rules rejected absolutely, whoever asks', async () => {
+    for (const reviewer of [vermeer, bakker]) {
+      const id = await claimed(['age_below_minimum']);
+      const response = await post(id, { to: 'approved', note: 'the patient asked' }, reviewer);
+      expect(response.status).toBe(403);
+      const body = (await response.json()) as { error: string };
+      expect(body.error).toContain('absolutely');
+      expect(await stateOf(id)).toBe('in_review');
+    }
+  });
+
+  // The same intake may still be rejected: the carve-out closes one edge, not the decision.
+  it('still lets it be rejected', async () => {
+    const id = await claimed(['age_below_minimum']);
+    expect((await post(id, { to: 'rejected', note: 'under 18' }, bakker)).status).toBe(200);
   });
 });
 
@@ -204,7 +217,7 @@ describe('approving and rejecting', () => {
 describe('an intake the rules rejected absolutely', () => {
   async function minor(): Promise<string> {
     const id = await intake('auto_rejected', ['age_below_minimum']);
-    await post(id, { to: 'in_review' }, doctor);
+    await post(id, { to: 'in_review' }, vermeer);
     return id;
   }
 
@@ -239,7 +252,7 @@ describe('an intake the rules rejected absolutely', () => {
     for (const next of ['submitted', 'auto_flagged'] as const) {
       await db.update(intakes).set({ state: next }).where(eq(intakes.id, id));
     }
-    await post(id, { to: 'in_review' }, doctor);
+    await post(id, { to: 'in_review' }, vermeer);
 
     const response = await post(id, { to: 'approved', note: 'looks fine' });
     expect(response.status).toBe(403);

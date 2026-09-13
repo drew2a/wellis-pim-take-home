@@ -85,7 +85,7 @@ export async function POST(request: Request, context: RouteContext): Promise<Res
     const result = await transitionIntake(db, {
       intakeId: id.data,
       to,
-      actor: { kind: 'reviewer', id: reviewer.id, name: reviewer.name, role: reviewer.role },
+      actor: { kind: 'reviewer', id: reviewer.id, name: reviewer.name },
       reason: parsed.data.to === 'in_review' ? CLAIM_REASON : parsed.data.note,
     });
     return json({ from: result.from, to: result.to });

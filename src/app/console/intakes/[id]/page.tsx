@@ -123,7 +123,9 @@ export default async function IntakePage({
 }: {
   readonly params: Promise<{ readonly id: string }>;
 }): Promise<ReactElement> {
-  const reviewer = await requireReviewer();
+  // For the guard, not for the answer: the page shows the same decision to every reviewer since
+  // ADR-0027, so who they are no longer changes what is rendered — only whether it is.
+  await requireReviewer();
   const view = await findIntake(getDb(), (await params).id);
   if (view === null) notFound();
 
@@ -201,7 +203,6 @@ export default async function IntakePage({
         intakeId={intake.id}
         canClaim={edgeFor(intake.state, 'in_review') !== undefined}
         canDecide={intake.state === 'in_review'}
-        isDoctor={reviewer.role === 'doctor'}
         approvalBlockedBy={blockedBy}
       />
     </Page>

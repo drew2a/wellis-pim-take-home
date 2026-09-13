@@ -22,13 +22,14 @@ import {
 
 const rules = loadRules();
 
-const DOCTOR: TransitionActor = {
+// Two reviewers, not two roles: since ADR-0027 a reviewer is a name, and every reviewer edge is
+// open to every one of them. They stay as two so the tests below can say "either of them".
+const VERMEER: TransitionActor = {
   kind: 'reviewer',
   id: '00000000-0000-4000-8000-000000000001',
   name: 'Dr Vermeer',
-  role: 'doctor',
 };
-const OPS: TransitionActor = { ...DOCTOR, name: 'Sanne from ops', role: 'ops' };
+const BAKKER: TransitionActor = { ...VERMEER, name: 'Sanne Bakker' };
 const FORM: TransitionActor = { kind: 'process', name: 'intake form' };
 const ENGINE: TransitionActor = { kind: 'process', name: 'eligibility engine' };
 
@@ -40,7 +41,7 @@ const pairs: [IntakeState, IntakeState][] = INTAKE_STATES.flatMap((from) =>
 function actorFor(from: IntakeState, to: IntakeState): TransitionActor {
   const edge = edgeFor(from, to);
   if (edge?.actorKind !== 'reviewer') return from === 'submitted' ? ENGINE : FORM;
-  return DOCTOR;
+  return VERMEER;
 }
 
 function check(from: IntakeState, to: IntakeState): void {
@@ -134,7 +135,7 @@ describe('who may take an edge', () => {
 
   it('refuses a process edge taken by a reviewer', () => {
     expect(() =>
-      checkTransition({ ...base, from: 'draft', to: 'submitted', actor: DOCTOR }),
+      checkTransition({ ...base, from: 'draft', to: 'submitted', actor: VERMEER }),
     ).toThrow(/reviewer/i);
   });
 
@@ -144,15 +145,15 @@ describe('who may take an edge', () => {
     ).toThrow(/process/i);
   });
 
+  // ADR-0027: the medical decision is open to any reviewer. What closes an approval is the
+  // intake's own evaluation — asserted under "what an edge demands" — and that refuses everybody
+  // alike, which is the property the role gate was mistaken for.
   it.each([['approved' as const], ['rejected' as const]])(
-    'lets a doctor take in_review -> %s and refuses ops',
+    'lets any reviewer take in_review -> %s',
     (to) => {
-      expect(() =>
-        checkTransition({ ...base, from: 'in_review', to, actor: DOCTOR }),
-      ).not.toThrow();
-      expect(() => checkTransition({ ...base, from: 'in_review', to, actor: OPS })).toThrow(
-        /doctor/i,
-      );
+      for (const actor of [VERMEER, BAKKER]) {
+        expect(() => checkTransition({ ...base, from: 'in_review', to, actor })).not.toThrow();
+      }
     },
   );
 
@@ -161,9 +162,24 @@ describe('who may take an edge', () => {
     ['auto_flagged' as const],
     ['auto_rejected' as const],
     ['legacy_pending' as const],
-  ])('lets either role claim from %s', (from) => {
-    for (const actor of [DOCTOR, OPS]) {
+  ])('lets any reviewer claim from %s', (from) => {
+    for (const actor of [VERMEER, BAKKER]) {
       expect(() => checkTransition({ ...base, from, to: 'in_review', actor })).not.toThrow();
+    }
+  });
+
+  // The one thing no reviewer may do, and the reason the role gate was not load-bearing.
+  it('refuses an approval the rules rejected absolutely, whoever asks', () => {
+    for (const actor of [VERMEER, BAKKER]) {
+      expect(() =>
+        checkTransition({
+          ...base,
+          from: 'in_review',
+          to: 'approved',
+          actor,
+          matched: ['age_below_minimum'],
+        }),
+      ).toThrow(/absolutely/i);
     }
   });
 });
@@ -204,7 +220,7 @@ describe('what an edge demands', () => {
 // patient's favour. The guard is the pure half; fetching the evaluation is the caller's job.
 describe('the age carve-out (Q1)', () => {
   const absoluteRejects = rules.precedence.absolute_rejects;
-  const base = { actor: DOCTOR, reason: 'looks fine to me', absoluteRejects };
+  const base = { actor: VERMEER, reason: 'looks fine to me', absoluteRejects };
 
   it('names age_below_minimum as the absolute reject of ruleset v1', () => {
     expect(absoluteRejects).toEqual(['age_below_minimum']);

@@ -86,7 +86,7 @@ describe('REVIEWERS names that collide with a named process', () => {
     'refuses a reviewer called %s',
     (name) => {
       expect(() =>
-        parseEnv({ ...required, REVIEWERS: JSON.stringify([{ name, role: 'doctor' }]) }),
+        parseEnv({ ...required, REVIEWERS: JSON.stringify([{ name }]) }),
       ).toThrow(/named process/);
     },
   );
@@ -95,16 +95,27 @@ describe('REVIEWERS names that collide with a named process', () => {
     expect(() =>
       parseEnv({
         ...required,
-        REVIEWERS: JSON.stringify([{ name: '  importer  ', role: 'ops' }]),
+        REVIEWERS: JSON.stringify([{ name: '  importer  ' }]),
       }),
     ).toThrow(/named process/);
+  });
+
+  // A deployed REVIEWERS still carries the role ADR-0027 removed. `loadEnv()` runs at boot for the
+  // whole app, so the key is dropped rather than refused: a strict schema would take the app down
+  // on the first deploy after the change instead of seeding a reviewer who no longer has a role.
+  it('drops a role a deployed value still carries, rather than refusing to boot', () => {
+    const env = parseEnv({
+      ...required,
+      REVIEWERS: JSON.stringify([{ name: 'Dr Vermeer', role: 'doctor' }]),
+    });
+    expect(env.REVIEWERS).toEqual([{ name: 'Dr Vermeer' }]);
   });
 
   it('still accepts a person whose name merely contains one', () => {
     const env = parseEnv({
       ...required,
-      REVIEWERS: JSON.stringify([{ name: 'Dr Importer-Jansen', role: 'doctor' }]),
+      REVIEWERS: JSON.stringify([{ name: 'Dr Importer-Jansen' }]),
     });
-    expect(env.REVIEWERS).toEqual([{ name: 'Dr Importer-Jansen', role: 'doctor' }]);
+    expect(env.REVIEWERS).toEqual([{ name: 'Dr Importer-Jansen' }]);
   });
 });

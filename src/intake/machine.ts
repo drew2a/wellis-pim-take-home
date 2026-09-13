@@ -4,9 +4,9 @@
 // installed by `drizzle/0007_intake_state_machine.sql` mirrors the same table as a second lock.
 //
 // Every refusal is one error type and one loudness: a pair that is not an edge, an actor of the
-// wrong kind, a reviewer without the role, a blocked approval and a missing reason are all "this
-// transition does not exist for you".
-import { intakeStateEnum, type ReviewerRole } from '@/db/schema';
+// wrong kind, a blocked approval and a missing reason are all "this transition does not exist for
+// you".
+import { intakeStateEnum } from '@/db/schema';
 import type { MatchedRule } from '@/eligibility/types';
 import type { RejectRule } from '@/rules/schema';
 
@@ -32,25 +32,23 @@ export type ActorKind = 'process' | 'reviewer';
 
 export type TransitionActor =
   | { readonly kind: 'process'; readonly name: string }
-  | {
-      readonly kind: 'reviewer';
-      readonly id: string;
-      readonly name: string;
-      readonly role: ReviewerRole;
-    };
+  // A name and an id: what the audit entry records. No role — a reviewer has none (ADR-0027).
+  | { readonly kind: 'reviewer'; readonly id: string; readonly name: string };
 
 export interface TransitionEdge {
   readonly from: IntakeState;
   readonly to: IntakeState;
   readonly actorKind: ActorKind;
-  /** Only a reviewer holding this role may take the edge; any reviewer may when absent. */
-  readonly requiredRole?: ReviewerRole;
   /** The audit entry must name the ruleset that decided (R-B8): the engine's edges. */
   readonly requiresRulesetVersion?: boolean;
   /**
    * The edge is refused when the intake's governing evaluation matched a rule the ruleset calls an
    * absolute reject. Q1 makes the age rule absolute because it is a legal gate a reviewer cannot
    * resolve in the patient's favour, so approval is the one edge it must close (ADR-0014 item 3).
+   *
+   * Since ADR-0027 this is the **only** guard on the medical decision, and that is the point: it
+   * is a property of what the rules found, so it refuses every reviewer alike rather than sorting
+   * people into those who may overrule it and those who may not.
    */
   readonly refusesAbsoluteReject?: boolean;
 }
@@ -67,14 +65,10 @@ export const TRANSITIONS: readonly TransitionEdge[] = [
   // The machine's only door out of the legacy states, and only the non-terminal one has it: a
   // person deciding to finish what the legacy process left open (ADR-0014 item 7).
   { from: 'legacy_pending', to: 'in_review', actorKind: 'reviewer' },
-  {
-    from: 'in_review',
-    to: 'approved',
-    actorKind: 'reviewer',
-    requiredRole: 'doctor',
-    refusesAbsoluteReject: true,
-  },
-  { from: 'in_review', to: 'rejected', actorKind: 'reviewer', requiredRole: 'doctor' },
+  // Open to any reviewer, like every other reviewer edge. What closes an approval is the intake's
+  // own evaluation, below, and it closes it for everybody (ADR-0027).
+  { from: 'in_review', to: 'approved', actorKind: 'reviewer', refusesAbsoluteReject: true },
+  { from: 'in_review', to: 'rejected', actorKind: 'reviewer' },
 ];
 
 export function edgeFor(from: IntakeState, to: IntakeState): TransitionEdge | undefined {
@@ -132,13 +126,6 @@ export function checkTransition(check: TransitionCheck): TransitionEdge {
   if (edge === undefined) throw refuse('no such edge in the state machine');
   if (edge.actorKind !== actor.kind) {
     throw refuse(`it is taken by a ${edge.actorKind}, not by a ${actor.kind}`);
-  }
-  if (edge.requiredRole !== undefined) {
-    // Narrowed by the actor-kind check above: an edge with a role is always a reviewer edge.
-    const role = actor.kind === 'reviewer' ? actor.role : undefined;
-    if (role !== edge.requiredRole) {
-      throw refuse(`it needs a reviewer with the role ${edge.requiredRole}, not ${String(role)}`);
-    }
   }
   if (check.reason.trim() === '') throw refuse('every transition records a reason (R-B20)');
   if (edge.requiresRulesetVersion === true && (check.rulesetVersion ?? '') === '') {

@@ -519,7 +519,7 @@ describe('mergePatients / unmergePatient (ADR-0006)', () => {
     it('names the reviewer behind a human merge on both entries', async () => {
       const [reviewer] = await database.db
         .insert(reviewers)
-        .values({ name: REVIEWER, role: 'ops' })
+        .values({ name: REVIEWER })
         .returning({ id: reviewers.id });
       const survivor = await insertPatient('recS');
       const loser = await insertPatient('recL');

@@ -3,9 +3,10 @@
 The scenario in [`reviewer-day.md`](reviewer-day.md) turned into stories that can be tested. One
 story per thing a reviewer does; the acceptance criteria are what the tests assert.
 
-**How to read a story.** *As a …* names the role the story needs — `ops`, `doctor`, or `either`,
-where "either" means both roles may do it and ADR-0014 item 3 is the authority, not the scenario's
-division of labour (see [D-11](#d-11)). **Done when** is a list of assertions; each is either a
+**How to read a story.** *As a …* names who the story is written for — `ops`, `doctor`, or
+`either`. Since ADR-0027 that is a description of the work, never a permission: every story is open
+to any signed-in reviewer. The heading survives because it names the scenario's division of
+labour (see [D-11](#d-11)). **Done when** is a list of assertions; each is either a
 test or a rendered element a test can find. `R-xx` are the requirements in `REQUIREMENTS.md`,
 `Q-n` the questions in `QUESTIONS.md`.
 
@@ -247,7 +248,7 @@ value wins in each field, and the merge really happens.
 
 ## Doctor work
 
-### S-12 · Review an intake · *either to open, doctor to decide*
+### S-12 · Review an intake · *either*
 
 As a doctor I open an `auto_flagged` intake and see what the patient said and what the rules made
 of it. 6 `auto_flagged`, 4 `auto_cleared`, 1 `auto_rejected` today.
@@ -276,19 +277,18 @@ of it. 6 `auto_flagged`, 4 `auto_cleared`, 1 `auto_rejected` today.
   reviewer sees the first reviewer's name, read from the claim's audit entry, and no claim button.
 - A test claims twice and asserts the second call is refused and writes nothing.
 
-### S-14 · Approve or reject · *doctor*
+### S-14 · Approve or reject · *either*
 
 **Done when**
 - **Approve** and **Reject** each require a note, which becomes the audit entry's `reason`
   (R-C8, R-B20).
-- Both are doctor-only: the buttons are absent for an `ops` reviewer, *and* the route refuses an
-  `ops` session with the machine's own error surfaced as 403 — the client carries no business
-  rules, the server is the authority (R-T4, R-B16, `CLAUDE.md` §2).
-- The role comes from the session, never from the request body ([D-4](#d-4)).
-- A test: an ops session posts approve, gets 403, and `intakes.state` and `audit_entries` are
-  unchanged.
+- Both are open to any signed-in reviewer (ADR-0027). The gate that used to be here required a
+  `doctor`, in a console where the reviewer picks their own name from a list — so it refused
+  nobody, and it is gone rather than left implying otherwise.
+- The actor comes from the session, never from the request body ([D-4](#d-4)).
+- What the route still refuses is S-15, and it refuses it to everyone.
 
-### S-15 · An under-18 intake cannot be approved by anyone · *doctor*
+### S-15 · An under-18 intake cannot be approved by anyone · *either*
 
 **Done when**
 - `in_review → approved` on an intake whose governing evaluation matched `age_below_minimum` is
@@ -380,7 +380,7 @@ As a reviewer I can see how this record came to look the way it does (R-C9).
 ### S-22 · A session, or nothing · *either*
 
 **Done when**
-- `/login` lists the seeded reviewers (`select id, name, role from reviewers` — 2 today) and takes
+- `/login` lists the seeded reviewers (`select id, name from reviewers` — 2 today) and takes
   the shared console secret from the environment.
 - A correct secret sets a signed, httpOnly, SameSite=Lax session cookie naming the reviewer id;
   a wrong one renders an error and sets nothing.
@@ -496,12 +496,14 @@ reviewer's name as it was at the time — the same rule and the same reason as
 path writes in the same transaction. No migration.
 
 ### D-11
-**The scenario's two roles are a filter, not a permission.** ADR-0014 item 3 puts the role gate on
-exactly two edges: `in_review → approved` and `in_review → rejected` require `doctor`. Claiming and
-**every review-item action** are open to both roles. So an ops reviewer may work a
-`clinical_history` item, and a doctor may merge two patients. The console follows the ADR: each
-story above says *either* unless the ADR says `doctor`. What the scenario describes is the default
-filter each role lands on, which the console can offer without pretending it is a permission.
+**The scenario's two roles are a filter, not a permission** — and since ADR-0027 they are not even
+a column. This entry used to record the one exception: ADR-0014 item 3 gated `in_review → approved`
+and `in_review → rejected` on `doctor`, while claiming and every review-item action were open to
+both. That gate is removed. With one shared secret and the name picked from a list (ADR-0021), it
+refused nobody, so every story above now says *either*.
+
+What the scenario still describes is the work each colleague normally picks up, which the console
+offers as a default filter — without a label on a person that pretends to be a permission.
 
 ### D-12
 **`in_review` has no `claimed_by` column,** by decision (ADR-0014 item 1: exclusive claiming falls

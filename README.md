@@ -199,9 +199,10 @@ additionally allows an intake to stay put, and the importer to re-map one legacy
 
 `in_review` is entered only when a named reviewer claims the intake — never automatically — which
 also makes claiming exclusive, since `in_review → in_review` is not an edge. `approved` and
-`rejected` need role `doctor`, and `approved` is refused outright when the intake's evaluation
-matched an absolute reject: an under-age intake cannot be approved by anyone, which is why Q1 calls
-that rule absolute in the first place.
+`rejected` are open to any reviewer (ADR-0027), and `approved` is refused outright when the
+intake's evaluation matched an absolute reject: an under-age intake cannot be approved by anyone,
+which is why Q1 calls that rule absolute in the first place. That refusal, not a label on a person,
+is the one thing standing between a minor and an approval.
 
 ## Part C — the review console
 
@@ -232,7 +233,7 @@ Two properties hold by construction rather than by review:
   writes the value, the audit entry with actor and note, and closes the item in one transaction.
   The merge is the single deliberate exception, for the reason ADR-0022 gives.
 - **The actor is never sent by the caller.** It comes from the session, and no route schema
-  declares a reviewer, an actor or a role — which is what makes the doctor gate mean something.
+  declares a reviewer or an actor, so there is no path from a request body to an audit entry.
 
 ### Deliberate scope cuts
 
@@ -245,8 +246,7 @@ Each is a decision, not an omission (R-S4):
   signed, httpOnly session cookie; `currentReviewer()` is where every console page and every
   mutating route gets its actor, so an audit entry's actor is never a value the caller sent. What
   this does **not** do: it does not prove who the person is. Anyone holding the shared secret can
-  pick any name on the list, so the role separates duties between colleagues and does not resist
-  an attacker who is already inside. There is no registration, no password reset, no per-reviewer
+  pick any name on the list. There is no registration, no password reset, no per-reviewer
   credential, no lockout and no audit of failed logins. **A real deployment plugs SSO in here**,
   against `audit_entries.actor_reviewer_id`, which is already the stable identity.
 - **An abandoned draft stays forever**, as a `draft` row with partial answers and no patient. No
@@ -260,10 +260,12 @@ Each is a decision, not an omission (R-S4):
   action but the opposite: one decision, applied to the rows a person kept.
 - **The queue shows a page, not everything.** 500 rows, oldest first, which is the whole of the
   default view; a filter that selects the 2068 legacy approvals says it is showing a page.
-- **Roles are enforced on exactly two edges** — `in_review → approved` and `in_review → rejected`
-  need a `doctor` — and nowhere else. Claiming an intake and every review-item action are open to
-  both roles, because triage and data work are operational and approving a course of treatment is
-  not (ADR-0014 item 3).
+- **A reviewer has no role, and the console enforces no permissions** (ADR-0027). Approving and
+  rejecting were once gated on a `doctor` role; with one shared secret and the name picked from a
+  list, that gate refused nobody who wanted to pass it, so it was removed rather than left to imply
+  a guarantee the login page cannot keep. What still closes an approval is the intake's own
+  evaluation — Q1's absolute age reject — which refuses every reviewer alike. Real permissions
+  arrive with real identity, and `currentReviewer()` is the one seam for both.
 - **A correction does not re-run the shadow evaluation it invalidates** (ADR-0026). Today's rules
   are run over every legacy intake at import and stored with the inputs they judged — age at
   submission, weight, height. A reviewer correcting one of those inputs leaves that stored verdict

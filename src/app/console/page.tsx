@@ -97,7 +97,6 @@ export default async function QueuePage({
     <Page>
       <PageHeader title="Work queue">
         <Caption>{reviewer.name}</Caption>
-        <Badge tone="info">{reviewer.role}</Badge>
         <SignOut />
       </PageHeader>
 

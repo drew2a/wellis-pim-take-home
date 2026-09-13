@@ -15,7 +15,6 @@ import { Button, ButtonRow, Card, Choice, ErrorText, Field, Hint, TextField } fr
 export interface SeededReviewer {
   readonly id: string;
   readonly name: string;
-  readonly role: string;
 }
 
 export function LoginForm({
@@ -75,7 +74,7 @@ export function LoginForm({
               setReviewerId(reviewer.id);
             }}
           >
-            {`${reviewer.name} — ${reviewer.role}`}
+            {reviewer.name}
           </Choice>
         ))}
       </Field>

@@ -1,11 +1,14 @@
 # What the care team does in the console — the decision record for Part C
 
-Two roles, one app, one queue. **Ops** handles data, identity and consent; **Doctor** handles
-clinical decisions. Same screens, different filters and buttons; a doctor can do everything an
-ops reviewer can. Every action below writes an audit entry with the reviewer as actor and a
-required note. Nothing is ever deleted.
+Two jobs, one app, one queue. **Ops** handles data, identity and consent; **Doctor** handles
+clinical decisions. That is a division of labour between colleagues, **not a permission the app
+enforces**: since ADR-0027 a reviewer has no role, and every action below is open to whoever is
+signed in. The headings say who normally does what, and the filters are what make that practical.
 
-## The queue — both roles
+Every action below writes an audit entry with the reviewer as actor and a required note. Nothing
+is ever deleted.
+
+## The queue — everyone
 
 One screen, one table. Every row is one thing to do: a review item or an intake.
 - Columns: type · title · patient · age (created_at, or the draft audit entry for an intake) ·
@@ -49,15 +52,15 @@ One screen, one table. Every row is one thing to do: a review item or an intake.
    note; accepted values go through the resolution path and appear in the patient's timeline.
 7. **Open a patient** from any item (see below).
 
-## Doctor — actions (plus everything above)
+## Doctor — actions (the clinical half of the same queue)
 
 8. **Review a new intake** (auto_flagged first; auto_rejected and auto_cleared reachable).
    Example: intake from today, "flagged: current GLP-1 medication (declared by patient)".
    Sees the answers as given (structured fields, free text as typed), the engine's evaluation:
    outcome, every reason line, the inputs it saw (age, BMI, matched terms), ruleset version.
-   Actions: **claim** → in_review with the doctor as actor (a second doctor sees "claimed by
-   Dr Vermeer" and cannot claim); **approve** / **reject** with a note (doctor only; approve of
-   an under-18 intake is refused with the reason shown); **open the patient**.
+   Actions: **claim** → in_review with the reviewer as actor (a second reviewer sees "claimed by
+   Dr Vermeer" and cannot claim); **approve** / **reject** with a note (approve of an under-18
+   intake is refused with the reason shown, for everyone); **open the patient**.
 9. **Reopen a legacy_pending intake** (332, via the filter). Example: "wacht op arts" from
    2025-11. Claim → in_review, then approve/reject as above. legacy_approved / legacy_rejected
    have no door; their disagreements are clinical_history items.
@@ -67,7 +70,7 @@ One screen, one table. Every row is one thing to do: a review item or an intake.
     **resolve** with a note (patient contacted, care plan adjusted, no action needed) or
     **dismiss** with a note. The historical outcome never changes.
 
-## Patient detail — both roles
+## Patient detail — everyone
 
 Header: canonical record (bsn masked, reveal audited), status, consent state per type, the
 legacy rows it was built from and any rows merged into it. Sections: **intakes** (state, outcome,
@@ -80,5 +83,6 @@ resolved through the membership function of ADR-0008, never the copied patient_i
 ## Deliberately not built (README scope cuts)
 - Unmerge UI (repository function exists; via API only).
 - Sorting beyond age; saved filters; bulk actions except the vocabulary items' row exclusion.
-- Real authentication: reviewer picked from the seeded list plus a shared console secret;
-  role gates actions; SSO is what a real deployment plugs in.
+- Real authentication: reviewer picked from the seeded list plus a shared console secret. No
+  permissions either, and deliberately so — a gate behind a shared secret refuses nobody
+  (ADR-0027). SSO is what a real deployment plugs in, and permissions come with it.

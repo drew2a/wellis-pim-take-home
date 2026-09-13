@@ -20,8 +20,10 @@ import { transitionIntake } from './transition';
 
 let database: TestDatabase;
 let db: TestDb;
-let doctor: TransitionActor;
-let ops: TransitionActor;
+// Two reviewers, not two roles (ADR-0027): every reviewer edge is open to both, and the tests
+// below assert exactly that rather than a gate between them.
+let vermeer: TransitionActor;
+let bakker: TransitionActor;
 
 const FORM: TransitionActor = { kind: 'process', name: INTAKE_FORM_ACTOR };
 const ENGINE: TransitionActor = { kind: 'process', name: ELIGIBILITY_ENGINE_ACTOR };
@@ -40,18 +42,15 @@ beforeEach(async () => {
   await database.truncateAll();
   const seeded = await db
     .insert(reviewers)
-    .values([
-      { name: 'Dr Vermeer', role: 'doctor' },
-      { name: 'Sanne from ops', role: 'ops' },
-    ])
-    .returning({ id: reviewers.id, name: reviewers.name, role: reviewers.role });
+    .values([{ name: 'Dr Vermeer' }, { name: 'Sanne Bakker' }])
+    .returning({ id: reviewers.id, name: reviewers.name });
   const row = (name: string): TransitionActor => {
     const found = seeded.find((r) => r.name === name);
     if (found === undefined) throw new Error(`reviewer ${name} was not seeded`);
-    return { kind: 'reviewer', id: found.id, name: found.name, role: found.role };
+    return { kind: 'reviewer', id: found.id, name: found.name };
   };
-  doctor = row('Dr Vermeer');
-  ops = row('Sanne from ops');
+  vermeer = row('Dr Vermeer');
+  bakker = row('Sanne Bakker');
 });
 
 // A legacy intake keeps an exported key, which is unique; two of them in one test need two keys.
@@ -75,7 +74,7 @@ async function arriveAt(state: IntakeState, options: { evaluate?: boolean } = {}
     await transitionIntake(db, {
       intakeId: id,
       to,
-      actor: edge?.actorKind === 'reviewer' ? doctor : from === 'submitted' ? ENGINE : FORM,
+      actor: edge?.actorKind === 'reviewer' ? vermeer : from === 'submitted' ? ENGINE : FORM,
       reason: `walking to ${state}`,
       rulesetVersion: edge?.requiresRulesetVersion === true ? 'v1' : null,
     });
@@ -111,7 +110,7 @@ const countRows = async (table: typeof auditEntries | typeof intakes): Promise<n
 
 const actorFor = (from: IntakeState, to: IntakeState): TransitionActor => {
   const edge = edgeFor(from, to);
-  if (edge?.actorKind === 'reviewer') return doctor;
+  if (edge?.actorKind === 'reviewer') return vermeer;
   return from === 'submitted' ? ENGINE : FORM;
 };
 
@@ -182,7 +181,7 @@ describe('who the audit entry names', () => {
     const byReviewer = await transitionIntake(db, {
       intakeId: id,
       to: 'in_review',
-      actor: ops,
+      actor: bakker,
       reason: 'taking a look',
     });
 
@@ -218,34 +217,23 @@ describe('who the audit entry names', () => {
   });
 });
 
-describe('the role gate (ADR-0014 item 3)', () => {
+describe('who may take a reviewer edge (ADR-0027)', () => {
   it.each([['approved' as const], ['rejected' as const]])(
-    'lets a doctor take in_review -> %s',
+    'lets any reviewer take in_review -> %s',
     async (to) => {
-      const id = await arriveAt('in_review');
-      await expect(
-        transitionIntake(db, { intakeId: id, to, actor: doctor, reason: 'my decision' }),
-      ).resolves.toMatchObject({ to });
-    },
-  );
-
-  it.each([['approved' as const], ['rejected' as const]])(
-    'refuses ops on in_review -> %s and writes nothing',
-    async (to) => {
-      const id = await arriveAt('in_review');
-      const before = await countRows(auditEntries);
-      await expect(
-        transitionIntake(db, { intakeId: id, to, actor: ops, reason: 'my decision' }),
-      ).rejects.toThrow(/role doctor/);
-      expect(await stateOf(id)).toBe('in_review');
-      expect(await countRows(auditEntries)).toBe(before);
+      for (const actor of [vermeer, bakker]) {
+        const id = await arriveAt('in_review');
+        await expect(
+          transitionIntake(db, { intakeId: id, to, actor, reason: 'my decision' }),
+        ).resolves.toMatchObject({ to });
+      }
     },
   );
 
   it.each([['auto_cleared' as const], ['auto_flagged' as const], ['legacy_pending' as const]])(
-    'lets either role claim from %s',
+    'lets any reviewer claim from %s',
     async (from) => {
-      for (const actor of [doctor, ops]) {
+      for (const actor of [vermeer, bakker]) {
         const id = await arriveAt(from);
         await expect(
           transitionIntake(db, { intakeId: id, to: 'in_review', actor, reason: 'claiming' }),
@@ -270,7 +258,7 @@ describe('the age carve-out (ADR-0014 item 3)', () => {
     const before = await countRows(auditEntries);
 
     await expect(
-      transitionIntake(db, { intakeId: id, to: 'approved', actor: doctor, reason: 'looks fine' }),
+      transitionIntake(db, { intakeId: id, to: 'approved', actor: vermeer, reason: 'looks fine' }),
     ).rejects.toThrow(/age_below_minimum/);
     expect(await stateOf(id)).toBe('in_review');
     expect(await countRows(auditEntries)).toBe(before);
@@ -282,14 +270,14 @@ describe('the age carve-out (ADR-0014 item 3)', () => {
       .insert(eligibilityEvaluations)
       .values(eligibilityEvaluationRow(id, { shadow: false, ...underAge }));
     await expect(
-      transitionIntake(db, { intakeId: id, to: 'rejected', actor: doctor, reason: 'under 18' }),
+      transitionIntake(db, { intakeId: id, to: 'rejected', actor: vermeer, reason: 'under 18' }),
     ).resolves.toMatchObject({ to: 'rejected' });
   });
 
   it('refuses approval when the intake has no stored evaluation at all', async () => {
     const id = await arriveAt('in_review', { evaluate: false });
     await expect(
-      transitionIntake(db, { intakeId: id, to: 'approved', actor: doctor, reason: 'looks fine' }),
+      transitionIntake(db, { intakeId: id, to: 'approved', actor: vermeer, reason: 'looks fine' }),
     ).rejects.toThrow(/no stored evaluation/);
   });
 
@@ -309,7 +297,7 @@ describe('the age carve-out (ADR-0014 item 3)', () => {
       }),
     );
     await expect(
-      transitionIntake(db, { intakeId: id, to: 'approved', actor: doctor, reason: 'cleared' }),
+      transitionIntake(db, { intakeId: id, to: 'approved', actor: vermeer, reason: 'cleared' }),
     ).resolves.toMatchObject({ to: 'approved' });
   });
 });
@@ -317,9 +305,9 @@ describe('the age carve-out (ADR-0014 item 3)', () => {
 describe('a claim is exclusive because in_review -> in_review is not an edge', () => {
   it('lets the first reviewer in and refuses the second', async () => {
     const id = await arriveAt('auto_flagged');
-    await transitionIntake(db, { intakeId: id, to: 'in_review', actor: ops, reason: 'mine' });
+    await transitionIntake(db, { intakeId: id, to: 'in_review', actor: bakker, reason: 'mine' });
     await expect(
-      transitionIntake(db, { intakeId: id, to: 'in_review', actor: doctor, reason: 'mine too' }),
+      transitionIntake(db, { intakeId: id, to: 'in_review', actor: vermeer, reason: 'mine too' }),
     ).rejects.toBeInstanceOf(IllegalTransitionError);
   });
 });

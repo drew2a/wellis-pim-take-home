@@ -36,7 +36,7 @@ beforeEach(async () => {
   await database.truncateAll();
   const [reviewer] = await db
     .insert(reviewers)
-    .values({ name: 'Sanne Bakker', role: 'ops' })
+    .values({ name: 'Sanne Bakker' })
     .returning({ id: reviewers.id });
   reviewerId = reviewer?.id ?? '';
   const [patient] = await db

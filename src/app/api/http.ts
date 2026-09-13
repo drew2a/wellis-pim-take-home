@@ -39,9 +39,10 @@ export const conflict = (message: string): Response => json({ error: message }, 
 export const unauthorized = (): Response => json({ error: 'sign in to the console first' }, 401);
 
 /**
- * A session, but not the role the action needs — today only `doctor`, on approve and reject
- * (ADR-0014 item 3). The machine's own message is passed through, because "this transition does
- * not exist for you" is what the reviewer has to be told.
+ * A session, and an edge the machine refuses this actor — today only Q1's absolute age reject,
+ * which closes approval for **every** reviewer (ADR-0014 item 3's carve-out; ADR-0027 removed the
+ * role that was the other reason). The machine's own message is passed through, because "this
+ * transition does not exist for you" is what the reviewer has to be told.
  */
 export const forbidden = (message: string): Response => json({ error: message }, 403);
 

@@ -2,10 +2,13 @@
 // console route, and the only answer to the question. The actor of every write in the console —
 // a transition, a merge, an item resolution, a bsn reveal — is what this returns.
 //
-// No route schema declares an actor, a reviewer or a role, so there is no path from a request body
-// to `audit_entries.actor`. An audit entry is evidence, and a name the caller chose is not.
+// No route schema declares an actor or a reviewer, so there is no path from a request body to
+// `audit_entries.actor`. An audit entry is evidence, and a name the caller chose is not.
+//
+// This is also the seam where authentication would go: a reviewer is a name here because identity
+// is picked from a list behind one shared secret (ADR-0021). ADR-0027 removed the role for that
+// reason, and real credentials would reintroduce it here and nowhere else.
 import { getDb } from '@/db/client';
-import type { ReviewerRole } from '@/db/schema';
 import { loadEnv } from '@/env';
 import { findReviewer } from '@/reviewers/repo';
 
@@ -15,7 +18,6 @@ export interface ConsoleReviewer {
   readonly id: string;
   /** As it is now. The audit entry copies it, so a later rename does not rewrite the evidence. */
   readonly name: string;
-  readonly role: ReviewerRole;
 }
 
 /**

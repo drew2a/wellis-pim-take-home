@@ -36,8 +36,8 @@ beforeEach(async () => {
   await database.truncateAll();
 });
 
-async function seed(name: string, role: 'doctor' | 'ops'): Promise<string> {
-  const [row] = await db.insert(reviewers).values({ name, role }).returning({ id: reviewers.id });
+async function seed(name: string): Promise<string> {
+  const [row] = await db.insert(reviewers).values({ name }).returning({ id: reviewers.id });
   if (row === undefined) throw new Error('the reviewer was not seeded');
   return row.id;
 }
@@ -52,12 +52,8 @@ const signedFor = (id: string, at = new Date()): Request =>
 
 describe('currentReviewer', () => {
   it('is the reviewer the session names', async () => {
-    const id = await seed('Dr Vermeer', 'doctor');
-    await expect(currentReviewer(signedFor(id))).resolves.toEqual({
-      id,
-      name: 'Dr Vermeer',
-      role: 'doctor',
-    });
+    const id = await seed('Dr Vermeer');
+    await expect(currentReviewer(signedFor(id))).resolves.toEqual({ id, name: 'Dr Vermeer' });
   });
 
   it('is nobody without a cookie at all', async () => {
@@ -65,37 +61,39 @@ describe('currentReviewer', () => {
   });
 
   it('is nobody when the signature does not verify', async () => {
-    const id = await seed('Sanne Bakker', 'ops');
+    const id = await seed('Sanne Bakker');
     await expect(
       currentReviewer(withSession(signSession(id, new Date(), 'a'.repeat(32)))),
     ).resolves.toBeNull();
   });
 
   it('is nobody when the session has expired', async () => {
-    const id = await seed('Sanne Bakker', 'ops');
+    const id = await seed('Sanne Bakker');
     const issued = new Date(Date.now() - (SESSION_MAX_AGE_SECONDS + 1) * 1000);
     await expect(currentReviewer(signedFor(id, issued))).resolves.toBeNull();
   });
 
   // The row is the identity: a seed that removed someone must not leave their session working.
   it('is nobody when the reviewer has been removed', async () => {
-    const id = await seed('Dr Vermeer', 'doctor');
+    const id = await seed('Dr Vermeer');
     const request = signedFor(id);
     await db.delete(reviewers).where(eq(reviewers.id, id));
     await expect(currentReviewer(request)).resolves.toBeNull();
   });
 
-  // The cookie carries no role, so this is the only place a role can come from (ADR-0021 item 2).
-  it('reads the role from the row, so a re-seeded role takes effect on the next request', async () => {
-    const id = await seed('Sanne Bakker', 'ops');
+  // The cookie carries an id and nothing else (ADR-0021 item 2), so everything a reviewer *is*
+  // comes from the row on every request. Since ADR-0027 that is their name — and the name is what
+  // an audit entry copies, so a rename has to reach the next entry rather than the next login.
+  it('reads the name from the row, so a rename takes effect on the next request', async () => {
+    const id = await seed('Sanne Bakker');
     const request = signedFor(id);
-    await expect(currentReviewer(request)).resolves.toMatchObject({ role: 'ops' });
-    await db.update(reviewers).set({ role: 'doctor' }).where(eq(reviewers.id, id));
-    await expect(currentReviewer(request)).resolves.toMatchObject({ role: 'doctor' });
+    await expect(currentReviewer(request)).resolves.toMatchObject({ name: 'Sanne Bakker' });
+    await db.update(reviewers).set({ name: 'Sanne de Vries' }).where(eq(reviewers.id, id));
+    await expect(currentReviewer(request)).resolves.toMatchObject({ name: 'Sanne de Vries' });
   });
 
   it('is nobody when the session names a uuid that was never a reviewer', async () => {
-    await seed('Dr Vermeer', 'doctor');
+    await seed('Dr Vermeer');
     await expect(
       currentReviewer(signedFor('00000000-0000-4000-8000-000000000000')),
     ).resolves.toBeNull();

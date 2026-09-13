@@ -3,15 +3,14 @@
 import { eq } from 'drizzle-orm';
 
 import type { Queryable } from '@/db/queryable';
-import { reviewers, type ReviewerRole } from '@/db/schema';
+import { reviewers } from '@/db/schema';
 
 export interface ReviewerRecord {
   readonly id: string;
   readonly name: string;
-  readonly role: ReviewerRole;
 }
 
-const COLUMNS = { id: reviewers.id, name: reviewers.name, role: reviewers.role };
+const COLUMNS = { id: reviewers.id, name: reviewers.name };
 
 /** The team, by name, for the login page's list and nothing else. */
 export async function listReviewers(db: Queryable): Promise<ReviewerRecord[]> {

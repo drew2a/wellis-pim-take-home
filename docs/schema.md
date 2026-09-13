@@ -261,7 +261,6 @@ erDiagram
   reviewers["reviewers — people"] {
     uuid id PK
     text name UK
-    reviewer_role role "enum"
     timestamptz created_at
   }
   %% foreign keys
@@ -301,7 +300,6 @@ erDiagram
 | `review_item_scope` | `row`, `vocabulary` |
 | `review_item_status` | `open`, `resolved`, `dismissed` |
 | `review_item_type` | `data_quality`, `identity_conflict`, `orphan_intake`, `duplicate_intake`, `consent`, `clinical_history`, `vocabulary` |
-| `reviewer_role` | `doctor`, `ops` |
 | `sex` | `male`, `female`, `unknown` |
 
 <!-- END GENERATED -->
