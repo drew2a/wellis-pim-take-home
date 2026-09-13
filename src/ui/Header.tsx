@@ -23,3 +23,8 @@ export function PageHeader({
 export function Caption({ children }: { readonly children: ReactNode }): ReactElement {
   return <span className="text-sm text-grey-500">{children}</span>;
 }
+
+/** A heading inside a page: the sections of an item's view, of a patient's record. */
+export function SectionTitle({ children }: { readonly children: ReactNode }): ReactElement {
+  return <h2 className="mt-8 mb-3 text-lg font-semibold text-grey-900">{children}</h2>;
+}

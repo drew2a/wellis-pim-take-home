@@ -12,9 +12,10 @@
 export { Badge, StateBadge } from './Badge';
 export { Button, ButtonRow, type ButtonVariant } from './Button';
 export { Card } from './Card';
+export { Definitions, Raw, type Definition } from './Definitions';
 export { Choice, Field, TextAreaField, TextField } from './Field';
 export { FilterGroup, FilterLink, FilterPanel } from './Filters';
-export { Caption, PageHeader } from './Header';
+export { Caption, PageHeader, SectionTitle } from './Header';
 export { Page, PageTitle } from './Page';
 export { StepIndicator } from './Steps';
 export { Table, type Column } from './Table';
