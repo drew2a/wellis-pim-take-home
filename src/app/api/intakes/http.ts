@@ -10,14 +10,25 @@ export interface ApiIssue {
 export const issuesOf = (error: z.ZodError): ApiIssue[] =>
   error.issues.map((issue) => ({ path: issue.path.join('.'), message: issue.message }));
 
+/**
+ * Every intake route answers with one patient's own intake — their name, email, date of birth,
+ * weight and medication — and the intake's uuid is the only thing that authorises the read, since
+ * there is no patient authentication (README, R-S4). A store that kept such a response would serve
+ * it to the next caller of that URL, so none of them is stored: not by the browser, not by a proxy,
+ * not by a CDN in front of the deployment.
+ *
+ * It is set on the failures too. A 404 and a 409 say whether an intake exists and what state it is
+ * in, which is the same answer, shorter.
+ */
+export const json = (body: unknown, status = 200): Response =>
+  Response.json(body, { status, headers: { 'Cache-Control': 'no-store' } });
+
 export const badRequest = (message: string, issues: readonly ApiIssue[] = []): Response =>
-  Response.json({ error: message, issues }, { status: 400 });
+  json({ error: message, issues }, 400);
 
-export const notFound = (message: string): Response =>
-  Response.json({ error: message }, { status: 404 });
+export const notFound = (message: string): Response => json({ error: message }, 404);
 
-export const conflict = (message: string): Response =>
-  Response.json({ error: message }, { status: 409 });
+export const conflict = (message: string): Response => json({ error: message }, 409);
 
 /** How far `describeError` follows `cause`. Bounded so a cyclic chain cannot spin. */
 const MAX_CAUSE_DEPTH = 4;
@@ -67,7 +78,7 @@ export function describeError(error: unknown, depth = 0): string {
  */
 export function serverError(context: string, error: unknown): Response {
   console.error(context, describeError(error));
-  return Response.json({ error: 'something went wrong on our side' }, { status: 500 });
+  return json({ error: 'something went wrong on our side' }, 500);
 }
 
 /** Route params are input like any other (ADR-0003): an id that is not a uuid never reaches SQL. */

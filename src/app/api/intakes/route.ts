@@ -18,7 +18,7 @@ import { todayIso } from '@/intake/today';
 import { dedupeKeyFor } from '@/repo/audit';
 import { currentRules } from '@/rules/load';
 
-import { badRequest, issuesOf, serverError } from './http';
+import { badRequest, issuesOf, json, serverError } from './http';
 
 const CREATED_REASON = 'draft created by the intake form';
 
@@ -71,7 +71,7 @@ export async function POST(request: Request): Promise<Response> {
           CREATED_REASON,
         ),
       });
-      return Response.json({ id: created.id, state: 'draft', answers }, { status: 201 });
+      return json({ id: created.id, state: 'draft', answers }, 201);
     });
   } catch (error) {
     return serverError('creating a draft intake failed', error);

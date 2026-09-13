@@ -8,7 +8,7 @@
 import { getDb } from '@/db/client';
 import { submitIntake } from '@/intake/submit';
 
-import { badRequest, conflict, intakeIdSchema, notFound, serverError } from '../../http';
+import { badRequest, conflict, intakeIdSchema, json, notFound, serverError } from '../../http';
 
 interface RouteContext {
   readonly params: Promise<{ readonly id: string }>;
@@ -28,7 +28,7 @@ export async function POST(_request: Request, context: RouteContext): Promise<Re
       case 'invalid':
         return badRequest('some answers need another look', outcome.issues);
       case 'submitted':
-        return Response.json({
+        return json({
           id: outcome.intakeId,
           state: outcome.state,
           outcome: outcome.result.outcome,

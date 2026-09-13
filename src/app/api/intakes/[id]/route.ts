@@ -14,7 +14,15 @@ import { INTAKE_STEPS, stepSchemas, type DraftAnswers, type IntakeStep } from '@
 import { todayIso } from '@/intake/today';
 import { currentRules } from '@/rules/load';
 
-import { badRequest, conflict, intakeIdSchema, issuesOf, notFound, serverError } from '../http';
+import {
+  badRequest,
+  conflict,
+  intakeIdSchema,
+  issuesOf,
+  json,
+  notFound,
+  serverError,
+} from '../http';
 
 interface RouteContext {
   readonly params: Promise<{ readonly id: string }>;
@@ -55,7 +63,7 @@ export async function GET(_request: Request, context: RouteContext): Promise<Res
       .orderBy(desc(eligibilityEvaluations.evaluatedAt), eligibilityEvaluations.shadow)
       .limit(1);
 
-    return Response.json({
+    return json({
       id: intake.id,
       state: intake.state,
       answers: intake.answers,
@@ -111,7 +119,7 @@ export async function PATCH(request: Request, context: RouteContext): Promise<Re
         [body.data.step satisfies IntakeStep]: step.data,
       };
       await tx.update(intakes).set({ answers: merged }).where(eq(intakes.id, id.data));
-      return Response.json({ id: id.data, state: 'draft', answers: merged });
+      return json({ id: id.data, state: 'draft', answers: merged });
     });
   } catch (error) {
     return serverError(`saving a step of intake ${id.data} failed`, error);

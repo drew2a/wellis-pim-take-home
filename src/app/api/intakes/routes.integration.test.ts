@@ -405,3 +405,31 @@ describe('GET /api/intakes/:id', () => {
     ).toBe(404);
   });
 });
+
+describe('cache headers', () => {
+  const submit = (id: string) => submitIntake(new Request('http://x'), params(id));
+  const read = (id: string) => readIntake(new Request('http://x'), params(id));
+  const UNKNOWN = '00000000-0000-4000-8000-000000000000';
+
+  it('tells every store not to keep an intake response', async () => {
+    const id = await newDraft();
+    await fillIn(id);
+
+    // Success and failure alike: a 404 and a 409 answer "does this intake exist, and where has it
+    // got to" — the same disclosure as the body, shorter.
+    const responses = [
+      await post(JSON.stringify(STEPS.identity)),
+      await post('not json'),
+      await read(id),
+      await read(UNKNOWN),
+      await patch(id, 'metrics', STEPS.metrics),
+      await patch(UNKNOWN, 'metrics', STEPS.metrics),
+      await submit(id),
+      await submit(id),
+    ];
+
+    expect(responses.map((response) => response.headers.get('cache-control'))).toEqual(
+      responses.map(() => 'no-store'),
+    );
+  });
+});
