@@ -206,10 +206,16 @@ is the one thing standing between a minor and an approval.
 
 ## Part C — the review console
 
-`/console`, behind `/login`. One queue combining both sources of work — the review items the import
-could not decide and the intakes waiting for a person — filtered by type, age and status, oldest
-first. On this export that is **340 open items and 6 flagged intakes**, with the counts beside every
-filter taken from the database rather than from the page.
+`/console`, behind `/login`. Three panes (ADR-0028): a dark rail of every kind of open work with its
+count, the queue, and the piece of work that is open — so deciding an item never costs a reviewer
+their place in the list. One queue combines both sources of work, the review items the import could
+not decide and the intakes waiting for a person, oldest first. On this export that is **340 open
+items and 6 flagged intakes**, with every count taken from the database rather than from the page.
+
+The filters are the URL: the rail's kinds, the scope (open / resolved / dismissed) and the age are
+query parameters, so a filtered queue survives a reload and can be kept in a tab. `j` and `k` move
+down and up it, and the key printed on each decision button also takes it. The design is the repo
+owner's, recorded in [`docs/design/`](docs/design/).
 
 Every kind of item has a screen and a decision:
 
@@ -255,7 +261,16 @@ Each is a decision, not an omission (R-S4):
   nothing in the console calls it. A merge taken back is rare enough to be worth a deliberate act
   through the API.
 - **Sorting is by age only**, and there are no saved filters. The filters are the URL, so a
-  filtered queue can be kept in a tab, which is most of what saved filters would buy.
+  filtered queue can be kept in a tab, which is most of what saved filters would buy. The queue's
+  own text box and its oldest/newest toggle narrow and reverse **the page already on screen** — they
+  are not a second query, and the header says how many of the page they left.
+- **There is no "Mine".** The console design offers it as a third scope; nothing owns an item —
+  roles were removed in ADR-0027, and claiming an intake writes an audit entry rather than an
+  assignment — so the three scope pills are the three real statuses instead. A pill that filtered on
+  nothing would be worse than an absent one.
+- **The rail lists the kinds; it is not a menu of screens.** Patients, intakes and import runs have
+  no list screens. A patient's record is reached from the item or intake that names it, and the
+  import run is the report in `reports/`.
 - **No bulk actions**, except the row-by-row exclusion on a vocabulary item — which is not a bulk
   action but the opposite: one decision, applied to the rows a person kept.
 - **The queue shows a page, not everything.** 500 rows, oldest first, which is the whole of the
