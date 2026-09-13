@@ -29,7 +29,9 @@ import {
   type Definition,
 } from '@/ui';
 
+import { DuplicateDecision, type PairedIntake } from './DuplicateDecision';
 import { IdentityDecision } from './IdentityDecision';
+import { OrphanDecision } from './OrphanDecision';
 import { VocabularyDecision, type ExcludableRow } from './VocabularyDecision';
 
 export const dynamic = 'force-dynamic';
@@ -89,6 +91,36 @@ function excludable(rows: ReturnType<typeof poundsRowsOf>): ExcludableRow[] {
     keeping: `${row.as_kilograms?.weight_kg ?? '?'} kg, BMI ${row.as_kilograms?.bmi ?? '?'}`,
     instead: `${row.as_pounds.weight_kg} kg, BMI ${row.as_pounds.bmi ?? '?'}`,
   }));
+}
+
+/** The look-alike patients an orphan item carries as context. Shape-tolerant: `payload` is jsonb. */
+function lookAlikes(payload: unknown): readonly Record<string, unknown>[] {
+  const rows = (payload as { look_alikes?: unknown }).look_alikes;
+  return Array.isArray(rows) ? (rows as Record<string, unknown>[]) : [];
+}
+
+/** One payload row as a line: `key value · key value`. Values are scalars or, rarely, nested. */
+const describe = (row: Record<string, unknown>): string =>
+  Object.entries(row)
+    .map(([key, value]) => `${key} ${scalar(value)}`)
+    .join(' · ');
+
+const scalar = (value: unknown): string => {
+  if (value === null || value === undefined) return '—';
+  if (typeof value === 'object') return JSON.stringify(value);
+  // eslint-disable-next-line @typescript-eslint/no-base-to-string -- narrowed to a primitive above.
+  return String(value);
+};
+
+/** The pair a same-day item names, each summarised by what a reviewer compares them on. */
+function pairedIntakes(payload: unknown): PairedIntake[] {
+  const rows = (payload as { intakes?: unknown }).intakes;
+  if (!Array.isArray(rows)) return [];
+  return (rows as Record<string, unknown>[]).flatMap((row) => {
+    const intakeId = row.intake_id;
+    if (typeof intakeId !== 'string') return [];
+    return [{ intakeId, summary: describe(row) }];
+  });
 }
 
 /**
@@ -183,6 +215,47 @@ export default async function ReviewItemPage({
 
       {item.type === 'identity_conflict' && <IdentityConflict view={view} />}
 
+      {item.type === 'orphan_intake' && (
+        <>
+          <SectionTitle>Patients that look like this one</SectionTitle>
+          <Card>
+            <Hint>
+              Context, not a proposal: the importer attached none of them, because even a single
+              look-alike is a guess. Same height, weight within 10 %, signed up at most a year
+              earlier.
+            </Hint>
+            {lookAlikes(item.payload).length === 0 ? (
+              <Hint>None. Search below.</Hint>
+            ) : (
+              <Definitions
+                items={lookAlikes(item.payload).map((row, index) => ({
+                  term: String(index + 1),
+                  value: describe(row),
+                }))}
+              />
+            )}
+          </Card>
+          <SectionTitle>Your decision</SectionTitle>
+          <OrphanDecision itemId={item.id} />
+        </>
+      )}
+
+      {item.type === 'duplicate_intake' && (
+        <>
+          <SectionTitle>The two intakes, side by side</SectionTitle>
+          <Card>
+            <Definitions
+              items={pairedIntakes(item.payload).map((intake) => ({
+                term: intake.intakeId,
+                value: intake.summary,
+              }))}
+            />
+          </Card>
+          <SectionTitle>Your decision</SectionTitle>
+          <DuplicateDecision itemId={item.id} intakes={pairedIntakes(item.payload)} />
+        </>
+      )}
+
       {item.type === 'vocabulary' ? (
         <>
           {rows.length > 0 && (
@@ -214,7 +287,7 @@ export default async function ReviewItemPage({
           />
         </>
       ) : (
-        item.type !== 'identity_conflict' && (
+        !['identity_conflict', 'orphan_intake', 'duplicate_intake'].includes(item.type) && (
           <>
             <SectionTitle>Your decision</SectionTitle>
             <Card>

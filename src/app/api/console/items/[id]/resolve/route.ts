@@ -3,7 +3,13 @@
 // The body says **what the reviewer chose**, never what to write: which values a choice implies is
 // decided on the server, from the item the importer raised (`@/console/decisions`, R-T4). The
 // actor is the session's reviewer and is never read from the body (ADR-0021).
+import {
+  decideDuplicate,
+  duplicateRequestSchema,
+  pairedIntakeIds,
+} from '@/console/decisions/duplicate';
 import { decideIdentity, identityRequestSchema } from '@/console/decisions/identity';
+import { decideOrphan, orphanRequestSchema } from '@/console/decisions/orphan';
 import { DecisionError } from '@/console/decisions/types';
 import {
   decideVocabulary,
@@ -13,7 +19,12 @@ import {
 import { currentReviewer } from '@/console/reviewer';
 import { getDb } from '@/db/client';
 import { conflictView } from '@/repo/identity';
-import { findReviewItem, patientsByLegacyId } from '@/repo/items';
+import {
+  findReviewItem,
+  intakesByExportedId,
+  patientExists,
+  patientsByLegacyId,
+} from '@/repo/items';
 import { mergePatients } from '@/repo/merge';
 import { closeReviewItem, resolveReviewItem } from '@/repo/resolve';
 import { CONSENT_TYPE_DATA_PROCESSING } from '@/consent/text';
@@ -107,6 +118,21 @@ export async function POST(request: Request, context: RouteContext): Promise<Res
           changed: outcome.decided.length + outcome.gained.length,
         });
       }
+      case 'orphan_intake': {
+        const parsed = orphanRequestSchema.safeParse(raw);
+        if (!parsed.success) return badRequest('that is not a decision', issuesOf(parsed.error));
+        const exists =
+          parsed.data.action === 'attach' && (await patientExists(db, parsed.data.patientId));
+        decision = decideOrphan(view.item, parsed.data, exists);
+        break;
+      }
+      case 'duplicate_intake': {
+        const parsed = duplicateRequestSchema.safeParse(raw);
+        if (!parsed.success) return badRequest('that is not a decision', issuesOf(parsed.error));
+        const canonical = await intakesByExportedId(db, pairedIntakeIds(view.item));
+        decision = decideDuplicate(view.item, parsed.data, canonical);
+        break;
+      }
       default:
         // Each type lands with its own screen and its own decider; until then the route says so
         // rather than accepting a decision it cannot carry out.
@@ -119,6 +145,7 @@ export async function POST(request: Request, context: RouteContext): Promise<Res
       outcome: decision.outcome,
       note: decision.note,
       changes: decision.changes,
+      subjects: decision.subjects,
       resolution: decision.resolution,
     });
     return json({ status: decision.outcome, changed: result.changes.length });

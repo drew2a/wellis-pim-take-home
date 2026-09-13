@@ -4,10 +4,17 @@
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { auditEntries, patientLegacyIds, patients, reviewItems, reviewers } from '@/db/schema';
+import {
+  auditEntries,
+  intakes,
+  patientLegacyIds,
+  patients,
+  reviewItems,
+  reviewers,
+} from '@/db/schema';
 import { loadEnv } from '@/env';
 import { createTestDatabase, type TestDatabase, type TestDb } from '@/test/database';
-import { patientRow, reviewItemRow } from '@/test/rows';
+import { intakeRow, patientRow, reviewItemRow } from '@/test/rows';
 
 const holder = vi.hoisted((): { db: unknown } => ({ db: undefined }));
 vi.mock('@/db/client', () => ({ getDb: () => holder.db }));
@@ -350,5 +357,119 @@ describe('resolving an identity conflict', () => {
     const [loserRow] = await db.select().from(patients).where(eq(patients.id, loser));
     expect(row?.status).toBe('open');
     expect(loserRow?.mergedInto).toBeNull();
+  });
+});
+
+describe('resolving an orphan intake', () => {
+  async function orphan(): Promise<{ itemId: string; intakeId: string }> {
+    const [intake] = await db
+      .insert(intakes)
+      .values({ ...intakeRow('INT-9902'), patientId: null })
+      .returning({ id: intakes.id });
+    const intakeId = intake?.id ?? '';
+    const itemId = await item({
+      type: 'orphan_intake',
+      field: 'patient_id',
+      intakeId,
+      title: 'intake INT-9902 references a patient that does not exist',
+      payload: { look_alikes: [], legacy_patient_id: 'reccXw7xuGLe0LLnN' },
+      dedupeKey: 'orphan_intake|row|legacy_intake:INT-9902|patient_id|ORPHAN|reccXw7xuGLe0LLnN',
+    });
+    return { itemId, intakeId };
+  }
+
+  it('attaches the intake to the patient a reviewer chose', async () => {
+    const patientId = await patient('recA', null);
+    const { itemId, intakeId } = await orphan();
+
+    const response = await post(itemId, {
+      action: 'attach',
+      note: 'same height and weight, signed up the week before',
+      patientId,
+    });
+    expect(response.status).toBe(200);
+
+    const [row] = await db.select().from(intakes).where(eq(intakes.id, intakeId));
+    expect(row?.patientId).toBe(patientId);
+    const entries = await db.select().from(auditEntries).where(eq(auditEntries.entityId, intakeId));
+    expect(entries[0]?.changes).toEqual([{ field: 'patient_id', from: null, to: patientId }]);
+  });
+
+  it('refuses a patient that does not exist, and attaches nothing', async () => {
+    const { itemId, intakeId } = await orphan();
+    const response = await post(itemId, {
+      action: 'attach',
+      note: 'ok',
+      patientId: '00000000-0000-4000-8000-000000000000',
+    });
+    expect(response.status).toBe(400);
+    const [row] = await db.select().from(intakes).where(eq(intakes.id, intakeId));
+    expect(row?.patientId).toBeNull();
+  });
+
+  it('leaves it unresolved, which is an acceptable outcome', async () => {
+    const { itemId, intakeId } = await orphan();
+    await post(itemId, { action: 'leave_unresolved', note: 'no candidate is close enough' });
+
+    const [row] = await db.select().from(reviewItems).where(eq(reviewItems.id, itemId));
+    expect(row?.status).toBe('dismissed');
+    const [intake] = await db.select().from(intakes).where(eq(intakes.id, intakeId));
+    expect(intake?.patientId).toBeNull();
+  });
+});
+
+describe('resolving a same-day pair', () => {
+  async function pair(): Promise<{ itemId: string; ids: string[] }> {
+    const ids: string[] = [];
+    for (const exportedId of ['INT-8342', 'INT-8344']) {
+      const [row] = await db
+        .insert(intakes)
+        .values({ ...intakeRow(exportedId), state: 'legacy_approved', outcome: 'approved' })
+        .returning({ id: intakes.id });
+      ids.push(row?.id ?? '');
+    }
+    const itemId = await item({
+      type: 'duplicate_intake',
+      title: '2 intakes from one patient on 2026-04-21',
+      payload: {
+        intakes: [{ intake_id: 'INT-8342' }, { intake_id: 'INT-8344' }],
+        submitted_at: '2026-04-21',
+      },
+      dedupeKey:
+        'duplicate_intake|row|legacy_patient:recF|submitted_at|SAME_DAY_INTAKES|INT-8342,INT-8344',
+    });
+    return { itemId, ids };
+  }
+
+  it('records the decision against both intakes and changes neither', async () => {
+    const { itemId, ids } = await pair();
+    const response = await post(itemId, {
+      action: 'keep_one',
+      note: 'the second is the visit; the first was started and abandoned',
+      intakeId: 'INT-8344',
+    });
+    expect(response.status).toBe(200);
+
+    for (const id of ids) {
+      const entries = await db.select().from(auditEntries).where(eq(auditEntries.entityId, id));
+      expect(entries).toHaveLength(1);
+      // Something happened; nothing transitioned (ADR-0014 item 7).
+      expect(entries[0]).toMatchObject({ fromState: null, toState: null, reviewItemId: itemId });
+      const [row] = await db.select().from(intakes).where(eq(intakes.id, id));
+      expect(row).toMatchObject({ state: 'legacy_approved', outcome: 'approved' });
+    }
+
+    const [row] = await db.select().from(reviewItems).where(eq(reviewItems.id, itemId));
+    expect(row?.resolution).toMatchObject({ record_of_note: 'INT-8344', also_kept: ['INT-8342'] });
+  });
+
+  it('refuses an intake that is not one of the pair', async () => {
+    const { itemId } = await pair();
+    const response = await post(itemId, {
+      action: 'keep_one',
+      note: 'ok',
+      intakeId: 'INT-0001',
+    });
+    expect(response.status).toBe(400);
   });
 });

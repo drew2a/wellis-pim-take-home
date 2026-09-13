@@ -13,6 +13,8 @@ export interface Decision {
   readonly outcome: 'resolved' | 'dismissed';
   readonly note: string;
   readonly changes: readonly FieldChange[];
+  /** Rows the decision is about though it changes none of them (see `ResolveRequest.subjects`). */
+  readonly subjects?: readonly { readonly entityType: string; readonly entityId: string }[];
   /** Stored on the item: what was chosen, in enough detail to read back years later. */
   readonly resolution: Readonly<Record<string, unknown>>;
 }

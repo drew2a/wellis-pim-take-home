@@ -54,6 +54,13 @@ export interface ResolveRequest {
   /** The reviewer's own words, and the audit entry's `reason`. Never empty (R-C6). */
   readonly note: string;
   readonly changes?: readonly FieldChange[] | undefined;
+  /**
+   * Rows the decision is *about* though it changes none of them — the two intakes of a same-day
+   * pair, where marking one as the record of note says something about both and rewrites neither.
+   * Each gets the decision's audit entry. Ignored when there are changes, which name their own rows.
+   */
+  readonly subjects?:
+    readonly { readonly entityType: string; readonly entityId: string }[] | undefined;
   /** What was chosen, stored on the item: the action, the excluded rows, the accepted proposal. */
   readonly resolution?: unknown;
 }
@@ -286,7 +293,15 @@ export async function resolveReviewItem(
     }
 
     // A decision that changed nothing is still a decision, and still says who took it and why.
-    if (drafts.length === 0) drafts.push(entry(...subjectOf(item)));
+    if (drafts.length === 0) {
+      const subjects = request.subjects ?? [];
+      if (subjects.length > 0) {
+        for (const subject of subjects)
+          drafts.push(entry(subject.entityType, subject.entityId, null));
+      } else {
+        drafts.push(entry(...subjectOf(item)));
+      }
+    }
 
     const written = await tx.insert(auditEntries).values(drafts).returning({ id: auditEntries.id });
 

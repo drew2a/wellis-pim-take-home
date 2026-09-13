@@ -47,6 +47,27 @@ export async function findReviewItem(db: Queryable, id: string): Promise<ReviewI
   return { item, rule: ruleOf(item.dedupeKey), patient, intake };
 }
 
+/** Whether a patient a reviewer named still exists, before a decision references it. */
+export async function patientExists(db: Queryable, id: string): Promise<boolean> {
+  const [row] = await db.select({ id: patients.id }).from(patients).where(eq(patients.id, id));
+  return row !== undefined;
+}
+
+/** Exported intake id (`INT-8342`) to canonical uuid, for the pair a same-day item names. */
+export async function intakesByExportedId(
+  db: Queryable,
+  exportedIds: readonly string[],
+): Promise<Map<string, string>> {
+  if (exportedIds.length === 0) return new Map();
+  const rows = await db
+    .select({ intakeId: intakes.intakeId, id: intakes.id })
+    .from(intakes)
+    .where(inArray(intakes.intakeId, [...exportedIds]));
+  return new Map(
+    rows.flatMap((row) => (row.intakeId === null ? [] : [[row.intakeId, row.id] as const])),
+  );
+}
+
 /**
  * Exported row id to canonical patient, through `created_from_legacy_id` — the column that says
  * which exported row a canonical row was built from and never changes. `patient_legacy_ids` would
