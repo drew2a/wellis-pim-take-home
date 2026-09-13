@@ -681,6 +681,12 @@
   ],
   "identity": {
     "candidates": 70,
+    "groupSizes": [
+      {
+        "key": "2",
+        "rows": 70
+      }
+    ],
     "tier1Merged": 28,
     "tier2": 3,
     "tier3": 39,
@@ -981,7 +987,7 @@
       "notCovered": "the notes say only that \"labelling discipline varied\""
     },
     {
-      "finding": "Three patient records are shifted about 36 years into the future, consistently across all three files; their dates of birth are normal, so it is the row that moved, not a digit",
+      "finding": "Whole patient records dated in 2062 — decades into the future, consistently across all three files; their dates of birth are normal, so it is the row that moved, not a digit",
       "numbers": {
         "patientRows": 3,
         "intakeRows": 3,
@@ -1001,10 +1007,13 @@
       "notCovered": "the notes question the log only *before* 2023"
     },
     {
-      "finding": "Valid BSNs carried by more than one patient row: an identity collision on a national identifier, not a formatting problem",
+      "finding": "Valid BSNs carried by more than one patient row. Where the two rows were identical on identity the importer merged them and the value now belongs to one patient; the rest are an identity collision on a national identifier, not a formatting problem",
       "numbers": {
         "bsnValues": 30,
-        "patients": 60
+        "valuesResolvedByTier1Merge": 9,
+        "rowsThoseMergesCovered": 18,
+        "valuesStillOnMoreThanOneSurvivingPatient": 21,
+        "survivingPatientsSharingThem": 42
       },
       "evidence": "P-6, P-34",
       "notCovered": "the notes say BSNs were \"never validated\", which is a claim about their shape"
@@ -1056,12 +1065,12 @@
       "notCovered": "the notes call the file append-only, which is what makes the order look safe"
     },
     {
-      "finding": "Patients with no consent event at all, and `v1` consent-text versions still appearing after the `v2` cut-over: silence before 2023 cannot be told from a lost record",
+      "finding": "Patients with no consent event at all, and `v1` consent-text versions still appearing after the first `v2` event (2024-01-01): silence before 2023 cannot be told from a lost record",
       "numbers": {
         "patientsWithNoRecord": 99,
         "eventsBefore2023": 477,
         "patientsWithNoEventSince2023": 432,
-        "eventsStillLabelledV1After2024": 64
+        "eventsStillLabelledV1AfterIt": 64
       },
       "evidence": "P-30, P-31, P-32",
       "notCovered": "the notes say the log is \"believed complete from 2023 onwards\" and leave the rest open"
