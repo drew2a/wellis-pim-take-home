@@ -291,6 +291,119 @@ export function CompareCard({
   );
 }
 
+export interface MergeOption {
+  readonly value: string;
+  readonly checked: boolean;
+  readonly onPick: () => void;
+}
+
+export interface MergeField {
+  readonly field: string;
+  /** One per record in the merge, survivor first. Empty where the two records agree. */
+  readonly options: readonly MergeOption[];
+  /** The value both records hold, where they hold the same one. */
+  readonly agreed: string | null;
+  readonly typed: string;
+  readonly onType: (value: string) => void;
+  /** What records in the group but not in this merge hold, if any. Shown, never pickable. */
+  readonly aside: string | null;
+}
+
+/**
+ * The fields of a merge, as a choice per row (R-C5).
+ *
+ * Two columns, survivor on the left and checked by default, because that is what the merge does
+ * with a field nobody decides (ADR-0022 §1). **A field the two records agree on is shown, not
+ * offered**: a choice between two identical values is not a choice, and ten of them between the
+ * reviewer and the one field that contradicts is the queue's time spent on nothing.
+ */
+export function MergeFields({
+  title,
+  columns,
+  fields,
+}: {
+  readonly title: string;
+  readonly columns: readonly string[];
+  readonly fields: readonly MergeField[];
+}): ReactElement {
+  return (
+    <div className="overflow-hidden rounded-[10px] border border-grey-200 bg-white">
+      <PanelHead title={title} />
+      <div className="flex flex-wrap gap-x-3.5 gap-y-0.5 border-b border-grey-100 px-[18px] py-[9px]">
+        <span className="w-30 shrink-0 font-mono text-[11px] tracking-[0.08em] text-grey-600 uppercase">
+          field
+        </span>
+        {columns.map((column, index) => (
+          <span
+            key={index}
+            className="min-w-0 flex-1 basis-38 text-[12.5px] font-semibold break-words text-grey-900"
+          >
+            {column}
+          </span>
+        ))}
+      </div>
+
+      {fields.map((row) => (
+        <div
+          key={row.field}
+          className={`px-[18px] py-2 ${
+            row.agreed === null
+              ? 'border-b border-differs-200 bg-differs-50'
+              : 'border-b border-hairline'
+          }`}
+        >
+          <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1">
+            <span className="w-30 shrink-0 font-mono text-xs text-grey-600">{row.field}</span>
+            {row.agreed !== null ? (
+              <span className="min-w-0 flex-1 text-[13.5px] break-words text-grey-500">
+                {row.agreed}
+              </span>
+            ) : (
+              row.options.map((option, index) => (
+                <label
+                  key={index}
+                  className="flex min-w-0 flex-1 basis-38 cursor-pointer items-center gap-2 text-[13.5px] text-grey-900"
+                >
+                  <input
+                    type="radio"
+                    name={`merge-${row.field}`}
+                    checked={option.checked}
+                    onChange={option.onPick}
+                    className="size-4 shrink-0 accent-accent-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-600"
+                  />
+                  <span className="min-w-0 break-words">{option.value}</span>
+                </label>
+              ))
+            )}
+          </div>
+
+          {row.agreed === null && (
+            <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1 pt-1.5">
+              <span className="w-30 shrink-0" />
+              <input
+                type="text"
+                value={row.typed}
+                onChange={(event) => {
+                  row.onType(event.target.value);
+                }}
+                placeholder="or type a value"
+                aria-label={`A value you type for ${row.field}`}
+                className="min-w-0 flex-1 rounded-[7px] border border-grey-200 bg-white px-2.5 py-1 text-[13px] text-grey-900 placeholder:text-grey-400 focus:border-accent-600 focus:outline-none"
+              />
+            </div>
+          )}
+
+          {row.aside !== null && (
+            <p className="pt-1 pl-[calc(--spacing(30)+--spacing(3.5))] text-xs text-grey-500">
+              {row.aside}
+            </p>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /** What a verdict line is: the engine's own word for it, and the colour that word already has. */
 const VERDICT_TONES: Readonly<Record<string, Tone>> = {
   rejected: 'bad',

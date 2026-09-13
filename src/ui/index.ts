@@ -27,10 +27,13 @@ export {
   EvidenceCard,
   Explainer,
   FindingsCard,
+  MergeFields,
   Folded,
   type CompareRow,
   type EvidenceRow,
   type Finding,
+  type MergeField,
+  type MergeOption,
 } from './Detail';
 export { QueuePane, type QueueChoice, type QueueItem } from './Queue';
 export {

@@ -111,6 +111,25 @@ distinction is the canvas's, and it is the one typographic rule this console has
 ADR-0018 is unchanged in substance: the tokens are still one block, the classes are still only in
 `src/ui/`, and there is still one light theme.
 
+### 5. A merge asks only about the fields that contradict
+
+The per-field picker of ADR-0022 offered a radio pair and a text field for all ten person fields,
+stacked. On the first open item that is thirty controls for one decision, and nine of the ten
+fields hold the same value in both records — a choice between `Fleur de Groot` and
+`Fleur de Groot`. The picker is now two columns, survivor on the left, and **a field the records
+agree on is shown rather than offered**.
+
+The survivor's column is checked before anything is touched, as a preview: that is what the merge
+does with a field nobody decides. Where the survivor holds no value and the other record does, the
+*other* column is checked instead, because that is the field the survivor gains (ADR-0022 §1). The
+preview posts nothing either way — an untouched form sends the same empty `fieldDecisions` it sent
+before, so ADR-0022's precedence rule is untouched and the importer's merges are unaffected.
+
+What this gives up: a reviewer can no longer type a replacement for a field **both** records agree
+on. R-C5's pick-and-edit survives on every field where the two records disagree, which is the case
+the item exists for; correcting a value both rows got wrong is a `data_quality` decision and has
+its own screen.
+
 ### Consequences
 
 - Good: a reviewer keeps their place. Deciding an item leaves the queue where it was, one row
@@ -121,8 +140,11 @@ ADR-0018 is unchanged in substance: the tokens are still one block, the classes 
   see Confirmation.
 - Bad: the console is now the widest thing in the product and wants ~840 px. The intake flow, which
   is the patient's screen, is untouched and stays narrow.
-- Neutral: `src/ui/` grows from nine files to thirteen. `Table`, `FilterPanel` and `PageHeader`
-  stay — the patient screen and the intake flow still use them.
+- Good: the merge picker drops from thirty controls to the one or two that are a real question.
+- Bad: a value both records agree on can no longer be edited from the merge screen (§5).
+- Neutral: `src/ui/` grows from nine files to thirteen. `Table` and `PageHeader` stay — the patient
+  screen and the intake flow still use them; `Filters` and `Findings` go, replaced by the rail, the
+  scope pills and `FindingsCard`.
 
 ### Confirmation
 

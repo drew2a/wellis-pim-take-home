@@ -291,6 +291,11 @@ Each is a decision, not an omission (R-S4):
   re-evaluates history at all — ADR-0005 says shadow rows are browsable and never applied. The
   console shows the ruleset version next to every shadow verdict, so a stale one is at least
   attributable.
+- **A merge asks only about the fields that contradict** (ADR-0028 §5). The picker is two columns,
+  survivor on the left and checked by default; a field both records hold the same value in is shown
+  rather than offered, so the one field that disagrees is not buried under nine that do not. The
+  cost is that a value both rows agree on cannot be retyped from the merge screen — that is a
+  `data_quality` decision, and it has one.
 - **A merge joins two records at a time.** An identity item comparing three or more — reachable
   through the new flow; there are none in the export — is decided one pair at a time, and the
   records not in that merge are left exactly as they are (ADR-0026 item 3).

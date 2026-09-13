@@ -25,8 +25,8 @@ import {
   ENTER,
   ErrorText,
   Hint,
+  MergeFields,
   NEEDS_A_NOTE,
-  TextField,
 } from '@/ui';
 
 export interface DecisionRow {
@@ -78,7 +78,17 @@ export function IdentityDecision({
   };
 
   const inMerge = (index: number): boolean => index === survivor || index === loser;
-  const roleOf = (index: number): string => (index === survivor ? 'survives' : 'merged in');
+
+  /**
+   * The column checked before the reviewer touches anything — a preview of what the merge does
+   * with a field nobody decides, not a decision taken on their behalf. That is the survivor's
+   * value, except where the survivor holds none and the other record does: there the survivor
+   * *gains* the field, so showing its own empty cell checked would be a lie (ADR-0022 §1).
+   *
+   * Nothing is posted for an untouched field either way: `picks` stays empty until a click.
+   */
+  const defaultColumn = (row: DecisionRow): number =>
+    (row.values[survivor] ?? '') === '' && (row.values[loser] ?? '') !== '' ? loser : survivor;
   const labelOf = (index: number): string => candidates[index]?.label ?? '';
 
   const decisions = (): Record<string, unknown> => {
@@ -171,57 +181,43 @@ export function IdentityDecision({
           />
         )}
 
-        <DetailSection title="The fields the survivor keeps">
-          <Hint>
-            For any field they disagree on, pick which value the surviving record keeps — or type
-            one. A field you leave alone keeps the survivor&rsquo;s value, and fills in from the
-            other record only where the survivor has none.
-          </Hint>
-          {decidable.map((row) => (
-            <div key={row.field}>
-              <Caption>
-                {row.field}
-                {row.differs ? ' — they disagree' : ''}
-              </Caption>
-              {row.values.map((value, index) =>
-                inMerge(index) ? (
-                  <Choice
-                    key={candidates[index]?.patientId ?? String(index)}
-                    type="radio"
-                    name={`field-${row.field}`}
-                    checked={(picks[row.field] as { index?: number } | undefined)?.index === index}
-                    onChange={() => {
-                      setPicks({ ...picks, [row.field]: { index } });
-                    }}
-                  >
-                    {`${value ?? '—'} — ${labelOf(index)}, ${roleOf(index)}`}
-                  </Choice>
-                ) : null,
-              )}
-              {candidates.length > 2 && (
-                <Hint>
-                  {row.values
-                    .flatMap((value, index) =>
-                      inMerge(index) ? [] : [`${value ?? '—'} — ${labelOf(index)}`],
-                    )
-                    .join('  ·  ')}
-                  {' — not part of this merge.'}
-                </Hint>
-              )}
-              <TextField
-                label=""
-                placeholder="or type a value"
-                value={(picks[row.field] as { edited?: string } | undefined)?.edited ?? ''}
-                onChange={(e) => {
-                  setPicks({ ...picks, [row.field]: { edited: e.target.value } });
-                }}
-              />
-            </div>
-          ))}
-          {Object.keys(picks).length > 0 && (
-            <Caption>{`${String(Object.keys(picks).length)} of ${String(decidable.length)} fields decided by hand; the rest follow the rule above.`}</Caption>
-          )}
-        </DetailSection>
+        <MergeFields
+          title="The fields the survivor keeps"
+          columns={[`${labelOf(survivor)} · survives`, `${labelOf(loser)} · merged in`]}
+          fields={decidable.map((row) => {
+            const agreed = row.differs ? null : (row.values[survivor] ?? '—');
+            const chosen = picks[row.field];
+            return {
+              field: row.field,
+              agreed,
+              options:
+                agreed !== null
+                  ? []
+                  : [survivor, loser].map((index) => ({
+                      value: row.values[index] ?? '—',
+                      checked:
+                        chosen === undefined
+                          ? index === defaultColumn(row)
+                          : 'index' in chosen && chosen.index === index,
+                      onPick: () => {
+                        setPicks({ ...picks, [row.field]: { index } });
+                      },
+                    })),
+              typed: chosen !== undefined && 'edited' in chosen ? chosen.edited : '',
+              onType: (value: string) => {
+                setPicks({ ...picks, [row.field]: { edited: value } });
+              },
+              aside:
+                candidates.length > 2
+                  ? `${row.values
+                      .flatMap((value, index) =>
+                        inMerge(index) ? [] : [`${value ?? '—'} — ${labelOf(index)}`],
+                      )
+                      .join('  ·  ')} — not part of this merge.`
+                  : null,
+            };
+          })}
+        />
       </DetailBody>
 
       <DecisionBar
