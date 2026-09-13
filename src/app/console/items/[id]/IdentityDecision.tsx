@@ -23,6 +23,7 @@ import {
   Choice,
   ErrorText,
   Hint,
+  NEEDS_A_NOTE,
   TextAreaField,
   TextField,
 } from '@/ui';
@@ -236,7 +237,7 @@ export function IdentityDecision({
         Merging repoints every legacy id, recomputes the consent state and records which record
         supplied which field. It can be undone through the API; there is no screen for that.
       </Hint>
-      <ButtonRow>
+      <ButtonRow reason={note.trim() === '' ? NEEDS_A_NOTE : undefined}>
         <Button
           variant="primary"
           busy={busy === 'merge'}

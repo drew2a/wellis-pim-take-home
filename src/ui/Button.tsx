@@ -1,4 +1,9 @@
-import type { ReactElement, ReactNode } from 'react';
+'use client';
+
+// `'use client'` for the same reason `./Field.tsx` carries it: `ButtonRow` names its reason with
+// `useId`, and a hook cannot run in a server component. Every caller is already a client
+// component; saying so here stops a future server-rendered button from failing at runtime.
+import { useId, type ReactElement, type ReactNode } from 'react';
 
 export type ButtonVariant = 'primary' | 'secondary' | 'danger';
 
@@ -49,7 +54,39 @@ export function Button({
   );
 }
 
-/** The one place a screen's actions live, so they are never scattered down the page. */
-export function ButtonRow({ children }: { children: ReactNode }): ReactElement {
-  return <div className="mt-8 flex gap-3">{children}</div>;
+/**
+ * Why a row of actions is unavailable, when it is. Every decision in the console records the
+ * reviewer's own words (R-C6), so an empty note is what usually holds the row, and this is that
+ * sentence in one place rather than seven.
+ */
+export const NEEDS_A_NOTE =
+  'Write why above first: a decision is only recorded with the reason you give it.';
+
+/**
+ * The one place a screen's actions live, so they are never scattered down the page.
+ *
+ * `reason` is what a disabled row owes the reader. `Button`'s own `disabled` stops the click and
+ * says nothing — a reviewer facing two grey buttons has to guess which field is missing — so a row
+ * that can be unavailable says why, above the buttons and bound to them for a screen reader.
+ */
+export function ButtonRow({
+  reason,
+  children,
+}: {
+  readonly reason?: string | undefined;
+  readonly children: ReactNode;
+}): ReactElement {
+  const id = useId();
+  return (
+    <div className="mt-8">
+      {reason !== undefined && (
+        <p id={id} className="mb-2 text-sm text-grey-500">
+          {reason}
+        </p>
+      )}
+      <div className="flex gap-3" aria-describedby={reason === undefined ? undefined : id}>
+        {children}
+      </div>
+    </div>
+  );
 }

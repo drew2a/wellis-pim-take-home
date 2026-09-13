@@ -10,7 +10,7 @@
 // The tokens the classes here refer to — colours, the font stack — are the `@theme` block in
 // `src/app/globals.css`.
 export { Badge, StateBadge } from './Badge';
-export { Button, ButtonRow, type ButtonVariant } from './Button';
+export { Button, ButtonRow, NEEDS_A_NOTE, type ButtonVariant } from './Button';
 export { Card } from './Card';
 export { Definitions, Raw, type Definition } from './Definitions';
 export { Choice, Field, TextAreaField, TextField } from './Field';

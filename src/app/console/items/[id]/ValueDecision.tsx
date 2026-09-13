@@ -21,6 +21,7 @@ import {
   Card,
   ErrorText,
   Hint,
+  NEEDS_A_NOTE,
   Raw,
   TextAreaField,
   TextField,
@@ -85,7 +86,7 @@ export function ValueDecision({
           required
         />
         {failure !== null && <ErrorText>{failure}</ErrorText>}
-        <ButtonRow>
+        <ButtonRow reason={noted ? undefined : NEEDS_A_NOTE}>
           <Button
             variant="primary"
             busy={busy === 'dismiss'}
@@ -115,7 +116,7 @@ export function ValueDecision({
 
       <TextField
         label="Or a value you establish"
-        hint="Leave empty to use one of the buttons below instead."
+        hint="Only “Use the value above” reads this field; the other buttons ignore it."
         value={value}
         onChange={(e) => {
           setValue(e.target.value);
@@ -136,7 +137,7 @@ export function ValueDecision({
         Every one of these writes the same record: the value, an audit entry naming you, and your
         note. A value you set here is yours, and no later import overwrites it.
       </Caption>
-      <ButtonRow>
+      <ButtonRow reason={noted ? undefined : NEEDS_A_NOTE}>
         {proposal !== null && (
           <Button
             variant="primary"

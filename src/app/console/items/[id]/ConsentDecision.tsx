@@ -6,7 +6,7 @@
 import { useRouter } from 'next/navigation';
 import { useState, type ReactElement } from 'react';
 
-import { Button, ButtonRow, Caption, Card, ErrorText, TextAreaField } from '@/ui';
+import { Button, ButtonRow, Caption, Card, ErrorText, NEEDS_A_NOTE, TextAreaField } from '@/ui';
 
 export function ConsentDecision({
   itemId,
@@ -68,7 +68,7 @@ export function ConsentDecision({
       <Caption>
         Recorded against the patient. No consent event is written: the log is what the patient did.
       </Caption>
-      <ButtonRow>
+      <ButtonRow reason={noted ? undefined : NEEDS_A_NOTE}>
         {conflicted &&
           (['granted', 'revoked'] as const).map((state) => (
             <Button

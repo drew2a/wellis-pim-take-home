@@ -8,7 +8,16 @@
 import { useRouter } from 'next/navigation';
 import { useState, type ReactElement } from 'react';
 
-import { Button, ButtonRow, Card, Choice, ErrorText, Hint, TextAreaField } from '@/ui';
+import {
+  Button,
+  ButtonRow,
+  Card,
+  Choice,
+  ErrorText,
+  Hint,
+  NEEDS_A_NOTE,
+  TextAreaField,
+} from '@/ui';
 
 export interface ExcludableRow {
   readonly legacyId: string;
@@ -102,7 +111,7 @@ export function VocabularyDecision({
       />
       {failure !== null && <ErrorText>{failure}</ErrorText>}
       <Hint>{question}</Hint>
-      <ButtonRow>
+      <ButtonRow reason={note.trim() === '' ? NEEDS_A_NOTE : undefined}>
         <Button
           variant="primary"
           busy={busy === 'confirm'}

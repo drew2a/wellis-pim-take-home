@@ -6,7 +6,16 @@
 import { useRouter } from 'next/navigation';
 import { useState, type ReactElement } from 'react';
 
-import { Button, ButtonRow, Caption, Card, ErrorText, Hint, TextAreaField } from '@/ui';
+import {
+  Button,
+  ButtonRow,
+  Caption,
+  Card,
+  ErrorText,
+  Hint,
+  NEEDS_A_NOTE,
+  TextAreaField,
+} from '@/ui';
 
 export function IntakeDecision({
   intakeId,
@@ -114,7 +123,7 @@ export function IntakeDecision({
             required
           />
           {failure !== null && <ErrorText>{failure}</ErrorText>}
-          <ButtonRow>
+          <ButtonRow reason={note.trim() === '' ? NEEDS_A_NOTE : undefined}>
             <Button
               variant="primary"
               busy={busy === 'approved'}

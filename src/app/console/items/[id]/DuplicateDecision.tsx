@@ -7,7 +7,16 @@
 import { useRouter } from 'next/navigation';
 import { useState, type ReactElement } from 'react';
 
-import { Button, ButtonRow, Caption, Card, Choice, ErrorText, TextAreaField } from '@/ui';
+import {
+  Button,
+  ButtonRow,
+  Caption,
+  Card,
+  Choice,
+  ErrorText,
+  NEEDS_A_NOTE,
+  TextAreaField,
+} from '@/ui';
 
 export interface PairedIntake {
   readonly intakeId: string;
@@ -79,7 +88,7 @@ export function DuplicateDecision({
       />
       {failure !== null && <ErrorText>{failure}</ErrorText>}
       <Caption>Both intakes stay, and neither outcome changes.</Caption>
-      <ButtonRow>
+      <ButtonRow reason={noted ? undefined : NEEDS_A_NOTE}>
         <Button
           variant="primary"
           busy={busy === 'keep_one'}

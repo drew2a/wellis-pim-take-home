@@ -6,7 +6,7 @@
 import { useRouter } from 'next/navigation';
 import { useState, type ReactElement } from 'react';
 
-import { Button, ButtonRow, Caption, Card, ErrorText, TextAreaField } from '@/ui';
+import { Button, ButtonRow, Caption, Card, ErrorText, NEEDS_A_NOTE, TextAreaField } from '@/ui';
 
 export function ClinicalHistoryDecision({ itemId }: { readonly itemId: string }): ReactElement {
   const router = useRouter();
@@ -54,7 +54,7 @@ export function ClinicalHistoryDecision({ itemId }: { readonly itemId: string })
       <Caption>
         The legacy outcome does not change. This is recorded against the intake, beside it.
       </Caption>
-      <ButtonRow>
+      <ButtonRow reason={noted ? undefined : NEEDS_A_NOTE}>
         <Button
           variant="primary"
           busy={busy === 'resolve'}

@@ -17,6 +17,7 @@ import {
   Choice,
   ErrorText,
   Hint,
+  NEEDS_A_NOTE,
   TextAreaField,
   TextField,
 } from '@/ui';
@@ -92,7 +93,9 @@ export function OrphanDecision({ itemId }: { readonly itemId: string }): ReactEl
           setQuery(e.target.value);
         }}
       />
-      <ButtonRow>
+      <ButtonRow
+        reason={query.trim().length < 2 ? 'Type at least two characters to search.' : undefined}
+      >
         <Button
           busy={busy === 'search'}
           disabled={query.trim().length < 2 || busy !== null}
@@ -133,7 +136,7 @@ export function OrphanDecision({ itemId }: { readonly itemId: string }): ReactEl
       <Caption>
         An unresolved orphan is an acceptable outcome. The import report counts them.
       </Caption>
-      <ButtonRow>
+      <ButtonRow reason={noted ? undefined : NEEDS_A_NOTE}>
         <Button
           variant="primary"
           busy={busy === 'attach'}
