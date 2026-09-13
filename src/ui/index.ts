@@ -12,7 +12,7 @@
 export { Badge, StateBadge } from './Badge';
 export { Button, ButtonRow, type ButtonVariant } from './Button';
 export { Card } from './Card';
-export { Choice, Field, TextArea, TextInput } from './Field';
+export { Choice, Field, TextAreaField, TextField } from './Field';
 export { Page, PageTitle } from './Page';
 export { StepIndicator } from './Steps';
 export { Table, type Column } from './Table';

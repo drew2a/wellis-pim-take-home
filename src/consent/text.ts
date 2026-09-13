@@ -11,10 +11,11 @@ export const CONSENT_TEXT_VERSION = 'v3';
 /** The one consent type the export declares (`src/import/mapper/vocabulary.ts`). */
 export const CONSENT_TYPE_DATA_PROCESSING = 'data_processing';
 
-export const CONSENT_TEXT = `I agree that Wellis may process the health data I provide in this
-form — my date of birth, height, weight, medication use and medical conditions — in order to
-assess whether their weight-care programme is suitable for me, and that a member of the Wellis
-care team may read it for that purpose.
+// Every line break below is one the patient sees: `Prose` reproduces this text as authored rather
+// than reflowing it (`src/ui/Text.tsx`), so that what is displayed and what is stored are the same
+// text. A paragraph is therefore one long source line, and a blank line separates paragraphs. Do
+// not wrap these lines to the editor's margin.
+// prettier-ignore
+export const CONSENT_TEXT = `I agree that Wellis may process the health data I provide in this form — my date of birth, height, weight, medication use and medical conditions — in order to assess whether their weight-care programme is suitable for me, and that a member of the Wellis care team may read it for that purpose.
 
-I understand that I can withdraw this consent at any time by contacting Wellis, and that
-withdrawing it does not affect the lawfulness of the processing that took place before.`;
+I understand that I can withdraw this consent at any time by contacting Wellis, and that withdrawing it does not affect the lawfulness of the processing that took place before.`;

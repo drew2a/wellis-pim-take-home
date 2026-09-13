@@ -7,7 +7,12 @@ export interface Column<T> {
   readonly cell: (row: T) => ReactNode;
 }
 
-/** A list of rows with a header, zebra striping, and something to say when there are none. */
+/**
+ * A list of rows with a header, zebra striping, and something to say when there are none.
+ *
+ * Columns are keyed by position, not by header: the first thing this table has to show is a
+ * conflict side by side (`CLAUDE.md` §6), which is two columns with the same heading.
+ */
 export function Table<T>({
   columns,
   rows,
@@ -32,9 +37,9 @@ export function Table<T>({
       <table className="w-full border-collapse text-left">
         <thead>
           <tr className="border-b border-grey-300">
-            {columns.map((column) => (
+            {columns.map((column, index) => (
               <th
-                key={column.header}
+                key={index}
                 scope="col"
                 className={`px-3 py-2 text-sm font-semibold text-grey-600 ${column.numeric === true ? 'text-right' : ''}`}
               >
@@ -46,9 +51,9 @@ export function Table<T>({
         <tbody>
           {rows.map((row) => (
             <tr key={rowKey(row)} className="border-b border-grey-200 even:bg-grey-50">
-              {columns.map((column) => (
+              {columns.map((column, index) => (
                 <td
-                  key={column.header}
+                  key={index}
                   className={`px-3 py-2 align-top text-grey-800 ${column.numeric === true ? 'text-right tabular-nums' : ''}`}
                 >
                   {column.cell(row)}

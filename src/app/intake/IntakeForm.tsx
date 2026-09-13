@@ -26,10 +26,9 @@ import {
   Findings,
   Hint,
   Prose,
-  StateBadge,
   StepIndicator,
-  TextArea,
-  TextInput,
+  TextAreaField,
+  TextField,
 } from '@/ui';
 
 export interface Bounds {
@@ -191,73 +190,67 @@ export function IntakeForm({ bounds }: { bounds: Bounds }): ReactElement {
       <Card>
         {current.step === 'identity' && (
           <>
-            <Field label="Full name" message={messageFor(issues, 'fullName')}>
-              <TextInput
-                value={fullName}
-                onChange={(e) => {
-                  setFullName(e.target.value);
-                }}
-                required
-              />
-            </Field>
-            <Field label="Email address" message={messageFor(issues, 'email')}>
-              <TextInput
-                type="email"
-                value={email}
-                onChange={(e) => {
-                  setEmail(e.target.value);
-                }}
-                required
-              />
-            </Field>
-            <Field label="Date of birth" message={messageFor(issues, 'dob')}>
-              <TextInput
-                type="date"
-                min={bounds.dob.min}
-                max={bounds.dob.max}
-                value={dob}
-                onChange={(e) => {
-                  setDob(e.target.value);
-                }}
-                required
-              />
-            </Field>
+            <TextField
+              label="Full name"
+              message={messageFor(issues, 'fullName')}
+              value={fullName}
+              onChange={(e) => {
+                setFullName(e.target.value);
+              }}
+              required
+            />
+            <TextField
+              label="Email address"
+              message={messageFor(issues, 'email')}
+              type="email"
+              value={email}
+              onChange={(e) => {
+                setEmail(e.target.value);
+              }}
+              required
+            />
+            <TextField
+              label="Date of birth"
+              message={messageFor(issues, 'dob')}
+              type="date"
+              min={bounds.dob.min}
+              max={bounds.dob.max}
+              value={dob}
+              onChange={(e) => {
+                setDob(e.target.value);
+              }}
+              required
+            />
           </>
         )}
 
         {current.step === 'metrics' && (
           <>
-            <Field
+            <TextField
               label="Height in centimetres"
               hint={`Between ${bounds.heightCm.min} and ${bounds.heightCm.max}.`}
               message={messageFor(issues, 'heightCm')}
-            >
-              <TextInput
-                type="number"
-                inputMode="numeric"
-                value={heightCm}
-                onChange={(e) => {
-                  setHeightCm(e.target.value);
-                }}
-                required
-              />
-            </Field>
-            <Field
+              type="number"
+              inputMode="numeric"
+              value={heightCm}
+              onChange={(e) => {
+                setHeightCm(e.target.value);
+              }}
+              required
+            />
+            <TextField
               label="Weight in kilograms"
               hint={`Between ${bounds.weightKg.min} and ${bounds.weightKg.max}, one decimal place.`}
               message={messageFor(issues, 'weightKg')}
-            >
-              <TextInput
-                type="number"
-                step="0.1"
-                inputMode="decimal"
-                value={weightKg}
-                onChange={(e) => {
-                  setWeightKg(e.target.value);
-                }}
-                required
-              />
-            </Field>
+              type="number"
+              step="0.1"
+              inputMode="decimal"
+              value={weightKg}
+              onChange={(e) => {
+                setWeightKg(e.target.value);
+              }}
+              required
+            />
           </>
         )}
 
@@ -309,7 +302,7 @@ export function IntakeForm({ bounds }: { bounds: Bounds }): ReactElement {
               </Field>
             )}
 
-            <Field
+            <TextAreaField
               label="Any other medication you take"
               hint={
                 glp1Declared === true
@@ -317,15 +310,12 @@ export function IntakeForm({ bounds }: { bounds: Bounds }): ReactElement {
                   : 'Leave this empty if there is none.'
               }
               message={messageFor(issues, 'otherMedications')}
-            >
-              <TextArea
-                rows={3}
-                value={otherMedications}
-                onChange={(e) => {
-                  setOtherMedications(e.target.value);
-                }}
-              />
-            </Field>
+              rows={3}
+              value={otherMedications}
+              onChange={(e) => {
+                setOtherMedications(e.target.value);
+              }}
+            />
           </>
         )}
 
@@ -348,19 +338,16 @@ export function IntakeForm({ bounds }: { bounds: Bounds }): ReactElement {
                 </Choice>
               ))}
             </Field>
-            <Field
+            <TextAreaField
               label="Anything else we should know about your health"
               hint="Leave this empty if there is nothing."
               message={messageFor(issues, 'otherConditions')}
-            >
-              <TextArea
-                rows={3}
-                value={otherConditions}
-                onChange={(e) => {
-                  setOtherConditions(e.target.value);
-                }}
-              />
-            </Field>
+              rows={3}
+              value={otherConditions}
+              onChange={(e) => {
+                setOtherConditions(e.target.value);
+              }}
+            />
           </>
         )}
 
@@ -420,8 +407,7 @@ function Result({ submitted }: { submitted: Submitted }): ReactElement {
   };
   return (
     <Card title={headline[submitted.state] ?? 'Thank you.'}>
-      <StateBadge state={submitted.state} />
-      <Findings items={submitted.reasons} />
+      <Findings title="What the rules found" items={submitted.reasons} />
       <p>A doctor makes the final decision; nothing here is one.</p>
       <Hint>Assessed with ruleset {submitted.rulesetVersion}.</Hint>
     </Card>
@@ -434,7 +420,10 @@ const FIELDS: Record<IntakeStep, readonly string[]> = {
   metrics: ['heightCm', 'weightKg'],
   medications: ['glp1Declared', 'glp1', 'otherMedications'],
   conditions: ['conditions', 'otherConditions'],
-  consent: ['granted', 'textVersion'],
+  // `textVersion` is deliberately absent: no field on this step renders it, so an issue naming it
+  // — the consent text changed under a patient who still has the old one open — falls through to
+  // the step-level messages in the card and is shown rather than filtered into silence.
+  consent: ['granted'],
 };
 
 const messageFor = (issues: readonly Issue[], path: string): string | undefined =>
