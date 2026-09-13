@@ -5,12 +5,13 @@
 // The machine itself is pure and lives in `./machine`; this module locks the row, fetches the one
 // thing the machine cannot fetch (the governing evaluation), writes both rows in one transaction,
 // and otherwise decides nothing.
-import { and, desc, eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 
 import type { Queryable } from '@/db/queryable';
-import { auditEntries, eligibilityEvaluations, intakes, type AuditChange } from '@/db/schema';
+import { auditEntries, intakes, type AuditChange } from '@/db/schema';
 import type { MatchedRule } from '@/eligibility/types';
 import { dedupeKeyFor } from '@/repo/audit';
+import { governingEvaluation } from '@/repo/evaluations';
 import { currentRules } from '@/rules/load';
 
 import { checkTransition, edgeFor, type IntakeState, type TransitionActor } from './machine';
@@ -37,21 +38,15 @@ export interface TransitionResult {
 }
 
 /**
- * The evaluation that governs the intake: the latest one, non-shadow first on a tie. For a new
- * intake that is the submission's own evaluation; for a legacy one, the current ruleset's shadow
- * evaluation. Null when the intake has none at all.
+ * What the governing evaluation matched, or null when the intake has none at all. The evaluation
+ * itself is chosen by `governingEvaluation`, which the console reads too: the reasons a reviewer
+ * is shown and the rules this function refuses an approval over must be the same row.
  */
 async function governingMatched(
   db: Queryable,
   intakeId: string,
 ): Promise<readonly MatchedRule[] | null> {
-  const [row] = await db
-    .select({ matched: eligibilityEvaluations.matched })
-    .from(eligibilityEvaluations)
-    .where(eq(eligibilityEvaluations.intakeId, intakeId))
-    .orderBy(desc(eligibilityEvaluations.evaluatedAt), eligibilityEvaluations.shadow)
-    .limit(1);
-  return row?.matched ?? null;
+  return (await governingEvaluation(db, intakeId))?.matched ?? null;
 }
 
 /**
