@@ -125,6 +125,44 @@ function identitySchema(context: AnswersContext): z.ZodType<IdentityAnswers> {
   });
 }
 
+/**
+ * Shifts an ISO day by whole years, staying on a real calendar day: a 29 February moved onto a
+ * non-leap year would roll into 1 March, so it steps back onto 28 February instead.
+ */
+function shiftYears(iso: string, years: number): string {
+  const [y, m, d] = iso.split('-').map(Number) as [number, number, number];
+  const date = new Date(Date.UTC(y - years, m - 1, d));
+  if (date.getUTCDate() !== d) date.setUTCDate(0);
+  return date.toISOString().slice(0, 10);
+}
+
+const shiftDays = (iso: string, days: number): string => {
+  const [y, m, d] = iso.split('-').map(Number) as [number, number, number];
+  return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
+};
+
+/**
+ * The days the date-of-birth field offers, so the browser refuses a six-digit year before the
+ * server has to.
+ *
+ * They are `identitySchema`'s own two rules expressed as days — a date in the past, an age of at
+ * most `MAX_PLAUSIBLE_AGE_YEARS` — derived here rather than written down again, so the field and
+ * the schema cannot drift. A convenience, not an authority: the server re-validates every
+ * submission and is the only thing that decides (`CLAUDE.md` §2, R-T4).
+ *
+ * The early bound is the oldest accepted *birthday*, which is not the same as the day a full
+ * `MAX_PLAUSIBLE_AGE_YEARS + 1` years ago: age turns over on a birthday, so everyone born after
+ * that day is still within the bound today. Taking the looser of the two matters — a field that
+ * refused a date the server accepts would be the client overruling the server, which is exactly
+ * what it may not do.
+ */
+export function dobBounds(todayIso: string): { readonly min: string; readonly max: string } {
+  return {
+    min: shiftDays(shiftYears(todayIso, MAX_PLAUSIBLE_AGE_YEARS + 1), 1),
+    max: shiftDays(todayIso, -1),
+  };
+}
+
 function metricsSchema(context: AnswersContext): z.ZodType<MetricsAnswers> {
   const { height_cm: height, weight_kg: weight } = context.rules.plausibility;
   return z.object({
