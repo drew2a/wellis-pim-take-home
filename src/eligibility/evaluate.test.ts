@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { loadRules } from '@/rules/load';
 
-import { evaluate } from './evaluate';
+import { evaluate, showBmi } from './evaluate';
 import type { EligibilityInput } from './types';
 
 const rules = loadRules();
@@ -453,5 +453,43 @@ describe('impossible inputs throw rather than evaluate (CLAUDE.md §2)', () => {
     ['a non-finite age', { ageYears: Number.NaN }],
   ])('throws on %s', (_label, patch) => {
     expect(() => evaluateWith(patch)).toThrow(/whole number of years/);
+  });
+});
+
+// Q2's default: the thresholds compare the unrounded BMI, and one decimal is for display. The
+// console's input panel sits directly above the reasons, so it is formatted by the same function
+// — a screen reading `27.0` over a reason reading `BMI 26.99 below 27` is the contradiction this
+// rounding exists to avoid, moved one line up.
+describe('a BMI as a screen shows it', () => {
+  it('is one decimal when one decimal says the same thing', () => {
+    expect(showBmi(35.35353535353536, rules)).toBe('35.4');
+    expect(showBmi(24, rules)).toBe('24.0');
+  });
+
+  // 26.99 rounds to 27.0, which is in the band and not below the threshold: two answers away
+  // from the truth, so the display widens instead.
+  it('widens rather than round a value across the reject threshold', () => {
+    expect(showBmi(26.99, rules)).toBe('26.99');
+    expect(showBmi(26.994, rules)).toBe('26.99');
+  });
+
+  // 30.04 rounds to 30.0, which the inclusive band contains while the exact value clears it.
+  it('widens rather than round a value into the band it is out of', () => {
+    expect(showBmi(30.04, rules)).toBe('30.04');
+    expect(showBmi(30.0, rules)).toBe('30.0');
+  });
+
+  it('shows the boundaries themselves at one decimal', () => {
+    expect(showBmi(27, rules)).toBe('27.0');
+    expect(showBmi(26.9, rules)).toBe('26.9');
+  });
+
+  // What the panel shows must agree with the reason the same evaluation carries.
+  it('agrees with the reason string the engine wrote', () => {
+    const result = evaluateWith({ weightKg: 107.96, heightCm: 200 });
+    expect(result.inputs.bmi).toBeCloseTo(26.99, 10);
+    expect(result.reasons).toEqual(['rejected: BMI 26.99 below 27']);
+    expect(result.inputs.bmi).not.toBeNull();
+    expect(showBmi(result.inputs.bmi as number, rules)).toBe('26.99');
   });
 });

@@ -1,6 +1,7 @@
 # ADR-0003: Stack — Next.js, Postgres (Supabase-hosted), Drizzle, Vitest
 
 - **Status:** accepted
+- **Amended by:** [ADR-0018](0018-tailwind-and-a-ui-directory-that-owns-every-class.md) (the styling toolchain) · [ADR-0024](0024-where-a-console-page-reads-its-data.md) ("No React component imports the data layer": route handlers are the only writers, server components read through `src/repo/`)
 - **Date:** 2026-09-08
 - **Deciders:** Andrei Andreev
 - **Requirements:** R-T1, R-T2, R-T3, R-T4, R-T5, R-T6, R-T7, R-S2

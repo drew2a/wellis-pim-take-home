@@ -8,14 +8,14 @@
 import { getDb } from '@/db/client';
 import { submitIntake } from '@/intake/submit';
 
-import { badRequest, conflict, intakeIdSchema, json, notFound, serverError } from '../../http';
+import { badRequest, conflict, json, notFound, routeUuid, serverError } from '../../../http';
 
 interface RouteContext {
   readonly params: Promise<{ readonly id: string }>;
 }
 
 export async function POST(_request: Request, context: RouteContext): Promise<Response> {
-  const id = intakeIdSchema.safeParse((await context.params).id);
+  const id = routeUuid.safeParse((await context.params).id);
   if (!id.success) return notFound('no such intake');
 
   try {

@@ -191,8 +191,10 @@ Fixed by ADR-0003; change it there, not here.
 
 - **Runtime & language:** Node 22, TypeScript with `strict: true`, npm.
 - **App:** Next.js (App Router) — one deployable that serves the React review console, the
-  patient intake flow, and the API as Route Handlers. The API is the only database client
-  (R-T4); React components never import the database layer.
+  patient intake flow, and the API as Route Handlers. **Route Handlers are the only writers**;
+  server components and Route Handlers both read through `src/repo/`, and the browser reaches
+  data only through a route (R-T4, ADR-0024). No page imports `drizzle-orm` or the schema, which
+  `src/app/pages.test.ts` asserts.
 - **Database:** PostgreSQL. Local via `docker compose`; production on Supabase-hosted
   Postgres, used **only** through its Postgres connection string — no PostgREST, no
   Supabase client SDK (R-T4).

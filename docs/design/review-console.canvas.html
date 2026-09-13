@@ -1,0 +1,739 @@
+
+<div style="height:100vh; overflow-x:auto; overflow-y:hidden; background:#f2f4f3;">
+<div style="display:grid; grid-template-columns:minmax(168px,216px) minmax(260px,332px) minmax(360px,1fr); grid-template-rows:minmax(0,1fr); height:100vh; min-width:840px; background:#f2f4f3; font-size:14px;">
+
+  <!-- ░░ RAIL ░░ -->
+  <aside style="background:#0d1618; color:#b9c6c3; display:flex; flex-direction:column; padding:18px 0 0; min-height:0;">
+    <div style="display:flex; align-items:center; gap:9px; padding:0 18px 22px;">
+      <span style="width:22px; height:22px; border-radius:6px; background:#1f8a7a; display:block;"></span>
+      <span style="color:#ffffff; font-weight:600; font-size:15px; letter-spacing:-0.01em;">Wellis</span>
+      <span style="font-family:'IBM Plex Mono',monospace; font-size:10px; letter-spacing:.12em; text-transform:uppercase; color:#8fa3a0; border:1px solid #263436; border-radius:4px; padding:2px 5px;">PIM</span>
+    </div>
+
+    <nav style="display:flex; flex-direction:column; gap:2px; padding:0 10px;">
+      <a href="#" style="display:flex; align-items:center; justify-content:space-between; padding:8px 10px; border-radius:7px; background:rgba(255,255,255,.09); color:#ffffff; font-weight:500;">
+        <span>Work queue</span>
+        <span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#e6efed;">346</span>
+      </a>
+      <a href="#" style="display:flex; align-items:center; justify-content:space-between; padding:8px 10px; border-radius:7px; color:#b9c6c3;" style-hover="background:rgba(255,255,255,.05); color:#ffffff;">
+        <span>Patients</span>
+        <span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#8fa3a0;">2438</span>
+      </a>
+      <a href="#" style="display:flex; align-items:center; justify-content:space-between; padding:8px 10px; border-radius:7px; color:#b9c6c3;" style-hover="background:rgba(255,255,255,.05); color:#ffffff;">
+        <span>Intakes</span>
+        <span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#8fa3a0;">2917</span>
+      </a>
+      <a href="#" style="display:flex; align-items:center; justify-content:space-between; padding:8px 10px; border-radius:7px; color:#b9c6c3;" style-hover="background:rgba(255,255,255,.05); color:#ffffff;">
+        <span>Import runs</span>
+        <span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#8fa3a0;">1</span>
+      </a>
+    </nav>
+
+    <div style="padding:26px 18px 8px; font-family:'IBM Plex Mono',monospace; font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:#8fa3a0;">Open by kind</div>
+    <div style="padding:0 10px; display:flex; flex-direction:column; gap:1px; overflow-y:auto;">
+      <sc-for list="{{ kinds }}" as="kind" hint-placeholder-count="7">
+        <button type="button" sc-camel-on-click="{{ kind.pick }}" style="{{ kind.style }}">
+          <span style="display:flex; align-items:center; gap:9px; min-width:0;">
+            <span style="{{ kind.dot }}"></span>
+            <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ kind.label }}</span>
+          </span>
+          <span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#8fa3a0;">{{ kind.count }}</span>
+        </button>
+      </sc-for>
+    </div>
+
+    <div style="margin-top:auto; border-top:1px solid #1c2a2c; padding:14px 18px; display:flex; align-items:center; gap:10px;">
+      <span style="width:28px; height:28px; border-radius:8px; background:#1c2a2c; color:#cfe0dd; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:600;">DV</span>
+      <span style="display:flex; flex-direction:column; min-width:0;">
+        <span style="color:#ffffff; font-size:13px; font-weight:500;">Dr Vermeer</span>
+        <span style="font-family:'IBM Plex Mono',monospace; font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:#8fa3a0;">signed in</span>
+      </span>
+    </div>
+  </aside>
+
+  <!-- ░░ QUEUE LIST ░░ -->
+  <section style="border-right:1px solid #dfe4e2; background:#ffffff; display:flex; flex-direction:column; min-width:0; min-height:0;">
+    <header style="padding:16px 16px 12px; border-bottom:1px solid #eaeeec; display:flex; flex-direction:column; gap:12px;">
+      <div style="display:flex; align-items:baseline; justify-content:space-between; gap:8px;">
+        <h1 style="margin:0; font-size:17px; font-weight:600; letter-spacing:-0.01em;">{{ listTitle }}</h1>
+        <span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:#52605e;">{{ listCount }}</span>
+      </div>
+      <div style="display:flex; gap:6px;">
+        <input type="text" placeholder="Filter by patient, id or rule" style="flex:1; min-width:0; border:1px solid #dfe4e2; border-radius:7px; padding:7px 10px; font:400 13px/18px 'Instrument Sans',sans-serif; color:#10181a; background:#fafbfa;" style-focus="border-color:#0f6b5f; outline:none; background:#ffffff;">
+        <button type="button" sc-camel-on-click="{{ toggleSort }}" style="border:1px solid #dfe4e2; border-radius:7px; background:#ffffff; padding:7px 10px; font:500 13px/18px 'Instrument Sans',sans-serif; color:#3d4a48; cursor:pointer; white-space:nowrap;" style-hover="background:#f2f4f3;">{{ sortLabel }}</button>
+      </div>
+      <div style="display:flex; gap:5px;">
+        <sc-for list="{{ scopes }}" as="scope" hint-placeholder-count="3">
+          <button type="button" sc-camel-on-click="{{ scope.pick }}" style="{{ scope.style }}">{{ scope.label }}</button>
+        </sc-for>
+      </div>
+    </header>
+
+    <div style="flex:1 1 auto; min-height:0; overflow-y:auto;">
+      <sc-for list="{{ rows }}" as="row" hint-placeholder-count="9">
+        <div sc-camel-on-click="{{ row.pick }}" style="{{ row.style }}">
+          <span style="{{ row.bar }}"></span>
+          <span style="display:flex; flex-direction:column; gap:3px; min-width:0;">
+            <span style="display:flex; align-items:center; gap:7px;">
+              <span style="{{ row.dot }}"></span>
+              <span style="font-family:'IBM Plex Mono',monospace; font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:#52605e;">{{ row.kindLabel }}</span>
+              <span style="margin-left:auto; font-family:'IBM Plex Mono',monospace; font-size:11px; color:#5c6a68;">{{ row.date }}</span>
+            </span>
+            <span style="font-size:13.5px; line-height:19px; color:#10181a; font-weight:500; text-wrap:pretty;">{{ row.title }}</span>
+            <span style="font-size:12.5px; color:#52605e; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ row.patient }}</span>
+          </span>
+        </div>
+      </sc-for>
+      <p style="margin:0; padding:14px 16px 26px; font-size:12px; color:#5c6a68; text-wrap:pretty;">Oldest first. 340 open items and 6 intakes waiting; this page holds the first 500.</p>
+    </div>
+  </section>
+
+  <!-- ░░ DETAIL ░░ -->
+  <section style="display:flex; flex-direction:column; min-width:0; min-height:0; background:#f2f4f3;">
+    <header style="background:#ffffff; border-bottom:1px solid #dfe4e2; padding:13px 20px 12px; display:flex; flex-direction:column; gap:7px;">
+      <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+        <span style="{{ head.dot }}"></span>
+        <span style="font-family:'IBM Plex Mono',monospace; font-size:10.5px; letter-spacing:.12em; text-transform:uppercase; color:#4d5a58;">{{ head.kindLabel }}</span>
+        <span style="width:1px; height:12px; background:#dfe4e2; display:block;"></span>
+        <span style="font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:#52605e;">{{ head.rule }}</span>
+        <span style="width:1px; height:12px; background:#dfe4e2; display:block;"></span>
+        <span style="font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:#52605e;">raised {{ head.date }}</span>
+        <span style="margin-left:auto; display:flex; align-items:center; gap:10px;">
+          <span style="font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:#5c6a68;">{{ head.position }}</span>
+          <button type="button" sc-camel-on-click="{{ prev }}" style="border:1px solid #dfe4e2; background:#ffffff; border-radius:6px; width:26px; height:26px; color:#3d4a48; cursor:pointer; font-size:13px; line-height:1;" style-hover="background:#f2f4f3;">↑</button>
+          <button type="button" sc-camel-on-click="{{ next }}" style="border:1px solid #dfe4e2; background:#ffffff; border-radius:6px; width:26px; height:26px; color:#3d4a48; cursor:pointer; font-size:13px; line-height:1;" style-hover="background:#f2f4f3;">↓</button>
+        </span>
+      </div>
+      <h2 style="margin:0; font-size:19px; line-height:25px; font-weight:600; letter-spacing:-0.012em; max-width:52ch; text-wrap:pretty;">{{ head.title }}</h2>
+      <div style="display:flex; align-items:baseline; gap:10px; flex-wrap:wrap;">
+        <a href="#" style="font-size:13.5px; font-weight:500;">{{ head.patient }}</a>
+        <span style="font-size:12.5px; color:#5c6a68;">{{ head.patientMeta }}</span>
+      </div>
+    </header>
+
+    <div style="flex:1 1 auto; min-height:0; overflow-y:auto; padding:16px 20px 32px; display:flex; flex-direction:column; gap:14px; max-width:920px;">
+
+      <sc-if value="{{ head.banner }}" hint-placeholder-val="{{ true }}">
+        <p style="margin:0; border-left:2px solid #1f8a7a; background:#e8f2f0; color:#13433c; padding:10px 14px; border-radius:0 7px 7px 0; font-size:13px; line-height:19px; text-wrap:pretty;">{{ head.banner }}</p>
+      </sc-if>
+
+      <div style="background:#ffffff; border:1px solid #dfe4e2; border-radius:10px;">
+        <div style="padding:13px 18px; border-bottom:1px solid #eaeeec; display:flex; align-items:baseline; justify-content:space-between;">
+          <h3 style="margin:0; font-size:12px; font-family:'IBM Plex Mono',monospace; letter-spacing:.12em; text-transform:uppercase; color:#4d5a58;">Evidence</h3>
+          <span style="font-size:12px; color:#5c6a68;">{{ head.evidenceNote }}</span>
+        </div>
+        <dl style="margin:0; padding:6px 18px 16px;">
+          <sc-for list="{{ evidence }}" as="e" hint-placeholder-count="5">
+            <div style="display:flex; flex-wrap:wrap; align-items:baseline; column-gap:16px; row-gap:1px; padding:8px 0; border-bottom:1px solid #f1f4f3;">
+              <dt style="flex:0 0 152px; font-family:'IBM Plex Mono',monospace; font-size:11.5px; letter-spacing:.02em; color:#52605e;">{{ e.term }}</dt>
+              <dd style="flex:1 1 200px; margin:0; min-width:0; font-size:13.5px; line-height:20px; color:#10181a; overflow-wrap:break-word;">{{ e.value }}</dd>
+            </div>
+          </sc-for>
+        </dl>
+      </div>
+
+      <sc-if value="{{ hasCompare }}" hint-placeholder-val="{{ false }}">
+        <div style="background:#ffffff; border:1px solid #dfe4e2; border-radius:10px; overflow:hidden;">
+          <div style="padding:13px 18px; border-bottom:1px solid #eaeeec;">
+            <h3 style="margin:0; font-size:12px; font-family:'IBM Plex Mono',monospace; letter-spacing:.12em; text-transform:uppercase; color:#4d5a58;">{{ compareTitle }}</h3>
+          </div>
+          <div style="display:flex; flex-wrap:wrap; column-gap:14px; row-gap:2px; padding:9px 18px; border-bottom:1px solid #eaeeec;">
+            <span style="flex:0 0 118px; font-family:'IBM Plex Mono',monospace; font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:#52605e;">field</span>
+            <span style="flex:1 1 150px; min-width:0; font-size:12.5px; font-weight:600; color:#10181a; overflow-wrap:break-word;">{{ compareLeft }}</span>
+            <span style="flex:1 1 150px; min-width:0; font-size:12.5px; font-weight:600; color:#10181a; overflow-wrap:break-word;">{{ compareRight }}</span>
+          </div>
+          <sc-for list="{{ compare }}" as="c" hint-placeholder-count="4">
+            <div style="{{ c.rowStyle }}">
+              <span style="flex:0 0 118px; font-family:'IBM Plex Mono',monospace; font-size:12px; color:#52605e;">{{ c.field }}</span>
+              <span style="flex:1 1 150px; min-width:0; font-size:13.5px; color:#10181a; overflow-wrap:break-word;">{{ c.left }}</span>
+              <span style="flex:1 1 150px; min-width:0; font-size:13.5px; color:#10181a; overflow-wrap:break-word;">{{ c.right }}</span>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ hasFindings }}" hint-placeholder-val="{{ false }}">
+        <div style="background:#ffffff; border:1px solid #dfe4e2; border-radius:10px;">
+          <div style="padding:13px 18px; border-bottom:1px solid #eaeeec; display:flex; align-items:baseline; justify-content:space-between;">
+            <h3 style="margin:0; font-size:12px; font-family:'IBM Plex Mono',monospace; letter-spacing:.12em; text-transform:uppercase; color:#4d5a58;">What the rules found</h3>
+            <span style="font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:#5c6a68;">{{ rulesetLabel }}</span>
+          </div>
+          <ul style="margin:0; padding:12px 18px 16px; list-style:none; display:flex; flex-direction:column; gap:7px;">
+            <sc-for list="{{ findings }}" as="f" hint-placeholder-count="3">
+              <li style="display:grid; grid-template-columns:86px minmax(0,1fr); gap:12px; align-items:baseline;">
+                <span style="{{ f.tag }}">{{ f.verdict }}</span>
+                <span style="font-size:13.5px; line-height:20px; color:#2a3634; text-wrap:pretty;">{{ f.text }}</span>
+              </li>
+            </sc-for>
+          </ul>
+        </div>
+      </sc-if>
+
+      <details style="background:#ffffff; border:1px solid #dfe4e2; border-radius:10px; padding:12px 18px;">
+        <summary style="cursor:pointer; font-size:13px; font-weight:500; color:#3d4a48; list-style:none;">Why this reached you, and what a decision writes</summary>
+        <p style="margin:10px 0 0; font-size:13px; line-height:20px; color:#4a5654; max-width:70ch; text-wrap:pretty;">{{ head.explainer }}</p>
+        <p style="margin:8px 0 0; font-size:13px; line-height:20px; color:#4a5654; max-width:70ch; text-wrap:pretty;">{{ footNote }}</p>
+      </details>
+    </div>
+
+    <!-- decision bar -->
+    <footer style="border-top:1px solid #dfe4e2; background:#ffffff; padding:10px 20px; display:flex; flex-wrap:wrap; justify-content:flex-end; align-items:center; gap:8px 10px; flex:none; box-shadow:0 -6px 18px rgb(16 24 26 / 0.04);">
+      <span style="flex:none; font-family:'IBM Plex Mono',monospace; font-size:10px; letter-spacing:.12em; text-transform:uppercase; color:#52605e;" title="Recorded with your name">Reason</span>
+      <input type="text" value="{{ note }}" sc-camel-on-change="{{ setNote }}" placeholder="{{ notePlaceholder }}" aria-label="Your reason, recorded with your name" style="flex:1 1 190px; min-width:0; border:1px solid #dfe4e2; border-radius:7px; padding:8px 11px; font:400 13px/18px 'Instrument Sans',sans-serif; color:#10181a; background:#fafbfa;" style-focus="border-color:#0f6b5f; outline:none; background:#ffffff;">
+      <sc-for list="{{ actions }}" as="action" hint-placeholder-count="3">
+        <button type="button" sc-camel-on-click="{{ action.run }}" disabled="{{ action.disabled }}" style="{{ action.style }}">
+          <span>{{ action.label }}</span>
+          <span style="{{ action.keyStyle }}">{{ action.key }}</span>
+        </button>
+      </sc-for>
+    </footer>
+  </section>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script="" data-props="{&quot;density&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;comfortable&quot;,&quot;compact&quot;],&quot;default&quot;:&quot;comfortable&quot;,&quot;tsType&quot;:&quot;'comfortable' | 'compact'&quot;,&quot;section&quot;:&quot;Queue&quot;},&quot;showShortcuts&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Queue&quot;}}">
+const KINDS = {
+  clinical_history: { label: 'Clinical history', color: '#b03a3a', count: 115 },
+  consent: { label: 'Consent', color: '#0f6b5f', count: 83 },
+  data_quality: { label: 'Data quality', color: '#b07306', count: 62 },
+  identity_conflict: { label: 'Identity conflict', color: '#7a3a9e', count: 44 },
+  orphan_intake: { label: 'Orphan intake', color: '#9a5426', count: 21 },
+  vocabulary: { label: 'Vocabulary', color: '#52605e', count: 10 },
+  duplicate_intake: { label: 'Duplicate intake', color: '#2a5aa0', count: 5 },
+  intake: { label: 'Auto flagged', color: '#8a5a06', count: 6 },
+  in_review: { label: 'In review', color: '#2a5aa0', count: 2 },
+  legacy_pending: { label: 'Legacy pending', color: '#52605e', count: 331 },
+};
+
+const ITEMS = [
+  {
+    kind: 'legacy_pending', date: '2021-11-02', rule: 'legacy_pending',
+    title: 'Legacy intake INT-2204 was never decided',
+    patient: 'Sofia Jansen', patientMeta: 'Utrecht · 2 intakes · consent granted',
+    banner: 'legacy_pending → in_review is the machine’s only door out of a legacy state, and only this one has it.',
+    evidence: [
+      ['submitted', '2021-11-02 · questionnaire v1'],
+      ['legacy outcome', 'pending — nothing followed it'],
+      ['weight / height', '101.4 kg · 168 cm'],
+      ['BMI', '35.9'],
+      ['today’s verdict', 'cleared (shadow, ruleset v1)'],
+      ['claimed by', 'nobody'],
+    ],
+    findings: [],
+    ruleset: '',
+    actions: [['Claim for review', 'primary', '↵']],
+    notePlaceholder: 'Why you are picking this up — every transition records a reason (R-B20)',
+    foot: 'Claiming is the only way in: in_review is never entered automatically, and in_review → in_review is not an edge, so a claim is exclusive.',
+    explainer:
+      'The legacy process left this open, and the importer kept it that way. Of the four legacy states this is the only non-terminal one, so it is the only one a person can finish — the other three stand as history.',
+  },
+  {
+    kind: 'clinical_history', date: '2022-01-14', rule: 'R-A20',
+    title: 'Approved intake from a patient aged 16 at submission',
+    patient: 'Zeynep Chen', patientMeta: 'Delft · 1 intake · consent granted',
+    banner: 'The legacy outcome stands. What is open is what to do about it now.',
+    evidence: [
+      ['intake', 'INT-3318 · submitted 2022-01-14 · questionnaire v1'],
+      ['age at submission', '16'],
+      ['legacy outcome', 'approved'],
+      ['legacy reviewer note', '"twijfel, toch akkoord"'],
+      ['today’s verdict', 'rejected — absolute'],
+    ],
+    findings: [
+      ['rejected', 'age 16 is under 18 (R-B6(a)), which the ruleset calls absolute'],
+      ['note', 'BMI 31.4 would otherwise clear'],
+    ],
+    ruleset: 'ruleset v1 · shadow',
+    actions: [
+      ['Resolve', 'primary', '↵'],
+      ['Dismiss', 'secondary', 'D'],
+    ],
+    notePlaceholder: 'What was done — resolve if something was; dismiss if nothing was needed',
+    foot: 'Nothing here changes the intake’s outcome. It writes an audit entry against the record.',
+    explainer:
+      'The importer raised this because a person under 18 was approved by the legacy process — a legal problem the process could not see, not a disagreement with today’s thresholds. Your decision closes the item and writes one audit entry: the outcome, your name, and the reason you type.',
+  },
+  {
+    kind: 'consent', date: '2022-02-03', rule: 'R-A14',
+    title: 'No consent record for a patient who is active',
+    patient: 'Ruben van den Berg', patientMeta: 'Delft · 2 intakes · no consent event',
+    banner: '',
+    evidence: [
+      ['patient status', 'active'],
+      ['consent events', 'none in the log'],
+      ['derived state', 'none'],
+      ['first intake', 'INT-6620 · 2022-02-03'],
+      ['last activity', '2024-11-09'],
+    ],
+    findings: [],
+    ruleset: '',
+    actions: [
+      ['Establish granted', 'primary', '↵'],
+      ['Establish revoked', 'secondary', 'R'],
+      ['Leave as none', 'ghost', 'D'],
+    ],
+    notePlaceholder: 'e.g. signed paper form on file, scanned 2023-04-02',
+    foot: 'Establishing a state appends an event; the log is append-only and nothing is rewritten.',
+    explainer:
+      'Consent is permission to process everything else, so a record with none is the import’s most consequential gap. Establishing a state writes a new event carrying your name — it never edits or deletes what the export gave us.',
+  },
+  {
+    kind: 'data_quality', date: '2022-02-19', rule: 'HEIGHT_IMPLAUSIBLE',
+    title: 'height_cm 17 is outside the plausible range',
+    patient: 'Olga Brouwer', patientMeta: 'Haarlem · 1 intake · consent granted',
+    banner: 'The detector proposes 170 — a transposition of the raw value. The raw row is kept either way.',
+    evidence: [
+      ['field', 'height_cm'],
+      ['raw value', '17'],
+      ['stored value', 'empty'],
+      ['plausible range', '120 – 220'],
+      ['proposal', '170  (HEIGHT_DIGIT_TRANSPOSED)'],
+      ['affects', 'BMI on 1 intake'],
+    ],
+    findings: [],
+    ruleset: '',
+    actions: [
+      ['Accept 170', 'primary', '↵'],
+      ['Type a value', 'secondary', 'V'],
+      ['Leave empty', 'ghost', 'D'],
+    ],
+    notePlaceholder: 'e.g. matches the height on the 2023 intake',
+    foot: 'A value you establish is yours: no later import overwrites it.',
+    explainer:
+      'The mapper refused a value outside the plausible range rather than storing nonsense, and kept the raw row. All three answers go through one writer, which stores the value, the audit entry and your note in a single transaction.',
+  },
+  {
+    kind: 'identity_conflict', date: '2022-07-05', rule: 'R-A06 · tier 2',
+    title: 'Noor El Amrani appears twice with different values',
+    patient: 'Noor El Amrani', patientMeta: 'Rotterdam · 3 intakes across both records',
+    banner: '',
+    evidence: [
+      ['matched on', 'canonical email, folded name + date of birth'],
+      ['contradicts on', 'phone, city'],
+      ['tier', '2 — identical on identity, contradictory elsewhere'],
+    ],
+    compare: {
+      title: 'The two records, side by side',
+      left: 'recohisP3yMTXqTGE',
+      right: 'recQ8xvKm2LpaB01c',
+      rows: [
+        ['full_name', 'Noor El Amrani', 'Noor El Amrani', false],
+        ['dob', '1962-02-16', '1962-02-16', false],
+        ['bsn', '•••••6248', '•••••6248', false],
+        ['phone', '+31668303946', '+31612447790', true],
+        ['city', 'Rotterdam', 'Capelle aan den IJssel', true],
+        ['signup_date', '2022-07-05', '2023-11-02', true],
+      ],
+    },
+    findings: [],
+    ruleset: '',
+    actions: [
+      ['Merge — pick fields', 'primary', '↵'],
+      ['Not the same person', 'secondary', 'N'],
+    ],
+    notePlaceholder: 'e.g. same person, moved in 2023; kept the newer address',
+    foot: 'A merge moves no row. It writes merged_into and the alias rows, and is reversible.',
+    explainer:
+      'Four exact keys group the candidates; only records literally identical on identity and non-contradictory elsewhere were merged by the importer. This pair contradicts, so the decision is yours — field by field, with a survivor.',
+  },
+  {
+    kind: 'orphan_intake', date: '2023-06-05', rule: 'R-A17',
+    title: 'Intake INT-9521 references a patient that does not exist',
+    patient: 'No patient', patientMeta: 'unattached · 3 look-alikes found',
+    banner: 'Context, not a proposal: the importer attached none of them, because even a single look-alike is a guess.',
+    evidence: [
+      ['intake', 'INT-9521 · submitted 2023-06-05 · v1'],
+      ['references', 'recZtNxtTROiwcw0C — no such row'],
+      ['answers', '83.6 kg · 162 cm · metformine 500mg · hoge bloeddruk'],
+      ['look-alike 1', 'Emma de Boer — 162 cm, 84.0 kg, signed up 2023-01-11'],
+      ['look-alike 2', 'Sofia Jansen — 162 cm, 81.2 kg, signed up 2022-09-30'],
+      ['look-alike 3', 'Iris Visser — 162 cm, 86.9 kg, signed up 2023-04-18'],
+    ],
+    findings: [],
+    ruleset: '',
+    actions: [
+      ['Attach to a patient', 'primary', '↵'],
+      ['Leave unresolved', 'ghost', 'D'],
+    ],
+    notePlaceholder: 'e.g. confirmed by phone with the patient',
+    foot: 'Same height, weight within 10 %, signed up at most a year earlier — that is all a look-alike means.',
+    explainer:
+      'The export referenced a patient row it did not contain. Attaching is a search, not a suggestion: the console will not guess an identity from body measurements.',
+  },
+  {
+    kind: 'clinical_history', date: '2023-08-09', rule: 'R-A21',
+    title: 'A GLP-1 medication named in free text on an approved intake',
+    patient: 'Mei Taylor', patientMeta: 'Tilburg · 1 intake · consent revoked',
+    banner: 'The legacy outcome stands. What is open is what to do about it now.',
+    evidence: [
+      ['intake', 'INT-4118 · submitted 2023-08-09 · v1'],
+      ['free text', '"ozempic 0,5mg sinds mei"'],
+      ['matched term', 'ozempic'],
+      ['legacy outcome', 'approved'],
+      ['today’s verdict', 'flagged'],
+    ],
+    findings: [
+      ['flagged', 'currently using a GLP-1 medication (ozempic)'],
+      ['cleared', 'age 42 is 18 or over'],
+      ['note', 'BMI 28.0 in the 27–30 band, weight-related condition present'],
+    ],
+    ruleset: 'ruleset v1 · shadow',
+    actions: [
+      ['Resolve', 'primary', '↵'],
+      ['Dismiss', 'secondary', 'D'],
+    ],
+    notePlaceholder: 'e.g. reviewed with Dr Vermeer, no action needed',
+    foot: 'Matching is on contiguous token runs, never a bare substring: levothyroxine is not a GLP-1.',
+    explainer:
+      'The legacy form let a patient type medication as prose, so this was invisible to the process that approved the intake. The importer read it, flagged it in shadow, and raised this item — it applied nothing.',
+  },
+  {
+    kind: 'duplicate_intake', date: '2023-09-18', rule: 'R-A12',
+    title: '2 intakes from one patient on 2023-09-18',
+    patient: 'Deniz Peters', patientMeta: 'Delft · 4 intakes · consent granted',
+    banner: 'Both rows stay. The decision is which one is the record of note.',
+    evidence: [
+      ['same day', '2023-09-18'],
+      ['intake A', 'INT-7681 · 136.7 kg · 191 cm · outcome goedgekeurd'],
+      ['intake B', 'INT-7692 · 136.7 kg · 191 cm · outcome approved'],
+      ['differ on', 'reviewer_note, questionnaire_version'],
+    ],
+    findings: [],
+    ruleset: '',
+    actions: [
+      ['INT-7681 is the record', 'primary', '↵'],
+      ['INT-7692 is the record', 'secondary', 'B'],
+      ['Both are real', 'ghost', 'D'],
+    ],
+    notePlaceholder: 'e.g. B is the resubmission after the form timed out',
+    foot: 'Neither row is deleted or altered; the choice is recorded on both.',
+    explainer:
+      'Two submissions on one day from one patient is usually one intake submitted twice — but the export cannot say so, and a deletion would lose evidence. The console records which is authoritative.',
+  },
+  {
+    kind: 'vocabulary', date: '2024-04-04', rule: 'WEIGHT_UNIT_MISSING_TO_NULL',
+    title: 'weight_unit is empty on 18 rows: are they pounds?',
+    patient: 'Applies to 18 rows',
+    patientMeta: 'one decision, applied row by row',
+    banner: 'Confirm reads the ticked rows as pounds and writes the conversion.',
+    evidence: [
+      ['rows affected', '18'],
+      ['pattern', 'all 18 fall in 150 – 400 with no unit'],
+      ['as kilograms', 'BMI 52 – 71 · implausible on every row'],
+      ['as pounds', 'BMI 24 – 32 · plausible on 18 of 18'],
+      ['example', 'reczPnfGfjA1IEi8o · raw 168.2 → 76.3 kg, BMI 26.1'],
+    ],
+    findings: [],
+    ruleset: '',
+    actions: [
+      ['Confirm for 18 rows', 'primary', '↵'],
+      ['Choose rows', 'secondary', 'C'],
+      ['Reject', 'ghost', 'D'],
+    ],
+    notePlaceholder: 'e.g. consistent with the 2023 lbs cohort',
+    foot: 'Rejecting records the answer against these rows; changing the rule is a new ruleset and a re-import.',
+    explainer:
+      'A vocabulary item is one inference over many rows. It is the only place the console lets you exclude rows one by one — the opposite of a bulk action: one decision, applied to the rows you kept.',
+  },
+  {
+    kind: 'intake', date: '2026-09-11', rule: 'auto_flagged',
+    title: 'New intake — Zeynep de Wit, flagged by the engine',
+    patient: 'Zeynep de Wit', patientMeta: 'Zwolle · prospect · consent granted v3',
+    banner: 'Waiting for a person. Claiming puts your name on it and no one else can then claim it.',
+    evidence: [
+      ['submitted', '2026-09-11 · form v3'],
+      ['age', '42'],
+      ['weight / height', '90.2 kg · 174 cm'],
+      ['BMI', '29.8'],
+      ['medication (yes/no)', 'yes'],
+      ['medication (text)', '"rybelsus 7 mg"'],
+      ['conditions', 'none selected'],
+    ],
+    findings: [
+      ['flagged', 'currently using a GLP-1 medication (rybelsus 7 mg → rybelsus)'],
+      ['flagged', 'BMI 29.8 in the 27–30 band with no weight-related condition'],
+      ['cleared', 'age 42 is 18 or over'],
+    ],
+    ruleset: 'ruleset v1 · live',
+    actions: [
+      ['Claim for review', 'primary', '↵'],
+      ['Open patient', 'secondary', 'P'],
+    ],
+    notePlaceholder: 'Why you are claiming it — every transition records a reason (R-B20)',
+    foot: 'auto_flagged → in_review is the only edge from here. Approving and rejecting are taken from in review.',
+    explainer:
+      'This intake came through the new flow: every answer was saved as it was given, the engine ran at submit, and nothing on the client decided anything. Claiming is the only way into in review.',
+  },
+  {
+    kind: 'consent', date: '2026-09-12', rule: 'R-A15',
+    title: 'Consent revoked while the patient is active',
+    patient: 'Mei Taylor', patientMeta: 'Tilburg · 1 intake · derived state: conflict',
+    banner: 'The log contradicts itself. Record the state a person established.',
+    evidence: [
+      ['patient status', 'active'],
+      ['derived state', 'conflict'],
+      ['event 1', '2023-08-09T10:22Z · processing grant (v1)'],
+      ['event 2', '2024-02-18T16:04Z · processing revoke (v1)'],
+      ['event 3', '2024-02-18T16:04Z · processing grant (v2)'],
+    ],
+    findings: [],
+    ruleset: '',
+    actions: [
+      ['Establish granted', 'primary', '↵'],
+      ['Establish revoked', 'secondary', 'R'],
+    ],
+    notePlaceholder: 'e.g. patient re-consented on the call, 2026-09-12',
+    foot: 'Two events share a timestamp, so order cannot decide it. A person must.',
+    explainer:
+      'Seven records in this export hold a self-contradicting log. The derived state is conflict rather than a guess, and the console asks for the state a person established instead of picking one.',
+  },
+  {
+    kind: 'in_review', date: '2026-09-12', rule: 'in_review',
+    title: 'Claimed intake — Iris Visser, waiting on your decision',
+    patient: 'Iris Visser', patientMeta: 'Amsterdam · prospect · consent granted v3',
+    banner: 'You hold this one. in_review → approved and in_review → rejected are the two edges out, and each writes your reason.',
+    evidence: [
+      ['submitted', '2026-09-10 · form v3'],
+      ['claimed by', 'you, 2026-09-12'],
+      ['age', '38'],
+      ['weight / height', '96.5 kg · 171 cm'],
+      ['BMI', '33.0'],
+      ['medication (yes/no)', 'no'],
+      ['conditions', 'slaapapneu (weight-related)'],
+    ],
+    findings: [
+      ['flagged', 'BMI 33.0 is at or above 30 — a person confirms the programme fit'],
+      ['cleared', 'age 38 is 18 or over'],
+      ['note', 'a weight-related condition is present, so the 27–30 band rule does not apply'],
+    ],
+    ruleset: 'ruleset v1 · live',
+    actions: [
+      ['Approve', 'primary', '↵'],
+      ['Reject', 'danger', 'R'],
+    ],
+    notePlaceholder: 'Your decision in a sentence — recorded as the audit reason',
+    foot: 'Both edges name the ruleset version on the audit entry, and the trigger on intakes refuses the pair a second time from psql.',
+    explainer:
+      'Roles were dropped (ADR-0027): what closes an approval is a property of the intake’s own evaluation, not who is signed in, so the same guard refuses every reviewer alike. Both edges demand a reason — an empty note is refused by the machine, not by this screen.',
+  },
+  {
+    kind: 'in_review', date: '2026-09-13', rule: 'in_review · absolute reject',
+    title: 'Claimed intake — a patient aged 17 at submission',
+    patient: 'Lars Hofman', patientMeta: 'Groningen · prospect · consent granted v3',
+    banner: 'The rules rejected this absolutely (age_below_minimum), which a reviewer cannot resolve in the patient’s favour. Rejecting is still yours.',
+    evidence: [
+      ['submitted', '2026-09-13 · form v3'],
+      ['claimed by', 'you, 2026-09-13'],
+      ['age', '17'],
+      ['weight / height', '104.0 kg · 176 cm'],
+      ['BMI', '33.6'],
+      ['absolute rejects', 'age_below_minimum (rules/v1.json)'],
+    ],
+    findings: [
+      ['rejected', 'age 17 is under 18 — the ruleset calls this absolute'],
+      ['note', 'BMI 33.6 would otherwise reach a person'],
+    ],
+    ruleset: 'ruleset v1 · live',
+    actions: [
+      ['Approve', 'primary', '↵', true],
+      ['Reject', 'danger', 'R'],
+    ],
+    notePlaceholder: 'Your decision in a sentence — recorded as the audit reason',
+    foot: 'Approval is closed by the evaluation, not by a role: checkTransition refuses in_review → approved for everyone here.',
+    explainer:
+      'The precedence statement in rules/v1.json makes the age rule absolute because it is a legal gate. The edge carries refusesAbsoluteReject, so the machine itself will not take it — and the same refusal comes back from the database trigger if it is tried from psql.',
+  },
+];
+
+const TAGS = {
+  rejected: 'background:#fbe9e9; color:#8f2323; border:1px solid #f0cccc;',
+  flagged: 'background:#fdf3e2; color:#7a4b05; border:1px solid #f0dcae;',
+  cleared: 'background:#e9f4ee; color:#1d6239; border:1px solid #c2ddcc;',
+  note: 'background:#f0f3f2; color:#5c6a68; border:1px solid #e2e8e6;',
+};
+
+const SCOPES = [
+  { id: 'open', label: 'Open' },
+  { id: 'mine', label: 'Mine' },
+  { id: 'resolved', label: 'Resolved' },
+];
+
+class Component extends DCLogic {
+  state = { selected: 0, kind: null, scope: 'open', sort: 'oldest', note: '' };
+
+  componentDidMount() {
+    this.onKey = (event) => {
+      const rows = this.rows();
+      if (event.target instanceof HTMLInputElement) return;
+      if (event.key === 'j' || event.key === 'ArrowDown') this.move(1, rows);
+      if (event.key === 'k' || event.key === 'ArrowUp') this.move(-1, rows);
+    };
+    window.addEventListener('keydown', this.onKey);
+  }
+
+  componentWillUnmount() {
+    window.removeEventListener('keydown', this.onKey);
+  }
+
+  rows() {
+    const kind = this.state.kind;
+    const list = kind === null ? ITEMS : ITEMS.filter((item) => item.kind === kind);
+    return this.state.sort === 'newest' ? [...list].reverse() : list;
+  }
+
+  move(delta, rows) {
+    this.setState((s) => ({
+      selected: Math.min(rows.length - 1, Math.max(0, s.selected + delta)),
+      note: '',
+    }));
+  }
+
+  dot(color, size) {
+    return `width:${size}px; height:${size}px; border-radius:50%; background:${color}; flex:none; display:block;`;
+  }
+
+  renderVals() {
+    const rows = this.rows();
+    const index = Math.min(this.state.selected, Math.max(0, rows.length - 1));
+    const item = rows[index] ?? ITEMS[0];
+    const density = this.props.density ?? 'comfortable';
+    const pad = density === 'compact' ? '9px 14px' : '13px 16px';
+    const showKeys = this.props.showShortcuts ?? true;
+
+    const kinds = Object.entries(KINDS).map(([id, kind]) => {
+      const on = this.state.kind === id;
+      return {
+        label: kind.label,
+        count: kind.count,
+        dot: this.dot(kind.color, 7),
+        style:
+          'display:flex; align-items:center; justify-content:space-between; gap:8px; width:100%; padding:7px 10px; border:0; border-radius:7px; cursor:pointer; text-align:left; font:500 13px/18px "Instrument Sans",sans-serif; ' +
+          (on ? 'background:rgba(255,255,255,.11); color:#ffffff;' : 'background:transparent; color:#b9c6c3;'),
+        pick: () => {
+          this.setState((s) => ({ kind: s.kind === id ? null : id, selected: 0, note: '' }));
+        },
+      };
+    });
+
+    const listRows = rows.map((row, i) => {
+      const kind = KINDS[row.kind];
+      const on = i === index;
+      return {
+        kindLabel: kind.label,
+        title: row.title,
+        patient: row.patient,
+        date: row.date,
+        dot: this.dot(kind.color, 6),
+        bar: `width:2px; align-self:stretch; border-radius:2px; background:${on ? kind.color : 'transparent'}; flex:none; display:block;`,
+        style:
+          `display:flex; gap:11px; padding:${pad}; cursor:pointer; border-bottom:1px solid #f1f4f3; ` +
+          (on ? 'background:#eef4f2;' : 'background:#ffffff;'),
+        pick: () => {
+          this.setState({ selected: i, note: '' });
+        },
+      };
+    });
+
+    const actions = (item.actions ?? []).map(([label, variant, key, off]) => {
+      const base =
+        'display:inline-flex; align-items:center; gap:7px; flex:none; border-radius:7px; padding:8px 11px; font:600 13px/17px "Instrument Sans",sans-serif; cursor:pointer; white-space:nowrap; ';
+      const styles = {
+        primary: 'background:#0f6b5f; border:1px solid #0f6b5f; color:#ffffff;',
+        secondary: 'background:#ffffff; border:1px solid #cfd8d6; color:#26332f;',
+        ghost: 'background:transparent; border:1px solid #e6ebe9; color:#3d4a48;',
+        danger: 'background:#ffffff; border:1px solid #b03a3a; color:#8f2323;',
+      };
+      return {
+        label,
+        key: showKeys ? key : '',
+        disabled: off === true,
+        run: () => {},
+        style:
+          base +
+          (off === true
+            ? 'background:#f1f4f3; border:1px solid #e0e5e3; color:#7a8886; cursor:not-allowed;'
+            : styles[variant]),
+        keyStyle: showKeys
+          ? 'font-family:"IBM Plex Mono",monospace; font-size:11px; opacity:.6;'
+          : 'display:none;',
+      };
+    });
+
+    const compare = item.compare;
+
+    return {
+      kinds,
+      rows: listRows,
+      scopes: SCOPES.map((scope) => ({
+        label: scope.label,
+        pick: () => {
+          this.setState({ scope: scope.id });
+        },
+        style:
+          'border-radius:6px; padding:5px 11px; font:500 12.5px/16px "Instrument Sans",sans-serif; cursor:pointer; ' +
+          (this.state.scope === scope.id
+            ? 'background:#10181a; border:1px solid #10181a; color:#ffffff;'
+            : 'background:#ffffff; border:1px solid #dfe4e2; color:#5c6a68;'),
+      })),
+      listTitle: this.state.kind === null ? 'Everything open' : KINDS[this.state.kind].label,
+      listCount: `${rows.length} shown`,
+      sortLabel: this.state.sort === 'oldest' ? 'Oldest first' : 'Newest first',
+      toggleSort: () => {
+        this.setState((s) => ({ sort: s.sort === 'oldest' ? 'newest' : 'oldest', selected: 0 }));
+      },
+      head: {
+        kindLabel: KINDS[item.kind].label,
+        dot: this.dot(KINDS[item.kind].color, 8),
+        rule: item.rule,
+        date: item.date,
+        title: item.title,
+        patient: item.patient,
+        patientMeta: item.patientMeta,
+        banner: item.banner === '' ? false : item.banner,
+        position: `${index + 1} of ${rows.length}`,
+        evidenceNote: 'as the export gave it',
+        explainer: item.explainer,
+      },
+      evidence: item.evidence.map(([term, value]) => ({ term, value })),
+      hasCompare: compare !== undefined,
+      compareTitle: compare?.title ?? '',
+      compareLeft: compare?.left ?? '',
+      compareRight: compare?.right ?? '',
+      compare: (compare?.rows ?? []).map(([field, left, right, differs]) => ({
+        field,
+        left,
+        right,
+        rowStyle:
+          'display:flex; flex-wrap:wrap; column-gap:14px; row-gap:2px; padding:9px 18px; ' +
+          (differs
+            ? 'background:#fdf7ec; border-bottom:1px solid #f4ead5;'
+            : 'border-bottom:1px solid #f1f4f3;'),
+      })),
+      hasFindings: (item.findings ?? []).length > 0,
+      findings: (item.findings ?? []).map(([verdict, text]) => ({
+        verdict,
+        text,
+        tag:
+          'display:inline-flex; justify-content:center; border-radius:5px; padding:2px 0; font-family:"IBM Plex Mono",monospace; font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; ' +
+          TAGS[verdict],
+      })),
+      rulesetLabel: item.ruleset ?? '',
+      actions,
+      note: this.state.note,
+      notePlaceholder: item.notePlaceholder,
+      setNote: (event) => {
+        this.setState({ note: event.target.value });
+      },
+      footNote: showKeys ? `${item.foot}   ·   j / k to move through the queue` : item.foot,
+      prev: () => {
+        this.move(-1, rows);
+      },
+      next: () => {
+        this.move(1, rows);
+      },
+    };
+  }
+}
+</script>
+
+

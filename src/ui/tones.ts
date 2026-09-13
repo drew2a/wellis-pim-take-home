@@ -27,6 +27,21 @@ export const TONE_CLASSES: Readonly<Record<Tone, string>> = {
 };
 
 /**
+ * The same eight colours as a solid dot — the kind marker in the rail and beside every queue row.
+ * A dot is a shape, not text, so it takes the ink shade of its tone and needs no ground.
+ */
+export const DOT_CLASSES: Readonly<Record<Tone, string>> = {
+  good: 'bg-good-700',
+  warn: 'bg-warn-700',
+  bad: 'bg-bad-700',
+  info: 'bg-info-700',
+  neutral: 'bg-grey-600',
+  accent: 'bg-accent-600',
+  plum: 'bg-plum-700',
+  clay: 'bg-clay-700',
+};
+
+/**
  * Intake states, coloured by what the state means to the person reading it: cleared and approved
  * are good, rejected is bad, flagged wants attention, in_review is in hand. The states that carry
  * no verdict — `draft`, `submitted` and everything the importer wrote as `legacy_*` — are grey,
@@ -70,5 +85,16 @@ const BY_STATE: ReadonlyMap<string, Tone> = new Map(Object.entries(STATE_TONES))
 
 export const toneForState = (state: string): Tone => BY_STATE.get(state) ?? 'neutral';
 
+/** The same, for a review-item type that arrived as a plain `string` — a queue row's `type`. */
+const BY_ITEM_TYPE: ReadonlyMap<string, Tone> = new Map(Object.entries(REVIEW_ITEM_TONES));
+
+export const toneForReviewItem = (type: string): Tone => BY_ITEM_TYPE.get(type) ?? 'neutral';
+
 /** `auto_cleared` → `auto cleared`. The enum value is the vocabulary; this only makes it readable. */
 export const humanise = (value: string): string => value.replace(/_/g, ' ');
+
+/** The same, where the label starts a line of its own — a rail entry, a queue row's kind. */
+export const titled = (value: string): string => {
+  const text = humanise(value);
+  return text.charAt(0).toUpperCase() + text.slice(1);
+};

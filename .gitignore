@@ -5,3 +5,7 @@ node_modules/
 .next/
 next-env.d.ts
 *.tsbuildinfo
+
+# The self-unpacking Claude Design bundle the console design arrived in (348 KB of base64).
+# What it renders is checked in, extracted, as docs/design/review-console.canvas.html.
+Wellis Review Console.html

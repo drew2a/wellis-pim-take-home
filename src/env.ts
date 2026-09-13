@@ -11,8 +11,13 @@ const postgresUrl = z.url({ protocol: /^postgres(ql)?$/ });
 const optional = <T extends z.ZodType>(schema: T) =>
   z.preprocess((value) => (value === '' ? undefined : value), schema.optional());
 
-// The care team, seeded by `npm run seed:reviewers` (ADR-0014 item 4). A JSON array so one
-// variable carries both fields; identification for the audit, never authentication (Q8, R-S4).
+// The care team, seeded by `npm run seed:reviewers` (ADR-0014 item 4): identification for the
+// audit, never authentication (Q8, R-S4).
+//
+// An object rather than a bare name, and **not** `.strict()`: a reviewer used to carry a role
+// (ADR-0027 removed it), the variable is already set in deployed environments, and `loadEnv()`
+// runs at boot for the whole app. A strict schema would take the app down on the first deploy
+// after this change rather than seed a reviewer whose stale `"role"` key is simply not read.
 const reviewerSeedSchema = z.object({
   // A reviewer may not be named after a named process. `dedupeKeyFor` branches on SYSTEM_ACTORS to
   // decide whether an audit entry gets a deterministic idempotency key (ADR-0008 item 1), so a
@@ -26,7 +31,6 @@ const reviewerSeedSchema = z.object({
     .refine((name) => !SYSTEM_ACTORS.has(name), {
       message: 'is the name of a named process and cannot also be a reviewer',
     }),
-  role: z.enum(['doctor', 'ops']),
 });
 
 export type ReviewerSeed = z.infer<typeof reviewerSeedSchema>;
@@ -44,6 +48,14 @@ const jsonArray = z.preprocess((value): unknown => {
 
 const envSchema = z.object({
   DATABASE_URL: postgresUrl,
+  // The one credential the review console has (ADR-0021 item 1). Required, not optional: the
+  // failure this prevents is a console served with no gate at all, and a secret that defaults to
+  // "no session needed" is the silent fallback CLAUDE.md §2 forbids. It is therefore wanted by
+  // every process that reads this file, `npm run import` included — one deployable, one
+  // environment (ADR-0003). Not trimmed: whitespace inside a secret is part of it.
+  CONSOLE_SECRET: z
+    .string()
+    .min(32, 'must be at least 32 characters, so it cannot be guessed or brute-forced'),
   // Same role and secret as DATABASE_URL through the Supabase session pooler (port 5432) instead
   // of the transaction pooler (6543), which cannot run migrations. Read by drizzle-kit only
   // (ADR-0008). Locally and in CI one URL serves both, so db:migrate falls back to DATABASE_URL.
@@ -52,7 +64,7 @@ const envSchema = z.object({
   // a non-local host unless this is set, so a .env pointed at production for a migration cannot
   // be hit by `npm run check`.
   ALLOW_REMOTE_TEST_DATABASE: optional(z.literal('1')),
-  // e.g. REVIEWERS='[{"name":"Dr Vermeer","role":"doctor"},{"name":"Sanne","role":"ops"}]'
+  // e.g. REVIEWERS='[{"name":"Dr Vermeer"},{"name":"Sanne Bakker"}]'
   REVIEWERS: jsonArray,
 });
 

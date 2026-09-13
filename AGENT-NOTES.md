@@ -94,132 +94,14 @@ Concrete cases where the agent's output was wrong and I corrected it.
    tiny weights; it does not, because those patients' intakes carry the same tiny values. I asked
    for a separate plausibility detector with bounds in the rules file, shared with Part B.
 
-## Review of `feature/legacy-importer` (2026-09-09)
 
-A fresh session ran `/code-review high` on the branch before the merge (`CLAUDE.md` §3). Ten
-findings survived verification, plus six cut by the report cap; a second review session fixed,
-corrected, deferred or declined each one.
-
-- **Fixed (12):** the "future" reference date was inferred from the data through the ambiguous
-  date reader and landed on 2062-11-04, a date in no file. I had it removed rather than repaired:
-  every profile script now takes `--as-of YYYY-MM-DD` and prints it. Also fixed: four literal NUL
-  bytes that made `common.ts` binary to git and therefore invisible to the review itself (the
-  file was then reviewed on its own); code spans that swallowed the edge whitespace they existed
-  to show; overlapping Dutch/English term lists that double-counted 190 rows; two definitions of
-  "same day" between the intake and patient duplicate checks (4 pairs became 5); a stale path to
-  the profile JSON; a prune step that would have blanked the inventory page at 41 sections; and
-  hypotheses.ts carrying its own copies of thresholds and helpers. Four cut-by-cap findings were
-  fixed as well: `URL.pathname` for the repo root, the duplicated helpers, an isolated-tail scan
-  that a single early outlier could have collapsed, and a name-group count computed as a
-  difference of two group counts (20) instead of the folded names with several spellings (41).
-- **Corrected as clerical (1):** `VOCAB_OUTCOME` 1918 was a tally that forgot the 82 `pending`
-  rows; the right figure is 1836. The decision is unchanged, so the count was corrected in place
-  under a new sentence in the ADR lifecycle rather than by a superseding ADR. The same pass
-  re-derived every number in `docs/findings.md` and ADR-0004 to ADR-0006 from the regenerated
-  profile; no other count moved.
-- **Deferred (1):** the detector, consent-state and identity-tier counts in ADR-0005 and
-  ADR-0006 are produced by no committed script. The agent started a `mapping.ts` in the profile
-  to recompute them; I stopped it. The mapper is written test-first in the importer branch, and
-  one copy of the rules is the point. Acceptance criterion carried forward: **the import report
-  reproduces every ADR-0005 and ADR-0006 count.** ADR-0005 now says which counts come from where.
-- **Declined (2):** 13 commit subjects over 72 characters (history is not rewritten in this repo);
-  ESLint and Prettier not configured (ADR-0003 places tooling in the scaffold branch, which is
-  next; deferred, not dismissed).
-
-## Importer load (2026-09-11, `feature/importer-load`)
-
-Plan, accept, execute: the agent read ADR-0004 to ADR-0008 and proposed the build, the
-`src/import/` layout (pure per-column mapper files, a review layer that turns the mapper's flags
-into items, one orchestrator), one branch instead of two along the patients / intakes seam, and the
-tests to write first. It listed eight decisions no accepted ADR settled; I accepted them with two
-refinements (entity types for new-flow normalisation records; one exported actor set) and had them
-drafted as ADR-0009, proposed, second commit after `rules/v1.json`.
-
-What the tests found while the branch was built:
-
-- **Impossible dobs are 5, not 6.** ADR-0005 counted "5 future, 1 above 100"; the one above 100 is
-  a 1958 birth date whose signup date is in 2062. The signup is what is impossible and already has
-  its own item, so the mapper keeps the dob. Recorded in ADR-0009 item 1 and in the count test.
-- **The alternative dob reading must include ISO values read as Y-D-M**, as the profile does
-  (P-4: 987 ambiguous values). Without it the minor/adult flip check found 2 of the 6 patients.
-- **A changed source row must be mapped from the stored raw row**, not from the incoming file.
-  The first version mapped from the file; the end-to-end test caught the canonical city following
-  the new export while the raw row, correctly, kept the old one.
-
-Two conventions surfaced in code and went into the proposed ADR-0009 rather than into comments: a
-human transition makes `state` human-owned (otherwise a re-run returns a reopened legacy intake to
-its legacy state), and an unseen outcome spelling sits in `legacy_pending` until its item is
-resolved.
-
-## Detectors and identity (2026-09-12, `feature/importer-detectors`)
-
-Same shape: the agent read ADR-0005 to ADR-0010, proposed the build, the order, what it would
-leave out, twelve decisions no accepted ADR settled and the tests it would write first. It also
-said, unprompted, that the branch was too large for one review and proposed the seam — everything
-that writes rows here, the import report next — which I took. Two things it caught that my list of
-obligations had missed: the mapper's 18 unit-less weights had no review item either (the same debt
-as the implausible values), and the counts in ADR-0005 needed checking rather than quoting.
-
-What the tests found, in order:
-
-- **`conflict` is "revoke before grant", not "revoke before grant *and* before signup".** ADR-0005
-  describes the 7 conflicts with both properties; only six have the second. The seventh revoked the
-  day after signing up. Under the narrower reading the derivation returns `granted` for a log that
-  contradicts itself, which is what the state exists to prevent.
-- **The second run overwrote 28 survivors with their losers' values.** After a merge repoints the
-  alias, the alias no longer says which exported row built which canonical row, and the importer
-  rewrites canonical rows from raw. A new column, `patients.created_from_legacy_id`, answers that
-  and never moves. The double-run test found it; nothing else would have.
-- **The weight-divergence detector finds nothing.** ADR-0005 predicts 3 items; all four diverging
-  pairs are tiny weights that ADR-0009 item 2 — decided later — now nulls as implausible, so there
-  is nothing to compare, and those patients already carry a plausibility item. I kept the detector
-  (Part B needs it) and had the zero recorded with its evidence instead of adjusted away.
-- **Two counts in accepted ADRs were wrong.** Same-day intake pairs need the profile's "any shared
-  plausible reading" to reach ADR-0006's five, and ADR-0006's "outcomes disagreeing in 3" is 2 by
-  canonical outcome and 4 by raw spelling. The second is a clerical fix under the lifecycle rule.
-
-Where I took the wheel: the disagreement definition. The agent proposed mapping `auto_flagged` to
-`pending` so the report could state one number. That conflates "the doctor never decided" with "a
-doctor should look" — they are different facts about a patient. The report carries the whole matrix
-instead and names two cells as hard disagreements (auto_rejected where legacy approved,
-auto_cleared where legacy rejected), which is one named predicate the report and any later query
-share.
-
-## The import report (2026-09-12, `feature/import-report`)
-
-The last piece of Part A, and the seam the detectors branch proposed: everything that writes rows
-there, the report here. The agent read the ADRs, proposed building the report from queries against
-the loaded database, and found three things the plan had to answer before any of it was written.
-
-- **A report built after the run cannot describe a dry run.** The dry run's transaction is rolled
-  back, so a report counted afterwards would print zeros as if they were true. The report is built
-  as the last step *inside* the run's transaction instead, and the CLI — not the importer — writes
-  the files. That is ADR-0013 item 1.
-- **Two figures are not a count of any column**, and the agent said so instead of inventing a
-  query for them: the rules that fired (`eligibility_evaluations` stores the verdict and the
-  inputs, not `matched`, and ADR-0011 item 21 forbids re-deriving them from the thresholds) and
-  the consent state of a row a merge took away. Both come from the code that owns them — the
-  engine and the consent derivation — and each is cross-checked in the integration test from the
-  other side, which is where a second implementation belongs.
-- **`review_items` has no `rule` column.** The agent proposed reading the rule back out of
-  `dedupe_key` with the exact inverse of the function that wrote it, rather than adding a column
-  for the report's convenience. A schema change would have been a graded decision and a stop.
-
-What the tests found, in order:
-
-- **The 28 consent states a merge removes are not the losers' states.** `run.integration.test.ts`
-  explained them as 23 `no_record` and 5 `unknown_pre_log` rows that never appeared in the log.
-  They are not: the losers hold 14 `granted`, 10 `no_record` and 4 `revoked`, and because a merge
-  moves no event, 18 survivors that had no record of their own gain one. The report now carries
-  both state tables and the move between them, and that third table is the interesting one: for 18
-  patients the consent record was on the row we were about to stop looking at.
-- **ADR-0012's "9 unreadable outcomes" is zero.** Every one of the 13 raw outcome spellings is in
-  the mapping table, which `export-counts.test.ts` already asserted. The decision stands as a
-  guard for the next export; the count was corrected under the lifecycle's trivial-fix rule.
-- **ADR-0005's 71 intakes before a first grant reproduce as 68 + 3.** The canonical comparison
-  cannot see the three intakes whose submission date the mapper nulled as impossible, and those
-  three belong to two patients — which is also ADR-0005's 70 patients as 68 + 2. Both readings are
-  in the report with the definition each counted under, rather than one of them quietly winning.
+8. **Roles the brief never asked for (2026-09-13).** ADR-0014 gave reviewers a `doctor` / `ops`
+   role and gated approve and reject on `doctor`; I accepted it, then cut it. The brief asks for
+   an *actor* on every audited decision, not for an authorisation model, and a second role means
+   every screen and every action has to answer "who may do this" — a question the assignment does
+   not pose and a reviewer-experience decision I had not intended to take. One kind of reviewer,
+   the audit still names who decided. Recorded in its own ADR, superseding ADR-0014 item 3 and
+   the role paragraph of ADR-0021.
 
 ## What I would do differently
 

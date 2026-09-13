@@ -18,6 +18,7 @@ import { EMAIL_SYNTAX } from '@/import/mapper/email';
 import type { Rules } from '@/rules/schema';
 
 import { CONDITION_OPTIONS, GLP1_OPTIONS, optionValues, type ChecklistOption } from './options';
+import { isCalendarDate } from './today';
 
 /** Stamped into the answers and onto `intakes.questionnaire_version_label` (ADR-0015 item 1). */
 export const INTAKE_FORM_VERSION = 'intake-form-v1';
@@ -100,12 +101,6 @@ export interface AnswersContext {
 }
 
 const trimmed = (value: string): string => value.trim();
-
-/** A real calendar day, not merely a well-shaped string: `2023-02-30` matches the shape. */
-function isCalendarDate(iso: string): boolean {
-  const date = new Date(`${iso}T00:00:00Z`);
-  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === iso;
-}
 
 const oneDecimal = (value: number): boolean => Number(value.toFixed(1)) === value;
 

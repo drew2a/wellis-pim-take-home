@@ -35,3 +35,13 @@ export function dayOf(at: Date): string {
 }
 
 export const todayIso = (): string => dayOf(new Date());
+
+/**
+ * A real calendar day, not merely a well-shaped string: `2023-02-30` matches the shape and is not
+ * a date. Here rather than in the intake form's schemas because the review console validates the
+ * dates a reviewer types with the same rule.
+ */
+export function isCalendarDate(iso: string): boolean {
+  const date = new Date(`${iso}T00:00:00Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === iso;
+}

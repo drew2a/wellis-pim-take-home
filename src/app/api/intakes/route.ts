@@ -22,7 +22,7 @@ import { todayIso } from '@/intake/today';
 import { dedupeKeyFor } from '@/repo/audit';
 import { currentRules } from '@/rules/load';
 
-import { badRequest, issuesOf, json, serverError } from './http';
+import { badRequest, issuesOf, json, serverError } from '../http';
 
 const CREATED_REASON = 'draft created by the intake form';
 

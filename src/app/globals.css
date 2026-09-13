@@ -2,62 +2,99 @@
    specific thing lives in a component under `src/ui/`, as Tailwind utilities — so the styling of
    the whole product is reviewable in that one directory (see `src/ui/index.ts`).
 
+   The values are the console design the repo owner approved, extracted to
+   `docs/design/review-console.canvas.html` and adopted in ADR-0028. The ramps keep the names and
+   the roles they had under ADR-0018, so a component that asked for `border-grey-200` still gets
+   "the border colour"; only the hexadecimals moved.
+
    One theme, light, deliberately: a reviewer reads these screens all day and a grader opens them
    on whatever their OS is set to. A dark theme is a second set of colour decisions to get right,
-   and this baseline does not need one. `color-scheme: light` also keeps the browser's own
-   widgets — the date picker, scrollbars, focus rings — on the light side of the fence. */
+   and this baseline does not need one — the console's rail is dark because that pane is dark in
+   every theme, which is a layout decision and not a second palette. `color-scheme: light` also
+   keeps the browser's own widgets — the date picker, scrollbars, focus rings — on the light side
+   of the fence. */
 @import 'tailwindcss';
 
 @theme {
-  /* Neutrals. Slightly warm-cool grey, near-black ink rather than #000: less glare over a
-     long reading session. */
-  --color-grey-50: #f7f8f8;
-  --color-grey-100: #eef0f0;
-  --color-grey-200: #e0e3e3;
-  --color-grey-300: #c8cccc;
-  --color-grey-400: #9aa0a0;
-  --color-grey-500: #6f7676;
-  --color-grey-600: #545a5a;
-  --color-grey-700: #3d4242;
-  --color-grey-800: #2a2e2e;
-  --color-grey-900: #1a1d1d;
+  /* Neutrals. A warm-cool grey with a near-black ink rather than #000: less glare over a long
+     reading session. Read as roles, lightest first: ground, soft fill, border, control border,
+     placeholder, caption, muted, body, strong, ink. */
+  --color-grey-50: #f2f4f3;
+  --color-grey-100: #eaeeec;
+  --color-grey-200: #dfe4e2;
+  --color-grey-300: #cfd8d6;
+  --color-grey-400: #a3aead;
+  --color-grey-500: #5c6a68;
+  --color-grey-600: #52605e;
+  --color-grey-700: #3d4a48;
+  --color-grey-800: #2a3634;
+  --color-grey-900: #10181a;
 
-  /* Accent: a calm teal-green. Care programme, not a checkout button. `accent-600` is the lightest
-     shade put on white as text (5.2:1) and is also the one that carries white text on itself. */
-  --color-accent-50: #eef7f5;
-  --color-accent-100: #d6ebe7;
+  /* A line inside a list, lighter than a border between panes: the divider between queue rows and
+     between the terms of an evidence list, where `grey-200` would draw a ladder. */
+  --color-hairline: #f1f4f3;
+  /* The row the reviewer is on. A tint of the accent rather than a grey, because it marks a
+     position and not a state. */
+  --color-picked: #eef4f2;
+
+  /* The rail. Its own darks, because nothing else in the product is dark and a ramp of one is
+     clearer named than numbered. */
+  --color-rail: #0d1618;
+  --color-rail-line: #1c2a2c;
+  --color-rail-edge: #263436;
+  --color-rail-ink: #b9c6c3;
+  --color-rail-dim: #8fa3a0;
+  --color-rail-bright: #e6efed;
+
+  /* Accent: a calm teal-green. Care programme, not a checkout button. `accent-600` is the shade
+     put on white as text (5.4:1) and the one that carries white text on itself; `accent-400` is
+     the product mark, which is a shape and never text. */
+  --color-accent-50: #e8f2f0;
+  --color-accent-100: #cfe6e0;
   --color-accent-200: #a9d6ce;
-  --color-accent-600: #167a6c;
-  --color-accent-700: #116358;
-  --color-accent-800: #0d4d45;
+  --color-accent-400: #1f8a7a;
+  --color-accent-600: #0f6b5f;
+  --color-accent-700: #0a4f46;
+  --color-accent-800: #13433c;
 
   /* State hues. Each is a soft ground plus an ink dark enough to read on it; nothing else is
-     tinted, so colour in this product always means "this is a state". */
-  --color-good-50: #e9f5ed;
-  --color-good-200: #b9ddc6;
-  --color-good-700: #1f6b3c;
+     tinted, so colour in this product always means "this is a state" or "this is a kind". The
+     `-700` ink is also the kind's dot in the rail and the queue (`src/ui/tones.ts`). */
+  --color-good-50: #e9f4ee;
+  --color-good-200: #c2ddcc;
+  --color-good-700: #1d6239;
   --color-warn-50: #fdf3e2;
-  --color-warn-200: #f0d9a8;
-  --color-warn-700: #855206;
-  --color-bad-50: #fdecec;
-  --color-bad-200: #f2c4c4;
-  --color-bad-700: #9a2323;
+  --color-warn-200: #f0dcae;
+  --color-warn-700: #7a4b05;
+  --color-bad-50: #fbe9e9;
+  --color-bad-200: #f0cccc;
+  --color-bad-700: #8f2323;
   --color-info-50: #ebf2fb;
   --color-info-200: #c2d6ef;
-  --color-info-700: #1f4f8f;
-  /* A fifth and sixth hue, for review-item types only: one type, one colour (`src/ui/tones.ts`). */
+  --color-info-700: #2a5aa0;
+  /* A fifth and sixth hue, for review-item kinds only: one kind, one colour. */
   --color-plum-50: #f5eefa;
   --color-plum-200: #ddc6ec;
-  --color-plum-700: #6b2d8f;
+  --color-plum-700: #7a3a9e;
   --color-clay-50: #f8efe9;
   --color-clay-200: #e7c9b5;
-  --color-clay-700: #8a4a24;
+  --color-clay-700: #9a5426;
 
-  --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  /* The one row of a comparison where the two records disagree. Not `warn`: it marks the rows
+     worth reading, not a verdict on them. */
+  --color-differs-50: #fdf7ec;
+  --color-differs-200: #f4ead5;
+
+  /* Two families, loaded in `layout.tsx`. Mono is not decoration: it marks the strings that are
+     identifiers rather than prose — ids, rule codes, counts, dates, field names — so a reviewer
+     can tell at a glance what the export said from what we say about it (ADR-0028). */
+  --font-sans:
+    var(--font-instrument-sans), system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, 'SF Mono', Menlo, monospace;
 }
 
-/* The page itself, because a body with no background inherits the OS's, which is how this form
-   came to render black-on-black in dark mode. */
+/* The page itself, because a body with no background inherits the OS's, which is how the intake
+   form came to render black-on-black in dark mode. */
 :root {
   color-scheme: light;
 }
@@ -66,6 +103,11 @@ body {
   background: var(--color-grey-50);
   color: var(--color-grey-900);
   font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: var(--color-accent-100);
 }
 
 /* Two element defaults, because Preflight strips them and a link that looks like text is a bug,
@@ -77,10 +119,15 @@ body {
     text-underline-offset: 2px;
   }
 
+  a:hover {
+    color: var(--color-accent-700);
+  }
+
   code {
     border-radius: 0.25rem;
     background: var(--color-grey-100);
     padding: 0.05rem 0.3rem;
+    font-family: var(--font-mono);
     font-size: 0.9em;
   }
 }

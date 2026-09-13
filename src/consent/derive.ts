@@ -41,6 +41,14 @@ export interface DerivationInput {
  */
 export const CONSENT_DERIVATION_VERSION = '1';
 
+/**
+ * The `derivation_version` of a state a reviewer established by hand over a log that contradicts
+ * itself (ADR-0025). Not a version of these rules: it says this row came from a person, which is
+ * what stops the recomputation overwriting it while the evidence it was taken over is still the
+ * latest.
+ */
+export const HUMAN_DERIVATION = 'human';
+
 /** The consent log's first year: 2023 (data-profile P-29). */
 export const CONSENT_LOG_STARTS = '2023-01-01';
 
@@ -91,6 +99,16 @@ function stateForType(
   if (conflict !== null) return { state: 'conflict', derivedFromEventId: conflict.id };
   const last = ordered[ordered.length - 1] as ConsentEventInput;
   return { state: last.action, derivedFromEventId: last.id };
+}
+
+/**
+ * The last event of a set, in the same total order the derivation reads them in — so a caller
+ * asking "which evidence was this decided over" and the function deciding cannot disagree about
+ * which event is last (ADR-0025 item 2). Null for no events at all.
+ */
+export function latestEvent(events: readonly ConsentEventInput[]): ConsentEventInput | null {
+  if (events.length === 0) return null;
+  return [...events].sort(byTimeThenRevokedLast)[events.length - 1] ?? null;
 }
 
 /**

@@ -25,12 +25,14 @@ export async function seedReviewers(
   if (duplicates.length > 0) {
     throw new Error(`REVIEWERS names two reviewers the same: ${duplicates.join(', ')}`);
   }
+  // A reviewer is a name (ADR-0027), so a name that is already there needs no update — but the
+  // insert still has to report it as seeded, which `onConflictDoNothing` would not: it returns
+  // nothing for the conflicting row, and `npm run seed:reviewers` would print a count that shrank
+  // on every re-run. Writing the name back to itself keeps the row in `returning`.
   const written = await db
     .insert(reviewers)
-    .values(seeds.map((seed) => ({ name: seed.name, role: seed.role })))
-    // A role can change; a name identifies. `excluded` so each row takes its own seed's role —
-    // a literal here would give every existing reviewer the role of whichever seed came first.
-    .onConflictDoUpdate({ target: reviewers.name, set: { role: sql`excluded.role` } })
+    .values(seeds.map((seed) => ({ name: seed.name })))
+    .onConflictDoUpdate({ target: reviewers.name, set: { name: sql`excluded.name` } })
     .returning({ name: reviewers.name });
   return { seeded: written.length, names: written.map((row) => row.name) };
 }

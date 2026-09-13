@@ -44,6 +44,26 @@ function formatBmi(bmi: number, holds: (shown: number) => boolean): string {
 const quote = (matches: readonly TermMatch[]): string =>
   matches.map((match) => match.text).join('; ');
 
+/**
+ * A stored BMI as a screen shows it: one decimal (Q2's default — the thresholds compare the
+ * unrounded value, and rounding is for display), widened until the value shown sits on the same
+ * side of every threshold as the exact one.
+ *
+ * Exported because the reasons above are already formatted this way, and a panel showing the
+ * input next to those reasons has to agree with them: the same evaluation reading `27.0` on the
+ * input line and `BMI 26.99 below 27` on the next is the contradiction `formatBmi` exists to
+ * prevent, moved one line up rather than fixed.
+ */
+export function showBmi(bmi: number, rules: Rules): string {
+  const band = rules.bmi.flag_band;
+  const below = bmi < rules.bmi.reject_below;
+  const banded = inBand(bmi, band);
+  return formatBmi(
+    bmi,
+    (shown) => shown < rules.bmi.reject_below === below && inBand(shown, band) === banded,
+  );
+}
+
 function missingMetrics(weightKg: number | null, heightCm: number | null): string | null {
   if (weightKg === null && heightCm === null) return 'weight and height';
   if (weightKg === null) return 'weight';

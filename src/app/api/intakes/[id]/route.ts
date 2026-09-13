@@ -14,15 +14,7 @@ import { INTAKE_STEPS, stepSchemas, type DraftAnswers, type IntakeStep } from '@
 import { todayIso } from '@/intake/today';
 import { currentRules } from '@/rules/load';
 
-import {
-  badRequest,
-  conflict,
-  intakeIdSchema,
-  issuesOf,
-  json,
-  notFound,
-  serverError,
-} from '../http';
+import { badRequest, conflict, issuesOf, json, notFound, routeUuid, serverError } from '../../http';
 
 interface RouteContext {
   readonly params: Promise<{ readonly id: string }>;
@@ -31,7 +23,7 @@ interface RouteContext {
 const bodySchema = z.object({ step: z.enum(INTAKE_STEPS), answers: z.unknown() });
 
 export async function GET(_request: Request, context: RouteContext): Promise<Response> {
-  const id = intakeIdSchema.safeParse((await context.params).id);
+  const id = routeUuid.safeParse((await context.params).id);
   if (!id.success) return notFound('no such intake');
   try {
     const db = getDb();
@@ -77,7 +69,7 @@ export async function GET(_request: Request, context: RouteContext): Promise<Res
 }
 
 export async function PATCH(request: Request, context: RouteContext): Promise<Response> {
-  const id = intakeIdSchema.safeParse((await context.params).id);
+  const id = routeUuid.safeParse((await context.params).id);
   if (!id.success) return notFound('no such intake');
 
   let raw: unknown;

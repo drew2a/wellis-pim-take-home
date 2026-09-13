@@ -1,3 +1,7 @@
+'use client';
+
+// `'use client'` for the same reason `./Field.tsx` carries it: every caller is already a client
+// component, and saying so here stops a future server-rendered button from failing at runtime.
 import type { ReactElement, ReactNode } from 'react';
 
 export type ButtonVariant = 'primary' | 'secondary' | 'danger';
@@ -49,7 +53,23 @@ export function Button({
   );
 }
 
-/** The one place a screen's actions live, so they are never scattered down the page. */
-export function ButtonRow({ children }: { children: ReactNode }): ReactElement {
-  return <div className="mt-8 flex gap-3">{children}</div>;
+/**
+ * Why a row of actions is unavailable, when it is. Every decision in the console records the
+ * reviewer's own words (R-C6), so an empty note is what usually holds the row, and this is that
+ * sentence in one place rather than seven.
+ */
+export const NEEDS_A_NOTE =
+  'A decision is only recorded with the reason you give it — write one in the field below first.';
+
+/**
+ * The one place a screen's actions live, so they are never scattered down the page. The console's
+ * decisions have their own bar (`./DecisionBar.tsx`); this is the intake flow and the login form,
+ * where a row of buttons ends a page rather than hanging off the bottom of it.
+ */
+export function ButtonRow({ children }: { readonly children: ReactNode }): ReactElement {
+  return (
+    <div className="mt-8">
+      <div className="flex gap-3">{children}</div>
+    </div>
+  );
 }

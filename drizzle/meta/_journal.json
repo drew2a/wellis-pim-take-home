@@ -64,6 +64,13 @@
       "when": 1789290390045,
       "tag": "0008_freeze_answers_on_leaving_draft",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1789331906271,
+      "tag": "0009_drop_reviewer_role",
+      "breakpoints": true
     }
   ]
 }

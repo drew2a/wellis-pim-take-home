@@ -87,11 +87,7 @@ export const reviewItemTypeEnum = pgEnum('review_item_type', [
 ]);
 export const reviewItemScopeEnum = pgEnum('review_item_scope', ['row', 'vocabulary']);
 export const reviewItemStatusEnum = pgEnum('review_item_status', ['open', 'resolved', 'dismissed']);
-// Who a reviewer is allowed to be. `doctor` gates the medical decision — approving or rejecting an
-// intake — and nothing else; triage and review-item work are open to both (ADR-0014 item 3).
-export const reviewerRoleEnum = pgEnum('reviewer_role', ['doctor', 'ops']);
-export type ReviewerRole = (typeof reviewerRoleEnum.enumValues)[number];
-
+export type ReviewItemStatus = (typeof reviewItemStatusEnum.enumValues)[number];
 // ---------------------------------------------------------------------------------------------
 // Shared column builders
 // ---------------------------------------------------------------------------------------------
@@ -496,11 +492,14 @@ export const reviewItems = pgTable(
 // The care team, and the only human actors the state machine accepts (ADR-0014 item 4). Seeded
 // from the environment by `npm run seed:reviewers`; this is identification, not authentication,
 // which is a deliberate scope cut (Q8 default A, R-S4).
+//
+// A reviewer is a name and nothing more. There was a `role` here gating the medical decision, and
+// ADR-0027 removed it: with one shared secret and the name picked from a list, it refused nobody
+// (ADR-0021). What closes an approval is the intake's own evaluation, not the person's label.
 export const reviewers = pgTable('reviewers', {
   id: uuidPrimaryKey(),
   // Unique so the seed can upsert by it, and so an audit entry's actor text names one person.
   name: text('name').notNull().unique(),
-  role: reviewerRoleEnum('role').notNull(),
   createdAt: timestamptz('created_at').notNull().defaultNow(),
 });
 
@@ -551,4 +550,11 @@ export interface AuditChange {
   from: string | null;
   to: string | null;
   source_legacy_id?: string;
+  /**
+   * Present only where a **reviewer chose** this value rather than the survivor gaining a field it
+   * had none of: `loser` and `edited` can produce the same string, and the audit has to say
+   * whether the value was picked out of a row or typed (ADR-0022 item 1). Absent on every entry
+   * the importer writes.
+   */
+  chosen?: 'survivor' | 'loser' | 'edited';
 }

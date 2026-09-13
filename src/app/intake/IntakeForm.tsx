@@ -25,6 +25,7 @@ import {
   Choice,
   ErrorText,
   Field,
+  Hint,
   Prose,
   StepIndicator,
   TextAreaField,
@@ -364,6 +365,11 @@ export function IntakeForm({ bounds }: { bounds: Bounds }): ReactElement {
         {current.step === 'consent' && (
           <>
             <Prose text={CONSENT_TEXT} />
+            {/* Which statement they are agreeing to, in the clinic's words rather than the
+                engine's. ADR-0020 removed "Consent text version v3." as machine vocabulary aimed
+                at the wrong audience; the reasoning held for the wording, not for the fact — a
+                person signing something may reasonably see which thing (ADR-0023 item 9). */}
+            <Hint>{`Version ${CONSENT_TEXT_VERSION} of our consent statement`}</Hint>
             <Field label="" message={messageFor(issues, 'granted')}>
               <Choice
                 type="checkbox"
