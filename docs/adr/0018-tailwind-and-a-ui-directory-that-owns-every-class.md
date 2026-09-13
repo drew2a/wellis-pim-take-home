@@ -1,6 +1,6 @@
 # ADR-0018: Tailwind v4, and one directory that owns every utility class
 
-- **Status:** proposed
+- **Status:** accepted
 - **Date:** 2026-09-13
 - **Deciders:** Andrei Andreev
 - **Requirements:** R-T4, R-T7, R-S4 · **Amends:** ADR-0003 (adds the styling toolchain to the

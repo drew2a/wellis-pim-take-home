@@ -1,6 +1,6 @@
 # ADR-0019: Consent is the first step of the intake form, not the last
 
-- **Status:** proposed
+- **Status:** accepted
 - **Date:** 2026-09-13
 - **Deciders:** Andrei Andreev
 - **Requirements:** R-B1, R-B2, R-B4, R-B7, R-T4 · **Amends:** ADR-0015 item 2 (the step table:

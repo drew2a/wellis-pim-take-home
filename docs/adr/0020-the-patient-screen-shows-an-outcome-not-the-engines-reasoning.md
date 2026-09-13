@@ -1,6 +1,6 @@
 # ADR-0020: The patient's screen shows an outcome, not the engine's reasoning
 
-- **Status:** proposed
+- **Status:** accepted
 - **Date:** 2026-09-13
 - **Deciders:** Andrei Andreev
 - **Requirements:** R-B8, R-B9, R-B12, R-S4 · **Relates to:** ADR-0010 (the engine's reasons),
