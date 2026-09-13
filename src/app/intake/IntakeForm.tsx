@@ -6,8 +6,10 @@
 //
 // It carries no business rules. Every message under a field is the server's own, from the Zod
 // schema at the boundary, so there is exactly one definition of what a valid answer is and the
-// client cannot disagree with it (`CLAUDE.md` §2, R-T4). The only client-side validation is the
-// browser's `required`, which is a convenience.
+// client cannot disagree with it (`CLAUDE.md` §2, R-T4). Client-side validation here is a
+// convenience and nothing more: the browser's `required`, and the greyed-out button on the consent
+// step. Both only decline to send a request the server would refuse anyway — `consentSchema` is
+// still the one thing that decides whether consent was given (ADR-0019 item 2).
 //
 // It carries no styling either: every element on the screen is a component from `@/ui`, so how
 // this form looks is decided there and not here (`src/ui/index.ts`).
@@ -399,7 +401,12 @@ export function IntakeForm({ bounds }: { bounds: Bounds }): ReactElement {
             Back
           </Button>
         )}
-        <Button type="submit" variant="primary" busy={busy}>
+        <Button
+          type="submit"
+          variant="primary"
+          busy={busy}
+          disabled={!agreedIfAsked(current.step, granted)}
+        >
           {index < STEPS.length - 1 ? 'Next' : 'Submit'}
         </Button>
       </ButtonRow>
@@ -434,6 +441,14 @@ const FIELDS: Record<IntakeStep, readonly string[]> = {
   // the step-level messages in the card and is shown rather than filtered into silence.
   consent: ['granted'],
 };
+
+/**
+ * Whether this step's answer may be sent yet. Only the consent step has one: a patient who has not
+ * ticked the box has not consented, and the button says so by going grey rather than by sending a
+ * request that comes back 400. Every other step is the server's to judge.
+ */
+const agreedIfAsked = (step: IntakeStep, granted: boolean): boolean =>
+  step !== 'consent' || granted;
 
 const messageFor = (issues: readonly Issue[], path: string): string | undefined =>
   issues.find((issue) => issue.path === path)?.message;

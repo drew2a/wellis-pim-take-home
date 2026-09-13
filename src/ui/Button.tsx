@@ -2,10 +2,14 @@ import type { ReactElement, ReactNode } from 'react';
 
 export type ButtonVariant = 'primary' | 'secondary' | 'danger';
 
+// Disabled is grey, not a faded version of the variant's own colour: a washed-out primary button
+// still reads as the thing to press, and the one place this matters is a consent screen where the
+// button must not invite the click until the patient has agreed.
 const BASE =
   'inline-flex items-center justify-center rounded-md border px-4 py-2 font-medium ' +
   'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-600 ' +
-  'disabled:cursor-not-allowed disabled:opacity-55 aria-busy:cursor-progress';
+  'disabled:cursor-not-allowed disabled:border-grey-200 disabled:bg-grey-100 ' +
+  'disabled:text-grey-500 aria-busy:cursor-progress';
 
 const VARIANTS: Readonly<Record<ButtonVariant, string>> = {
   primary: 'border-accent-600 bg-accent-600 text-white not-disabled:hover:bg-accent-700',
