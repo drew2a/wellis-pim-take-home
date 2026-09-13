@@ -85,9 +85,9 @@ describe('REVIEWERS names that collide with a named process', () => {
   it.each(['importer', 'legacy import', 'intake form', 'eligibility engine'])(
     'refuses a reviewer called %s',
     (name) => {
-      expect(() =>
-        parseEnv({ ...required, REVIEWERS: JSON.stringify([{ name }]) }),
-      ).toThrow(/named process/);
+      expect(() => parseEnv({ ...required, REVIEWERS: JSON.stringify([{ name }]) })).toThrow(
+        /named process/,
+      );
     },
   );
 
