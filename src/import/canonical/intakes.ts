@@ -27,6 +27,19 @@ export interface IntakeLoadResult {
 
 const CHUNK = 500;
 
+/**
+ * `intakes.intake_id` is nullable since ADR-0015: a new-flow intake has no exported key. Every row
+ * this loader touches was selected by `intake_id` or inserted with one, and the
+ * `intakes_legacy_rows_keep_their_intake_id` check keeps it that way, so a null here is a broken
+ * invariant rather than a case to handle (`CLAUDE.md` §2).
+ */
+function keyOf(row: { id: string; intakeId: string | null }): string {
+  if (row.intakeId === null) {
+    throw new Error(`imported intake ${row.id} has no intake_id`);
+  }
+  return row.intakeId;
+}
+
 export function legacyOutcomeReason(outcomeRaw: string): string {
   return 'legacy outcome `' + outcomeRaw + '`';
 }
@@ -49,7 +62,7 @@ export async function loadIntakes(
           mapped.slice(i, i + CHUNK).map((m) => m.intakeId),
         ),
       );
-    for (const r of rows) ids.set(r.intakeId, r.id);
+    for (const r of rows) ids.set(keyOf(r), r.id);
   }
   const orphans = mapped.filter((i) => !patientIds.has(i.legacyPatientId));
 
@@ -69,7 +82,7 @@ export async function loadIntakes(
         })),
       )
       .returning({ id: intakes.id, intakeId: intakes.intakeId });
-    for (const r of returned) ids.set(r.intakeId, r.id);
+    for (const r of returned) ids.set(keyOf(r), r.id);
     inserted += returned.length;
   }
 

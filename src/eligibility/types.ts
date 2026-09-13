@@ -31,6 +31,13 @@ export interface EligibilityInput {
   /** Null when the value was missing or implausible: the mapper nulls it, the engine sees null. */
   readonly weightKg: number | null;
   readonly heightCm: number | null;
+  /**
+   * The patient's own yes/no answer to "are you currently using a GLP-1 medication?" (ADR-0015
+   * item 6, amending ADR-0010). The GLP-1 rule fires on this or on a matched term, so a patient
+   * who reports current use is never cleared even when they name a drug the ruleset does not know.
+   * The legacy questionnaire never asked, so the history audit passes `false`.
+   */
+  readonly glp1Declared: boolean;
   readonly medications: readonly string[];
   /** The authoritative answer: matched for flag terms and for weight-related terms. */
   readonly conditions: readonly string[];
@@ -63,6 +70,8 @@ export interface EvaluatedInputs {
   readonly heightCm: number | null;
   /** Unrounded: the thresholds compare this value, rounding is for display only (Q2). */
   readonly bmi: number | null;
+  /** What the patient answered, next to what the matcher found (ADR-0015 item 6). */
+  readonly glp1Declared: boolean;
   readonly glp1: readonly TermMatch[];
   readonly flagConditions: readonly TermMatch[];
   readonly weightRelated: readonly TermMatch[];

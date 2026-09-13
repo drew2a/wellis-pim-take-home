@@ -4,8 +4,10 @@
 import { trimWhitespace } from './text';
 import { mapped, type Mapped, type RecordDraft } from './types';
 
-// The check the profile used (data-profile P-3): something@something.tld, no whitespace.
-const SYNTAX = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/u;
+// The check the profile used (data-profile P-3): something@something.tld, no whitespace. Exported
+// so the intake form refuses at its boundary exactly what the importer would have had to null
+// (ADR-0015 item 5).
+export const EMAIL_SYNTAX = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/u;
 
 export function mapEmail(raw: string): Mapped<string | null> {
   const trimmed = trimWhitespace(raw, 'email');
@@ -24,11 +26,11 @@ export function mapEmail(raw: string): Mapped<string | null> {
     records.push({ field: 'email', from: value, to: lower, ruleCode: 'EMAIL_LOWERCASE' });
     value = lower;
   }
-  if (SYNTAX.test(value)) {
+  if (EMAIL_SYNTAX.test(value)) {
     return mapped(value, records);
   }
   const withoutSpaces = value.replaceAll(/\s+/gu, '');
-  if (withoutSpaces !== value && SYNTAX.test(withoutSpaces)) {
+  if (withoutSpaces !== value && EMAIL_SYNTAX.test(withoutSpaces)) {
     records.push({
       field: 'email',
       from: value,

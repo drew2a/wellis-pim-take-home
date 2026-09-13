@@ -22,3 +22,14 @@ export function parseRules(source: unknown): Rules {
 export function loadRules(path: string = RULES_V1_PATH): Rules {
   return parseRules(JSON.parse(readFileSync(path, 'utf8')));
 }
+
+let cached: Rules | undefined;
+
+/**
+ * The ruleset in force, read once per process. The file is immutable in a running deployment — a
+ * new ruleset is a new version and a new file — so re-reading it per request would buy nothing.
+ */
+export function currentRules(): Rules {
+  cached ??= loadRules();
+  return cached;
+}

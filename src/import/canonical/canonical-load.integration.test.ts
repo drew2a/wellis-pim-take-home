@@ -230,17 +230,20 @@ describe('canonical load', () => {
     ]);
   });
 
+  // `legacy_pending -> in_review` is the machine's one door out of the legacy states (ADR-0014
+  // item 7), and since the state-machine trigger the database enforces that: a human cannot reopen
+  // a legacy intake the legacy process decided, only one it left open.
   it('treats state as human-owned after a human transition', async () => {
     const [row] = await database.db
       .select({ id: intakes.id })
       .from(intakes)
-      .where(eq(intakes.intakeId, 'INT-9521'));
+      .where(eq(intakes.intakeId, 'INT-8830'));
     const intakeId = row?.id ?? '';
     await database.db.insert(auditEntries).values({
       actor: 'dr. reviewer',
       entityType: 'intake',
       entityId: intakeId,
-      fromState: 'legacy_rejected',
+      fromState: 'legacy_pending',
       toState: 'in_review',
       reason: 'reopened on the patient request',
     });
@@ -254,10 +257,10 @@ describe('canonical load', () => {
       expect.objectContaining({
         entityType: 'intake',
         entityId: intakeId,
-        naturalKey: 'INT-9521',
+        naturalKey: 'INT-8830',
         field: 'state',
         stored: 'in_review',
-        mapped: 'legacy_rejected',
+        mapped: 'legacy_pending',
       }),
     ]);
     // No second legacy-import entry: the dedupe key found the first one.

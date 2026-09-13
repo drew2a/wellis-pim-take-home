@@ -1,7 +1,7 @@
 // Dates under the separator convention (ADR-0005, H-1): `9999-99-99` is Y-M-D, `99-99-9999` is
 // D-M-Y, `99/99/9999` is M-D-Y. Anything else is unreadable and stored null with a flag, never
 // guessed. "Impossible" is relative to the run's --as-of date (ADR-0009).
-import { ageInYears } from '@/eligibility/age';
+import { ageInYears, MAX_PLAUSIBLE_AGE_YEARS } from '@/eligibility/age';
 
 import { mapped, unchanged, type Flag, type Mapped, type RecordDraft } from './types';
 
@@ -116,7 +116,7 @@ function whyImpossible(
   if (
     context.signupIso !== undefined &&
     context.signupIso !== null &&
-    ageInYears(iso, context.signupIso) > 100
+    ageInYears(iso, context.signupIso) > MAX_PLAUSIBLE_AGE_YEARS
   ) {
     return 'age_above_100_at_signup';
   }

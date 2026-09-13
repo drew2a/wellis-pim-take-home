@@ -33,6 +33,8 @@ const GROUPS: Group[] = [
   { title: 'canonical', tables: ['patients', 'patient_legacy_ids', 'intakes', 'consent_states'] },
   { title: 'evidence', tables: ['consent_events', 'normalisation_records', 'audit_entries'] },
   { title: 'decisions', tables: ['review_items', 'eligibility_evaluations'] },
+  // The care team. Identification for the audit's human actors, not authentication (ADR-0014).
+  { title: 'people', tables: ['reviewers'] },
 ];
 
 function tablesByName(): Map<string, PgTable> {

@@ -20,6 +20,7 @@ const ADR_0004_TABLES = [
   'patient_legacy_ids',
   'patients',
   'review_items',
+  'reviewers',
 ];
 
 interface AppliedMigration {

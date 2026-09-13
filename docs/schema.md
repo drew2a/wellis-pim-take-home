@@ -154,7 +154,7 @@ erDiagram
   }
   intakes["intakes — canonical"] {
     uuid id PK
-    text intake_id UK
+    text intake_id UK "null"
     text legacy_patient_id "null"
     uuid patient_id FK "null"
     date submitted_at "null"
@@ -172,6 +172,7 @@ erDiagram
     text reviewer_note "null"
     intake_state state "enum"
     text ruleset_version "null"
+    jsonb answers "null"
     integer created_by_run FK "null"
   }
   consent_states["consent_states — canonical"] {
@@ -209,13 +210,16 @@ erDiagram
   }
   audit_entries["audit_entries — evidence, append-only"] {
     uuid id PK
+    bigint seq UK
     text actor
+    uuid actor_reviewer_id FK "null"
     timestamptz at
     text entity_type
     text entity_id
     text from_state "null"
     text to_state "null"
     text reason
+    text ruleset_version "null"
     uuid review_item_id FK "null"
     jsonb changes "null"
     text dedupe_key UK "null"
@@ -247,10 +251,18 @@ erDiagram
     text ruleset_version
     engine_outcome engine_outcome "enum"
     jsonb reasons
+    jsonb matched
     jsonb inputs
     boolean shadow
     timestamptz evaluated_at
     integer import_run_id FK "null"
+  }
+  %% people
+  reviewers["reviewers — people"] {
+    uuid id PK
+    text name UK
+    reviewer_role role "enum"
+    timestamptz created_at
   }
   %% foreign keys
   import_runs ||--o{ legacy_patients_raw : "import_run_id"
@@ -266,6 +278,7 @@ erDiagram
   patients |o--o{ consent_events : "patient_id"
   import_runs |o--o{ consent_events : "import_run_id"
   import_runs |o--o{ normalisation_records : "import_run_id"
+  reviewers |o--o{ audit_entries : "actor_reviewer_id"
   review_items |o--o{ audit_entries : "review_item_id"
   patients |o--o{ review_items : "patient_id"
   intakes |o--o{ review_items : "intake_id"
@@ -288,6 +301,7 @@ erDiagram
 | `review_item_scope` | `row`, `vocabulary` |
 | `review_item_status` | `open`, `resolved`, `dismissed` |
 | `review_item_type` | `data_quality`, `identity_conflict`, `orphan_intake`, `duplicate_intake`, `consent`, `clinical_history`, `vocabulary` |
+| `reviewer_role` | `doctor`, `ops` |
 | `sex` | `male`, `female`, `unknown` |
 
 <!-- END GENERATED -->
