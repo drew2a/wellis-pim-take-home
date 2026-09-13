@@ -44,6 +44,14 @@ const jsonArray = z.preprocess((value): unknown => {
 
 const envSchema = z.object({
   DATABASE_URL: postgresUrl,
+  // The one credential the review console has (ADR-0021 item 1). Required, not optional: the
+  // failure this prevents is a console served with no gate at all, and a secret that defaults to
+  // "no session needed" is the silent fallback CLAUDE.md §2 forbids. It is therefore wanted by
+  // every process that reads this file, `npm run import` included — one deployable, one
+  // environment (ADR-0003). Not trimmed: whitespace inside a secret is part of it.
+  CONSOLE_SECRET: z
+    .string()
+    .min(32, 'must be at least 32 characters, so it cannot be guessed or brute-forced'),
   // Same role and secret as DATABASE_URL through the Supabase session pooler (port 5432) instead
   // of the transaction pooler (6543), which cannot run migrations. Read by drizzle-kit only
   // (ADR-0008). Locally and in CI one URL serves both, so db:migrate falls back to DATABASE_URL.

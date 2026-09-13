@@ -16,10 +16,12 @@ Requires Node 22, npm and Docker. Every step below is a command; there are no ma
 ```sh
 git clone <this repository> && cd wellis-pim-take-home
 npm ci
-cp .env.example .env        # DATABASE_URL for the compose database (host port 55432)
+cp .env.example .env        # DATABASE_URL for the compose database (host port 55432), then put
+                            # a CONSOLE_SECRET of your own in it — it is required and unset here
 npm run db:up               # starts Postgres 17 and waits until it is healthy
 npm run db:migrate          # applies the migrations under drizzle/ (see docs/schema.md)
-npm run seed:reviewers      # the care team from REVIEWERS in .env (ADR-0014)
+npm run seed:reviewers      # the care team from REVIEWERS in .env (ADR-0014); the console's
+                            # /login lists exactly these people
 npm run dev                 # http://localhost:3000
 ```
 
@@ -205,16 +207,23 @@ that rule absolute in the first place.
 
 Each is a decision, not an omission (R-S4):
 
-- **No authentication of any kind.** A patient holds their intake's uuid; a reviewer asserts who
-  they are. `audit_entries.actor_reviewer_id` is the stable identity real auth would slot into, and
-  `reviewers` is seeded from the environment. Q8's documented default.
-- **The review console is not built on this branch** — no work queue, no conflict resolution, no
-  patient detail view, and no route offers the reviewer edges of the machine, although the edges
-  themselves are implemented and tested.
+- **No authentication of the patient.** A patient holds their intake's uuid, and that uuid is the
+  only thing that authorises a read of their own intake.
+- **One shared secret for the console, not real authentication** (ADR-0021). `/login` takes the
+  secret from `CONSOLE_SECRET` and a reviewer picked from the seeded `reviewers` list, and sets a
+  signed, httpOnly session cookie; `currentReviewer()` is where every console page and every
+  mutating route gets its actor, so an audit entry's actor is never a value the caller sent. What
+  this does **not** do: it does not prove who the person is. Anyone holding the shared secret can
+  pick any name on the list, so the role separates duties between colleagues and does not resist
+  an attacker who is already inside. There is no registration, no password reset, no per-reviewer
+  credential, no lockout and no audit of failed logins. **A real deployment plugs SSO in here**,
+  against `audit_entries.actor_reviewer_id`, which is already the stable identity.
 - **An abandoned draft stays forever**, as a `draft` row with partial answers and no patient. No
   expiry is built.
-- **Roles are recorded but not authorised beyond the two edges above**, and reviewer identity is
-  asserted rather than proven, so the role separates duties; it does not resist an attacker.
+- **Roles are enforced on exactly two edges** — `in_review → approved` and `in_review → rejected`
+  need a `doctor` — and nowhere else. Claiming an intake and every review-item action are open to
+  both roles, because triage and data work are operational and approving a course of treatment is
+  not (ADR-0014 item 3).
 
 ## Deploy
 

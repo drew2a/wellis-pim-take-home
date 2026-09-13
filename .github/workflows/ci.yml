@@ -24,6 +24,9 @@ jobs:
           --health-retries 15
     env:
       DATABASE_URL: postgres://wellis:wellis@localhost:5432/wellis
+      # Required by src/env.ts (ADR-0021). CI has no console to protect, so this is a fixed,
+      # public, throwaway value and deliberately not a repository secret.
+      CONSOLE_SECRET: ci-console-secret-not-a-real-one-000000
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
