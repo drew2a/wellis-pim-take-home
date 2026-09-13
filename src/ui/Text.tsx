@@ -33,30 +33,3 @@ export function Prose({ text }: { text: string }): ReactElement {
     </div>
   );
 }
-
-/**
- * The engine's explanation lines, or any other list of short findings.
- *
- * The heading is not optional: these lines are the engine's own vocabulary, and a reader who is not
- * told what the list is has no way to work it out from the lines themselves.
- */
-export function Findings({
-  title,
-  items,
-}: {
-  readonly title: string;
-  readonly items: readonly string[];
-}): ReactElement {
-  return (
-    <>
-      <h3 className="mt-5 mb-2 font-medium text-grey-900">{title}</h3>
-      <ul className="mb-4 space-y-1.5">
-        {items.map((item, index) => (
-          <li key={index} className="border-l-2 border-grey-200 pl-3 text-grey-800">
-            {item}
-          </li>
-        ))}
-      </ul>
-    </>
-  );
-}

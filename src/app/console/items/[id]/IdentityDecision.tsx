@@ -12,19 +12,20 @@
 // therefore names both sides, and a value can only be picked from one of the two in the merge
 // (ADR-0026 item 3). Assuming the other record was whichever one the survivor is not merged the
 // wrong pair and wrote a third record's values into the survivor.
-import { useRouter } from 'next/navigation';
-import { useState, type ReactElement } from 'react';
+import { useState, type ReactElement, type ReactNode } from 'react';
 
+import { useDecide } from '@/app/console/useDecide';
 import {
-  Button,
-  ButtonRow,
   Caption,
-  Card,
   Choice,
+  CompareCard,
+  DecisionBar,
+  DetailBody,
+  DetailSection,
+  ENTER,
   ErrorText,
   Hint,
   NEEDS_A_NOTE,
-  TextAreaField,
   TextField,
 } from '@/ui';
 
@@ -47,20 +48,21 @@ type Pick = { readonly index: number } | { readonly edited: string };
 
 export function IdentityDecision({
   itemId,
+  after,
   candidates,
   rows,
+  children,
 }: {
   readonly itemId: string;
+  readonly after: string;
   readonly candidates: readonly DecisionCandidate[];
   readonly rows: readonly DecisionRow[];
+  readonly children: ReactNode;
 }): ReactElement {
-  const router = useRouter();
+  const decide = useDecide(`/api/console/items/${itemId}/resolve`, after);
   const [survivor, setSurvivor] = useState(0);
   const [loser, setLoser] = useState(1);
   const [picks, setPicks] = useState<Readonly<Record<string, Pick>>>({});
-  const [note, setNote] = useState('');
-  const [failure, setFailure] = useState<string | null>(null);
-  const [busy, setBusy] = useState<string | null>(null);
 
   const firstOther = (skip: number): number => candidates.findIndex((_, index) => index !== skip);
 
@@ -79,28 +81,6 @@ export function IdentityDecision({
   const roleOf = (index: number): string => (index === survivor ? 'survives' : 'merged in');
   const labelOf = (index: number): string => candidates[index]?.label ?? '';
 
-  const send = async (body: Record<string, unknown>, label: string): Promise<void> => {
-    setBusy(label);
-    setFailure(null);
-    try {
-      const response = await fetch(`/api/console/items/${itemId}/resolve`, {
-        method: 'POST',
-        body: JSON.stringify({ ...body, note }),
-      });
-      if (!response.ok) {
-        const answer = (await response.json()) as { error?: string };
-        setFailure(answer.error ?? 'that did not work');
-        return;
-      }
-      router.push('/console');
-      router.refresh();
-    } catch {
-      setFailure('the console could not be reached');
-    } finally {
-      setBusy(null);
-    }
-  };
-
   const decisions = (): Record<string, unknown> => {
     const chosen: Record<string, unknown> = {};
     for (const [field, pick] of Object.entries(picks)) {
@@ -110,75 +90,99 @@ export function IdentityDecision({
     return chosen;
   };
 
-  const survivorId = candidates[survivor]?.patientId ?? '';
-  const loserId = candidates[loser]?.patientId ?? '';
-  const ready = note.trim() !== '' && busy === null;
-
   if (candidates.length < 2) {
     return (
-      <Card>
-        <ErrorText>
-          This item no longer has two records to compare. One of them may already have been merged.
-        </ErrorText>
-      </Card>
+      <>
+        <DetailBody>
+          {children}
+          <DetailSection title="Nothing to merge">
+            <ErrorText>
+              This item no longer has two records to compare. One of them may already have been
+              merged.
+            </ErrorText>
+          </DetailSection>
+        </DetailBody>
+      </>
     );
   }
 
+  const survivorId = candidates[survivor]?.patientId ?? '';
+  const loserId = candidates[loser]?.patientId ?? '';
+  const stopped = !decide.noted || decide.busy !== null;
+  const describing = rows.filter((row) => !row.decidable);
+  const decidable = rows.filter((row) => row.decidable);
+
   return (
-    <Card>
-      <Hint>
-        Pick the record that survives. Then, for any field they disagree on, pick which value the
-        surviving record keeps — or type one. A field you leave alone keeps the survivor&rsquo;s
-        value, and fills in from the other record only where the survivor has none.
-      </Hint>
+    <>
+      <DetailBody>
+        {children}
 
-      {candidates.map((candidate, index) => (
-        <Choice
-          key={candidate.patientId}
-          type="radio"
-          name="survivor"
-          checked={survivor === index}
-          onChange={() => {
-            choosePair(index, index === loser ? firstOther(index) : loser);
-          }}
-        >
-          {`${candidate.label} survives — ${String(candidate.intakeCount)} intakes, consent ${candidate.consent}`}
-        </Choice>
-      ))}
-
-      {candidates.length > 2 && (
-        <>
-          <Caption>And the record merged into it</Caption>
-          {candidates.map((candidate, index) =>
-            index === survivor ? null : (
-              <Choice
-                key={candidate.patientId}
-                type="radio"
-                name="loser"
-                checked={loser === index}
-                onChange={() => {
-                  choosePair(survivor, index);
-                }}
-              >
-                {`${candidate.label} — ${String(candidate.intakeCount)} intakes, consent ${candidate.consent}`}
-              </Choice>
-            ),
-          )}
-          <Hint>
-            A merge joins two records. Every other record in this group is left exactly as it is,
-            and deciding about it is a decision of its own.
-          </Hint>
-        </>
-      )}
-
-      {rows.map((row) => (
-        <div key={row.field}>
-          <Caption>
-            {row.field}
-            {row.differs ? ' — they disagree' : ''}
-          </Caption>
-          {row.decidable ? (
+        <DetailSection title="Which record survives">
+          {candidates.map((candidate, index) => (
+            <Choice
+              key={candidate.patientId}
+              type="radio"
+              name="survivor"
+              checked={survivor === index}
+              onChange={() => {
+                choosePair(index, index === loser ? firstOther(index) : loser);
+              }}
+            >
+              {`${candidate.label} survives — ${String(candidate.intakeCount)} intakes, consent ${candidate.consent}`}
+            </Choice>
+          ))}
+          {candidates.length > 2 && (
             <>
+              <Caption>And the record merged into it</Caption>
+              {candidates.map((candidate, index) =>
+                index === survivor ? null : (
+                  <Choice
+                    key={candidate.patientId}
+                    type="radio"
+                    name="loser"
+                    checked={loser === index}
+                    onChange={() => {
+                      choosePair(survivor, index);
+                    }}
+                  >
+                    {`${candidate.label} — ${String(candidate.intakeCount)} intakes, consent ${candidate.consent}`}
+                  </Choice>
+                ),
+              )}
+              <Hint>
+                A merge joins two records. Every other record in this group is left exactly as it
+                is, and deciding about it is a decision of its own.
+              </Hint>
+            </>
+          )}
+        </DetailSection>
+
+        {describing.length > 0 && (
+          // Shown and not offered: these describe the row rather than the person, so the survivor
+          // keeps its own whatever the other record says.
+          <CompareCard
+            title="What the rows say, and nobody chooses"
+            columns={candidates.map((candidate) => candidate.label)}
+            rows={describing.map((row) => ({
+              field: row.field,
+              values: row.values.map((value) => value ?? '—'),
+              differs: row.differs,
+            }))}
+          />
+        )}
+
+        <DetailSection title="The fields the survivor keeps">
+          <Hint>
+            For any field they disagree on, pick which value the surviving record keeps — or type
+            one. A field you leave alone keeps the survivor&rsquo;s value, and fills in from the
+            other record only where the survivor has none.
+          </Hint>
+          {decidable.map((row) => (
+            <div key={row.field}>
+              <Caption>
+                {row.field}
+                {row.differs ? ' — they disagree' : ''}
+              </Caption>
               {row.values.map((value, index) =>
                 inMerge(index) ? (
                   <Choice
@@ -212,64 +216,53 @@ export function IdentityDecision({
                   setPicks({ ...picks, [row.field]: { edited: e.target.value } });
                 }}
               />
-            </>
-          ) : (
-            <Hint>
-              {row.values.map((value) => value ?? '—').join('  ·  ')} — describes the row, not the
-              person; the survivor keeps its own.
-            </Hint>
+            </div>
+          ))}
+          {Object.keys(picks).length > 0 && (
+            <Caption>{`${String(Object.keys(picks).length)} of ${String(decidable.length)} fields decided by hand; the rest follow the rule above.`}</Caption>
           )}
-        </div>
-      ))}
+        </DetailSection>
+      </DetailBody>
 
-      <TextAreaField
-        label="Why"
-        hint="Recorded on both records, with the value each field took and where it came from."
-        rows={3}
-        value={note}
-        onChange={(e) => {
-          setNote(e.target.value);
-        }}
-        required
+      <DecisionBar
+        note={decide.note}
+        onNote={decide.setNote}
+        placeholder="e.g. same person, moved in 2023; kept the newer address"
+        unavailable={
+          decide.noted
+            ? 'Merging repoints every legacy id, recomputes the consent state and records which record supplied which field. It can be undone through the API; there is no screen for that.'
+            : NEEDS_A_NOTE
+        }
+        error={decide.failure}
+        actions={[
+          {
+            label: 'Merge',
+            variant: 'primary',
+            hint: ENTER,
+            busy: decide.busy === 'merge',
+            disabled: stopped,
+            onPick: () => {
+              decide.send('merge', {
+                action: 'merge',
+                survivorId,
+                loserId,
+                decisions: decisions(),
+                note: decide.note,
+              });
+            },
+          },
+          {
+            label: 'Not the same person',
+            variant: 'danger',
+            hint: 'N',
+            busy: decide.busy === 'apart',
+            disabled: stopped,
+            onPick: () => {
+              decide.send('apart', { action: 'not_the_same_person', note: decide.note });
+            },
+          },
+        ]}
       />
-      {failure !== null && <ErrorText>{failure}</ErrorText>}
-      <Hint>
-        Merging repoints every legacy id, recomputes the consent state and records which record
-        supplied which field. It can be undone through the API; there is no screen for that.
-      </Hint>
-      <ButtonRow reason={note.trim() === '' ? NEEDS_A_NOTE : undefined}>
-        <Button
-          variant="primary"
-          busy={busy === 'merge'}
-          disabled={!ready}
-          onClick={() => {
-            void send({ action: 'merge', survivorId, loserId, decisions: decisions() }, 'merge');
-          }}
-        >
-          Merge
-        </Button>
-        <Button
-          variant="danger"
-          busy={busy === 'apart'}
-          disabled={!ready}
-          onClick={() => {
-            void send({ action: 'not_the_same_person' }, 'apart');
-          }}
-        >
-          Not the same person
-        </Button>
-        <Button
-          disabled={busy !== null}
-          onClick={() => {
-            router.push('/console');
-          }}
-        >
-          Leave open
-        </Button>
-      </ButtonRow>
-      {Object.keys(picks).length > 0 && (
-        <Caption>{`${String(Object.keys(picks).length)} of ${String(rows.length)} fields decided by hand; the rest follow the rule above.`}</Caption>
-      )}
-    </Card>
+    </>
   );
 }

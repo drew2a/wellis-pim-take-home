@@ -4,19 +4,10 @@
 // neither is deleted and neither legacy outcome is rewritten, because what the legacy process
 // recorded is evidence. The decision is which of them is the record of note, and that is written
 // into the audit and onto the item rather than into either row.
-import { useRouter } from 'next/navigation';
-import { useState, type ReactElement } from 'react';
+import { useState, type ReactElement, type ReactNode } from 'react';
 
-import {
-  Button,
-  ButtonRow,
-  Caption,
-  Card,
-  Choice,
-  ErrorText,
-  NEEDS_A_NOTE,
-  TextAreaField,
-} from '@/ui';
+import { useDecide } from '@/app/console/useDecide';
+import { Choice, DecisionBar, DetailBody, DetailSection, ENTER, Hint, NEEDS_A_NOTE } from '@/ui';
 
 export interface PairedIntake {
   readonly intakeId: string;
@@ -25,90 +16,78 @@ export interface PairedIntake {
 
 export function DuplicateDecision({
   itemId,
+  after,
   intakes,
+  children,
 }: {
   readonly itemId: string;
+  readonly after: string;
   readonly intakes: readonly PairedIntake[];
+  readonly children: ReactNode;
 }): ReactElement {
-  const router = useRouter();
+  const decide = useDecide(`/api/console/items/${itemId}/resolve`, after);
   const [chosen, setChosen] = useState('');
-  const [note, setNote] = useState('');
-  const [failure, setFailure] = useState<string | null>(null);
-  const [busy, setBusy] = useState<string | null>(null);
-
-  const send = async (body: Record<string, unknown>, label: string): Promise<void> => {
-    setBusy(label);
-    setFailure(null);
-    try {
-      const response = await fetch(`/api/console/items/${itemId}/resolve`, {
-        method: 'POST',
-        body: JSON.stringify({ ...body, note }),
-      });
-      if (!response.ok) {
-        const answer = (await response.json()) as { error?: string };
-        setFailure(answer.error ?? 'that did not work');
-        return;
-      }
-      router.push('/console');
-      router.refresh();
-    } catch {
-      setFailure('the console could not be reached');
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  const noted = note.trim() !== '';
+  const stopped = !decide.noted || decide.busy !== null;
 
   return (
-    <Card>
-      {intakes.map((intake) => (
-        <Choice
-          key={intake.intakeId}
-          type="radio"
-          name="recordOfNote"
-          checked={chosen === intake.intakeId}
-          onChange={() => {
-            setChosen(intake.intakeId);
-          }}
-        >
-          {`${intake.intakeId} is the record of note — ${intake.summary}`}
-        </Choice>
-      ))}
-
-      <TextAreaField
-        label="Why"
-        hint="Recorded against both intakes, whichever one you mark."
-        rows={3}
-        value={note}
-        onChange={(e) => {
-          setNote(e.target.value);
-        }}
-        required
+    <>
+      <DetailBody>
+        {children}
+        <DetailSection title="Which one is the record of note">
+          {intakes.map((intake) => (
+            <Choice
+              key={intake.intakeId}
+              type="radio"
+              name="recordOfNote"
+              checked={chosen === intake.intakeId}
+              onChange={() => {
+                setChosen(intake.intakeId);
+              }}
+            >
+              {`${intake.intakeId} — ${intake.summary}`}
+            </Choice>
+          ))}
+          <Hint>Both intakes stay, and neither outcome changes.</Hint>
+        </DetailSection>
+      </DetailBody>
+      <DecisionBar
+        note={decide.note}
+        onNote={decide.setNote}
+        placeholder="e.g. B is the resubmission after the form timed out"
+        unavailable={
+          !decide.noted
+            ? NEEDS_A_NOTE
+            : chosen === ''
+              ? 'Pick the record of note above, or say that both are genuine.'
+              : undefined
+        }
+        error={decide.failure}
+        actions={[
+          {
+            label: 'Mark as the record of note',
+            variant: 'primary',
+            hint: ENTER,
+            busy: decide.busy === 'keep_one',
+            disabled: stopped || chosen === '',
+            onPick: () => {
+              decide.send('keep_one', {
+                action: 'keep_one',
+                intakeId: chosen,
+                note: decide.note,
+              });
+            },
+          },
+          {
+            label: 'Two genuine submissions',
+            hint: 'B',
+            busy: decide.busy === 'keep_both',
+            disabled: stopped,
+            onPick: () => {
+              decide.send('keep_both', { action: 'keep_both', note: decide.note });
+            },
+          },
+        ]}
       />
-      {failure !== null && <ErrorText>{failure}</ErrorText>}
-      <Caption>Both intakes stay, and neither outcome changes.</Caption>
-      <ButtonRow reason={noted ? undefined : NEEDS_A_NOTE}>
-        <Button
-          variant="primary"
-          busy={busy === 'keep_one'}
-          disabled={!noted || chosen === '' || busy !== null}
-          onClick={() => {
-            void send({ action: 'keep_one', intakeId: chosen }, 'keep_one');
-          }}
-        >
-          Mark as the record of note
-        </Button>
-        <Button
-          busy={busy === 'keep_both'}
-          disabled={!noted || busy !== null}
-          onClick={() => {
-            void send({ action: 'keep_both' }, 'keep_both');
-          }}
-        >
-          Two genuine submissions
-        </Button>
-      </ButtonRow>
-    </Card>
+    </>
   );
 }

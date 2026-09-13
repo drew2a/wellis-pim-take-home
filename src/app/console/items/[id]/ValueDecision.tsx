@@ -8,168 +8,118 @@
 // "accept" look like a shortcut that skips the record.
 //
 // Some of these items have no row to correct at all — a consent event whose timestamp could not be
-// read was never stored, and ADR-0007 does not let one be written. There the value form is not
+// read was never stored, and ADR-0007 does not let one be written. There the value field is not
 // shown: offering a field and two buttons the server answers with a 400 walks a reviewer into a
 // dead end (ADR-0026 item 2). `uncorrectable` says so in one line, and dismissing stays.
-import { useRouter } from 'next/navigation';
-import { useState, type ReactElement } from 'react';
+import { useState, type ReactElement, type ReactNode } from 'react';
 
+import { useDecide } from '@/app/console/useDecide';
 import {
-  Button,
-  ButtonRow,
-  Caption,
-  Card,
-  ErrorText,
+  DecisionBar,
+  DetailBody,
+  DetailSection,
+  ENTER,
   Hint,
   NEEDS_A_NOTE,
-  Raw,
-  TextAreaField,
   TextField,
+  type DecisionAction,
 } from '@/ui';
 
 export function ValueDecision({
   itemId,
+  after,
   field,
-  current,
   proposal,
   uncorrectable,
+  children,
 }: {
   readonly itemId: string;
+  readonly after: string;
   readonly field: string;
-  readonly current: string | null;
   readonly proposal: { readonly value: string; readonly rule: string | null } | null;
   /** Why no value can be written, in one line, or null when one can. */
   readonly uncorrectable: string | null;
+  readonly children: ReactNode;
 }): ReactElement {
-  const router = useRouter();
+  const decide = useDecide(`/api/console/items/${itemId}/resolve`, after);
   const [value, setValue] = useState('');
-  const [note, setNote] = useState('');
-  const [failure, setFailure] = useState<string | null>(null);
-  const [busy, setBusy] = useState<string | null>(null);
+  const stopped = !decide.noted || decide.busy !== null;
 
-  const send = async (body: Record<string, unknown>, label: string): Promise<void> => {
-    setBusy(label);
-    setFailure(null);
-    try {
-      const response = await fetch(`/api/console/items/${itemId}/resolve`, {
-        method: 'POST',
-        body: JSON.stringify({ ...body, note }),
-      });
-      if (!response.ok) {
-        const answer = (await response.json()) as { error?: string };
-        setFailure(answer.error ?? 'that did not work');
-        return;
-      }
-      router.push('/console');
-      router.refresh();
-    } catch {
-      setFailure('the console could not be reached');
-    } finally {
-      setBusy(null);
-    }
+  const leave: DecisionAction = {
+    label: 'Leave it empty',
+    variant: uncorrectable === null ? 'ghost' : 'primary',
+    hint: uncorrectable === null ? 'D' : ENTER,
+    busy: decide.busy === 'dismiss',
+    disabled: stopped,
+    onPick: () => {
+      decide.send('dismiss', { action: 'dismiss', note: decide.note });
+    },
   };
 
-  const noted = note.trim() !== '';
-
-  if (uncorrectable !== null) {
-    return (
-      <Card>
-        <Hint>{uncorrectable}</Hint>
-        <TextAreaField
-          label="Why"
-          hint="Recorded against the row this item names, with your name."
-          rows={3}
-          value={note}
-          onChange={(e) => {
-            setNote(e.target.value);
-          }}
-          required
-        />
-        {failure !== null && <ErrorText>{failure}</ErrorText>}
-        <ButtonRow reason={noted ? undefined : NEEDS_A_NOTE}>
-          <Button
-            variant="primary"
-            busy={busy === 'dismiss'}
-            disabled={!noted || busy !== null}
-            onClick={() => {
-              void send({ action: 'dismiss' }, 'dismiss');
-            }}
-          >
-            Leave it empty
-          </Button>
-        </ButtonRow>
-      </Card>
-    );
-  }
+  const actions: readonly DecisionAction[] =
+    uncorrectable !== null
+      ? [leave]
+      : [
+          ...(proposal === null
+            ? []
+            : [
+                {
+                  label: `Accept ${proposal.value}`,
+                  variant: 'primary' as const,
+                  hint: ENTER,
+                  busy: decide.busy === 'accept',
+                  disabled: stopped,
+                  onPick: () => {
+                    decide.send('accept', { action: 'accept_proposal', note: decide.note });
+                  },
+                },
+              ]),
+          {
+            label: 'Use the value above',
+            variant: proposal === null ? ('primary' as const) : ('secondary' as const),
+            hint: proposal === null ? ENTER : 'V',
+            busy: decide.busy === 'set',
+            disabled: stopped || value.trim() === '',
+            onPick: () => {
+              decide.send('set', {
+                action: 'set_value',
+                value: value.trim(),
+                note: decide.note,
+              });
+            },
+          },
+          leave,
+        ];
 
   return (
-    <Card>
-      <Caption>
-        {field} is now {current ?? 'empty'}. The raw value is kept either way.
-      </Caption>
-      {proposal !== null && (
-        <Hint>
-          {`The detector proposes ${proposal.value}`}
-          {proposal.rule === null ? '.' : ` (${proposal.rule}).`}
-        </Hint>
-      )}
-
-      <TextField
-        label="Or a value you establish"
-        hint="Only “Use the value above” reads this field; the other buttons ignore it."
-        value={value}
-        onChange={(e) => {
-          setValue(e.target.value);
-        }}
-      />
-      <TextAreaField
-        label="Why"
-        hint="Recorded with the field, the old value and the new one."
-        rows={3}
-        value={note}
-        onChange={(e) => {
-          setNote(e.target.value);
-        }}
-        required
-      />
-      {failure !== null && <ErrorText>{failure}</ErrorText>}
-      <Caption>
-        Every one of these writes the same record: the value, an audit entry naming you, and your
-        note. A value you set here is yours, and no later import overwrites it.
-      </Caption>
-      <ButtonRow reason={noted ? undefined : NEEDS_A_NOTE}>
-        {proposal !== null && (
-          <Button
-            variant="primary"
-            busy={busy === 'accept'}
-            disabled={!noted || busy !== null}
-            onClick={() => {
-              void send({ action: 'accept_proposal' }, 'accept');
-            }}
-          >
-            Accept <Raw>{proposal.value}</Raw>
-          </Button>
+    <>
+      <DetailBody>
+        {children}
+        {uncorrectable === null ? (
+          <DetailSection title="A value you establish">
+            <TextField
+              label={field}
+              hint="Only “Use the value above” reads this field; the other buttons ignore it. A value you set here is yours, and no later import overwrites it."
+              value={value}
+              onChange={(e) => {
+                setValue(e.target.value);
+              }}
+            />
+          </DetailSection>
+        ) : (
+          <DetailSection title="Nothing to correct">
+            <Hint>{uncorrectable}</Hint>
+          </DetailSection>
         )}
-        <Button
-          variant={proposal === null ? 'primary' : 'secondary'}
-          busy={busy === 'set'}
-          disabled={!noted || value.trim() === '' || busy !== null}
-          onClick={() => {
-            void send({ action: 'set_value', value: value.trim() }, 'set');
-          }}
-        >
-          Use the value above
-        </Button>
-        <Button
-          busy={busy === 'dismiss'}
-          disabled={!noted || busy !== null}
-          onClick={() => {
-            void send({ action: 'dismiss' }, 'dismiss');
-          }}
-        >
-          Leave it empty
-        </Button>
-      </ButtonRow>
-    </Card>
+      </DetailBody>
+      <DecisionBar
+        note={decide.note}
+        onNote={decide.setNote}
+        placeholder="Why — recorded with the field, the old value and the new one"
+        unavailable={decide.noted ? undefined : NEEDS_A_NOTE}
+        error={decide.failure}
+        actions={actions}
+      />
+    </>
   );
 }

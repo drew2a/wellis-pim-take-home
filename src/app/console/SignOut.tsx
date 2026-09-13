@@ -4,13 +4,13 @@
 import { useRouter } from 'next/navigation';
 import { useState, type ReactElement } from 'react';
 
-import { Button } from '@/ui';
+import { RailButton } from '@/ui';
 
 export function SignOut(): ReactElement {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   return (
-    <Button
+    <RailButton
       busy={busy}
       onClick={() => {
         setBusy(true);
@@ -21,6 +21,6 @@ export function SignOut(): ReactElement {
       }}
     >
       Sign out
-    </Button>
+    </RailButton>
   );
 }

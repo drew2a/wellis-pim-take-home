@@ -3,138 +3,115 @@
 // Claiming an intake, and deciding it (R-C8). The buttons a reviewer cannot use are absent, and
 // that is a courtesy: the server refuses the same move with the machine's own words, and this
 // component could not talk its way past it (R-T4, ADR-0014 item 3).
-import { useRouter } from 'next/navigation';
-import { useState, type ReactElement } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 
-import {
-  Button,
-  ButtonRow,
-  Caption,
-  Card,
-  ErrorText,
-  Hint,
-  NEEDS_A_NOTE,
-  TextAreaField,
-} from '@/ui';
+import { useDecide } from '@/app/console/useDecide';
+import { DecisionBar, DetailBody, ENTER, NEEDS_A_NOTE } from '@/ui';
 
 export function IntakeDecision({
   intakeId,
+  after,
   canClaim,
   canDecide,
   approvalBlockedBy,
+  children,
 }: {
   readonly intakeId: string;
+  readonly after: string;
   readonly canClaim: boolean;
   /** True once a named person has it: `in_review` is the only state a decision is taken from. */
   readonly canDecide: boolean;
   /** The rules the ruleset calls absolute that this intake matched, if any (Q1). */
   readonly approvalBlockedBy: readonly string[];
+  readonly children: ReactNode;
 }): ReactElement {
-  const router = useRouter();
-  const [note, setNote] = useState('');
-  const [failure, setFailure] = useState<string | null>(null);
-  const [busy, setBusy] = useState<string | null>(null);
-
-  const move = async (to: string): Promise<void> => {
-    setBusy(to);
-    setFailure(null);
-    try {
-      const response = await fetch(`/api/console/intakes/${intakeId}/transition`, {
-        method: 'POST',
-        body: JSON.stringify(to === 'in_review' ? { to } : { to, note }),
-      });
-      if (!response.ok) {
-        const answer = (await response.json()) as { error?: string };
-        setFailure(answer.error ?? 'that did not work');
-        return;
-      }
-      router.refresh();
-    } catch {
-      setFailure('the console could not be reached');
-    } finally {
-      setBusy(null);
-    }
-  };
-
+  const decide = useDecide(`/api/console/intakes/${intakeId}/transition`, after);
   const blocked = approvalBlockedBy.length > 0;
 
+  // Claiming keeps the reviewer on this intake: they claimed it in order to decide it, and the
+  // decision is the next thing they do. Approving and rejecting move on to the next row.
   if (canClaim) {
     return (
-      <Card>
-        <Hint>
-          Claiming puts your name on this intake. Nobody else can then claim it, and the audit says
-          who looked at it and when.
-        </Hint>
-        {failure !== null && <ErrorText>{failure}</ErrorText>}
-        <ButtonRow>
-          <Button
-            variant="primary"
-            busy={busy === 'in_review'}
-            onClick={() => {
-              void move('in_review');
-            }}
-          >
-            Claim for review
-          </Button>
-        </ButtonRow>
-      </Card>
+      <>
+        <DetailBody>{children}</DetailBody>
+        <DecisionBar
+          note={decide.note}
+          onNote={decide.setNote}
+          placeholder="Why you are picking this up — every transition records a reason (R-B20)"
+          unavailable="Claiming puts your name on this intake. Nobody else can then claim it, and the audit says who looked at it and when."
+          error={decide.failure}
+          actions={[
+            {
+              label: 'Claim for review',
+              variant: 'primary',
+              hint: ENTER,
+              busy: decide.busy === 'in_review',
+              disabled: decide.busy !== null,
+              onPick: () => {
+                decide.send('in_review', { to: 'in_review' }, true);
+              },
+            },
+          ]}
+        />
+      </>
     );
   }
 
   if (!canDecide) {
     return (
-      <Card>
-        <Caption>
-          This intake takes no decision from here. The legacy process decided it, and this console
-          does not rewrite what it decided — a disagreement with today&rsquo;s rules is a clinical
-          history item.
-        </Caption>
-      </Card>
+      <>
+        <DetailBody>{children}</DetailBody>
+        <DecisionBar
+          note=""
+          onNote={() => undefined}
+          placeholder="No decision is taken from here"
+          unavailable="This intake takes no decision from here. The legacy process decided it, and this console does not rewrite what it decided — a disagreement with today’s rules is a clinical history item."
+          actions={[]}
+        />
+      </>
     );
   }
 
+  const stopped = !decide.noted || decide.busy !== null;
+
   return (
-    <Card>
-      {blocked && (
-        <Caption>
-          {`The rules rejected this absolutely (${approvalBlockedBy.join(', ')}), which a reviewer
-            cannot resolve in the patient's favour. Rejecting, and leaving it open, are still
-            yours.`}
-        </Caption>
-      )}
-      <TextAreaField
-        label="Your decision, in a sentence"
-        hint="Recorded as the reason on the audit entry, with your name and the time."
-        rows={3}
-        value={note}
-        onChange={(e) => {
-          setNote(e.target.value);
-        }}
-        required
+    <>
+      <DetailBody>{children}</DetailBody>
+      <DecisionBar
+        note={decide.note}
+        onNote={decide.setNote}
+        placeholder="Your decision in a sentence — recorded as the audit reason"
+        unavailable={
+          !decide.noted
+            ? NEEDS_A_NOTE
+            : blocked
+              ? `The rules rejected this absolutely (${approvalBlockedBy.join(', ')}), which a reviewer cannot resolve in the patient’s favour. Rejecting is still yours.`
+              : undefined
+        }
+        error={decide.failure}
+        actions={[
+          {
+            label: 'Approve',
+            variant: 'primary',
+            hint: ENTER,
+            busy: decide.busy === 'approved',
+            disabled: stopped || blocked,
+            onPick: () => {
+              decide.send('approved', { to: 'approved', note: decide.note });
+            },
+          },
+          {
+            label: 'Reject',
+            variant: 'danger',
+            hint: 'R',
+            busy: decide.busy === 'rejected',
+            disabled: stopped,
+            onPick: () => {
+              decide.send('rejected', { to: 'rejected', note: decide.note });
+            },
+          },
+        ]}
       />
-      {failure !== null && <ErrorText>{failure}</ErrorText>}
-      <ButtonRow reason={note.trim() === '' ? NEEDS_A_NOTE : undefined}>
-        <Button
-          variant="primary"
-          busy={busy === 'approved'}
-          disabled={note.trim() === '' || blocked || busy !== null}
-          onClick={() => {
-            void move('approved');
-          }}
-        >
-          Approve
-        </Button>
-        <Button
-          variant="danger"
-          busy={busy === 'rejected'}
-          disabled={note.trim() === '' || busy !== null}
-          onClick={() => {
-            void move('rejected');
-          }}
-        >
-          Reject
-        </Button>
-      </ButtonRow>
-    </Card>
+    </>
   );
 }

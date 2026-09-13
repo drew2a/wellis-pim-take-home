@@ -112,3 +112,22 @@ export function withParam(
   const search = query.toString();
   return search === '' ? '/console' : `/console?${search}`;
 }
+
+/**
+ * The filters as a query string, for a link that is not the queue itself: opening a row keeps the
+ * queue it was opened from, so the three panes agree about what the list is (ADR-0028).
+ */
+export function queryOf(params: SearchParams): string {
+  const query = new URLSearchParams();
+  const chosen = params.type !== undefined || params.state !== undefined;
+  const current = filtersFrom(params);
+  if (chosen) {
+    for (const each of current.types) query.append('type', each);
+    for (const each of current.states) query.append('state', each);
+    if (current.types.length === 0 && current.states.length === 0) query.set('type', '');
+  }
+  if (current.status !== DEFAULT_FILTERS.status) query.set('status', current.status);
+  if (current.age !== undefined) query.set('age', current.age);
+  const search = query.toString();
+  return search === '' ? '' : `?${search}`;
+}

@@ -1,18 +1,19 @@
 // One review item, and the decision it asks for (R-C4, R-C5, R-C6). A server component: it reads
-// through `@/repo/items` and renders, and the decision is posted by the client component to the
-// one route every item action goes through (ADR-0023, ADR-0024).
+// through `@/repo/items` and renders into the detail pane of `ConsoleShell`, and the decision is
+// posted by the client component to the one route every item action goes through (ADR-0023,
+// ADR-0024, ADR-0028).
 //
-// Each item type gets its own view as its commit lands; until then the page says so rather than
-// offering a decision the route would refuse.
+// The queue stays on screen beside it, so deciding an item does not cost a reviewer their place:
+// each decision component is handed `after`, which is the next row down.
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import type { ReactElement, ReactNode } from 'react';
 
+import { proposalOf } from '@/console/decisions/data-quality';
 import { poundsRowsOf } from '@/console/decisions/vocabulary';
 import { requireReviewer } from '@/console/guard';
 import { getDb } from '@/db/client';
 import { dayOf } from '@/intake/today';
-import { proposalOf } from '@/console/decisions/data-quality';
 import { COMPARED_FIELDS, conflictView, DECIDABLE_FIELDS } from '@/repo/identity';
 import {
   consentTimeline,
@@ -23,22 +24,26 @@ import {
 } from '@/repo/items';
 import { writableTarget } from '@/repo/resolve';
 import {
-  Badge,
-  Caption,
-  Card,
-  Definitions,
-  Hint,
-  Page,
-  PageHeader,
+  Banner,
+  DetailBody,
+  DetailHeader,
+  DetailPane,
+  EvidenceCard,
+  Explainer,
+  Mono,
   Raw,
-  SectionTitle,
   humanise,
+  titled,
   toneForReviewItem,
-  type Definition,
+  type EvidenceRow,
 } from '@/ui';
 
+import { ConsoleShell } from '../../ConsoleShell';
+import { type QueuePlace } from '../../place';
+import { type SearchParams } from '../../queue-filters';
 import { ClinicalHistoryDecision } from './ClinicalHistoryDecision';
 import { ConsentDecision } from './ConsentDecision';
+import { ITEM_COPY } from './copy';
 import { DuplicateDecision, type PairedIntake } from './DuplicateDecision';
 import { IdentityDecision } from './IdentityDecision';
 import { OrphanDecision } from './OrphanDecision';
@@ -63,55 +68,6 @@ const QUESTIONS: Readonly<Record<string, string>> = {
 const DEFAULT_QUESTION = 'Confirm records that the importer read this correctly.';
 
 /**
- * Rejecting an inference writes nothing, and that is the design: the rule lives in `rules/v1.json`
- * and a changed rule is a new ruleset and a re-import. The answer, and the rows it applies to, are
- * what the console records (ADR-0005).
- */
-const REJECT_MEANS =
-  'Rejecting records the answer against the rows listed; it does not rewrite them. ' +
-  'Changing the rule is a new ruleset version and a re-import.';
-
-/**
- * The heading every decision sits under, and the decision itself — unless the item is closed.
- *
- * A decision is taken once: the queue's Status filter links straight to resolved and dismissed
- * items, and a live form on one of those lets a reviewer write a note and press a button only to
- * be told 409 afterwards. What a closed item shows instead is the decision that was taken.
- */
-function YourDecision({
-  item,
-  children,
-}: {
-  readonly item: ReviewItemView['item'];
-  readonly children: ReactNode;
-}): ReactElement {
-  if (item.status === 'open') {
-    return (
-      <>
-        <SectionTitle>Your decision</SectionTitle>
-        {children}
-      </>
-    );
-  }
-  return (
-    <>
-      <SectionTitle>The decision that was taken</SectionTitle>
-      <Card>
-        <Definitions
-          items={[
-            { term: 'outcome', value: humanise(item.status) },
-            { term: 'by', value: item.resolvedBy ?? '—' },
-            { term: 'when', value: item.resolvedAt === null ? '—' : dayOf(item.resolvedAt) },
-            { term: 'why', value: item.resolutionNote ?? '—' },
-          ]}
-        />
-        <Hint>A decision is taken once, and this one is taken.</Hint>
-      </Card>
-    </>
-  );
-}
-
-/**
  * Why a `data_quality` item has no value to write, in one line. The consent case names the table
  * the line is still in, because "nothing was stored" invites the question of where it went.
  */
@@ -133,13 +89,13 @@ function payloadRows(payload: unknown): readonly Record<string, unknown>[] {
 
 /** Anything a payload holds, rendered as what it is rather than as `[object Object]`. */
 const shown = (value: unknown): ReactNode => {
-  if (value === null || value === undefined) return <Caption>—</Caption>;
+  if (value === null || value === undefined) return '—';
   if (typeof value === 'string') return <Raw>{value}</Raw>;
   if (typeof value === 'number' || typeof value === 'boolean') return <Raw>{String(value)}</Raw>;
   return <Raw>{JSON.stringify(value)}</Raw>;
 };
 
-function evidenceOf(item: ReviewItemView['item']): Definition[] {
+function evidenceOf(item: ReviewItemView['item']): EvidenceRow[] {
   const payload = item.payload as Record<string, unknown>;
   return Object.entries(payload)
     .filter(([key]) => key !== 'rows' && key !== 'actions' && key !== 'note')
@@ -186,51 +142,107 @@ function pairedIntakes(payload: unknown): PairedIntake[] {
 }
 
 /**
+ * The evidence every item shows, whatever kind it is: the line above it, what the export gave, and
+ * the explanation folded away at the bottom. The kinds that need more put it between the two by
+ * passing `extra`.
+ */
+function Evidence({
+  view,
+  banner,
+  extra,
+}: {
+  readonly view: ReviewItemView;
+  readonly banner?: string | null;
+  readonly extra?: ReactNode;
+}): ReactElement {
+  const copy = ITEM_COPY[view.item.type];
+  const said = banner === undefined ? copy.banner : banner;
+  return (
+    <>
+      {said !== null && <Banner>{said}</Banner>}
+      <EvidenceCard note="as the export gave it" rows={evidenceOf(view.item)} />
+      {extra}
+      <Explainer>
+        <p>{copy.why}</p>
+        <p>{copy.writes}</p>
+        <p>j / k move through the queue; the key beside each button also takes it.</p>
+      </Explainer>
+    </>
+  );
+}
+
+/**
+ * A decision is taken once. The queue's scope links straight to resolved and dismissed items, and
+ * a live form on one of those lets a reviewer write a reason and press a button only to be told
+ * 409 afterwards. What a closed item shows instead is the decision that was taken.
+ */
+function Closed({ view }: { readonly view: ReviewItemView }): ReactElement {
+  const { item } = view;
+  return (
+    <DetailBody>
+      <Banner>A decision is taken once, and this one is taken.</Banner>
+      <EvidenceCard
+        title="The decision that was taken"
+        rows={[
+          { term: 'outcome', value: humanise(item.status) },
+          { term: 'by', value: item.resolvedBy ?? '—' },
+          { term: 'when', value: item.resolvedAt === null ? '—' : dayOf(item.resolvedAt) },
+          { term: 'why', value: item.resolutionNote ?? '—' },
+        ]}
+      />
+      <EvidenceCard note="as the export gave it" rows={evidenceOf(item)} />
+    </DetailBody>
+  );
+}
+
+/**
  * The competing versions of the truth, side by side (R-C4). The values come from the canonical
  * rows as they are now, not from the item's payload snapshot, because that is what a merge will
  * write; the payload says why the item was raised.
  */
 async function IdentityConflict({
   view,
+  after,
 }: {
   readonly view: ReviewItemView;
+  readonly after: string;
 }): Promise<ReactElement> {
   const conflict = await conflictView(getDb(), view.item);
   const decidable = new Set<string>(DECIDABLE_FIELDS);
   const differing = new Set<string>(conflict.differing);
 
   return (
-    <>
-      <SectionTitle>Why these two are together</SectionTitle>
-      <Card>
-        <Definitions
-          items={[
-            { term: 'matched on', value: conflict.matchedKeys.join(', ') || '—' },
-            { term: 'contradicts on', value: conflict.contradictions.join(', ') || '—' },
-            { term: 'tier', value: conflict.tier === null ? '—' : String(conflict.tier) },
-          ]}
-        />
-      </Card>
-
-      <YourDecision item={view.item}>
-        <IdentityDecision
-          itemId={view.item.id}
-          candidates={conflict.candidates.map((candidate) => ({
-            patientId: candidate.patientId,
-            label: candidate.fields.full_name ?? candidate.patientId,
-            intakeCount: candidate.intakeCount,
-            consent: Object.values(candidate.consentStates).join(', ') || 'no record',
-            legacyIds: candidate.legacyIds,
-          }))}
-          rows={COMPARED_FIELDS.map((field) => ({
-            field,
-            values: conflict.candidates.map((candidate) => candidate.fields[field]),
-            differs: differing.has(field),
-            decidable: decidable.has(field),
-          }))}
-        />
-      </YourDecision>
-    </>
+    <IdentityDecision
+      itemId={view.item.id}
+      after={after}
+      candidates={conflict.candidates.map((candidate) => ({
+        patientId: candidate.patientId,
+        label: candidate.fields.full_name ?? candidate.patientId,
+        intakeCount: candidate.intakeCount,
+        consent: Object.values(candidate.consentStates).join(', ') || 'no record',
+        legacyIds: candidate.legacyIds,
+      }))}
+      rows={COMPARED_FIELDS.map((field) => ({
+        field,
+        values: conflict.candidates.map((candidate) => candidate.fields[field]),
+        differs: differing.has(field),
+        decidable: decidable.has(field),
+      }))}
+    >
+      <Evidence
+        view={view}
+        extra={
+          <EvidenceCard
+            title="Why these two are together"
+            rows={[
+              { term: 'matched on', value: conflict.matchedKeys.join(', ') || '—' },
+              { term: 'contradicts on', value: conflict.contradictions.join(', ') || '—' },
+              { term: 'tier', value: conflict.tier === null ? '—' : String(conflict.tier) },
+            ]}
+          />
+        }
+      />
+    </IdentityDecision>
   );
 }
 
@@ -238,229 +250,282 @@ async function IdentityConflict({
  * The consent log, in `at` order, next to the state derived from it. The log is evidence and the
  * state is what we act on, and a reviewer deciding what to do needs to see both (`CLAUDE.md` §6).
  */
-async function ConsentItem({ view }: { readonly view: ReviewItemView }): Promise<ReactElement> {
+async function ConsentItem({
+  view,
+  after,
+}: {
+  readonly view: ReviewItemView;
+  readonly after: string;
+}): Promise<ReactElement> {
   const timeline = await consentTimeline(getDb(), view.item);
   // The state as it stands now, not the one the payload snapshotted at import: a reviewer may
   // already have established it, and the buttons below depend on which it is (ADR-0025).
   const derived = await derivedConsentState(getDb(), view.item);
+  const conflicted = derived === 'conflict';
 
   return (
-    <>
-      <SectionTitle>The consent log for this patient</SectionTitle>
-      <Card>
-        {timeline.length === 0 ? (
-          <Hint>No event at all. That is what the item is about.</Hint>
-        ) : (
-          <Definitions
-            items={timeline.map((event, index) => ({
-              term: String(index + 1),
-              value: `${event.at} · ${event.type} ${event.action}${
-                event.version === null ? '' : ` (${event.version})`
-              }`,
-            }))}
+    <ConsentDecision itemId={view.item.id} after={after} conflicted={conflicted}>
+      <Evidence
+        view={view}
+        banner={
+          conflicted
+            ? 'The log contradicts itself — it revokes a consent that was never given — so no rule can say what is true. Record the state a person established.'
+            : `Derived state: ${derived ?? 'none'}. The log is evidence; the state is what we act on.`
+        }
+        extra={
+          <EvidenceCard
+            title="The consent log for this patient"
+            note={`state now: ${derived ?? 'none'}`}
+            rows={
+              timeline.length === 0
+                ? [{ term: 'events', value: 'None at all. That is what the item is about.' }]
+                : timeline.map((event, index) => ({
+                    term: `event ${index + 1}`,
+                    value: `${event.at} · ${event.type} ${event.action}${
+                      event.version === null ? '' : ` (${event.version})`
+                    }`,
+                  }))
+            }
           />
-        )}
-        <Hint>
-          {`State now: ${derived ?? 'none'}. The log is evidence; the state is what we act on.`}
-        </Hint>
-      </Card>
-      <YourDecision item={view.item}>
-        <ConsentDecision itemId={view.item.id} conflicted={derived === 'conflict'} />
-      </YourDecision>
-    </>
+        }
+      />
+    </ConsentDecision>
+  );
+}
+
+async function Decision({
+  view,
+  after,
+}: {
+  readonly view: ReviewItemView;
+  readonly after: string;
+}): Promise<ReactElement> {
+  const { item, rule } = view;
+
+  if (item.status !== 'open') return <Closed view={view} />;
+
+  if (item.type === 'identity_conflict') return <IdentityConflict view={view} after={after} />;
+  if (item.type === 'consent') return <ConsentItem view={view} after={after} />;
+
+  if (item.type === 'orphan_intake') {
+    const found = lookAlikes(item.payload);
+    return (
+      <OrphanDecision itemId={item.id} after={after}>
+        <Evidence
+          view={view}
+          extra={
+            <EvidenceCard
+              title="Patients that look like this one"
+              note="same height, weight within 10 %, signed up at most a year earlier"
+              rows={
+                found.length === 0
+                  ? [{ term: 'look-alikes', value: 'None. Search below.' }]
+                  : found.map((row, index) => ({
+                      term: `look-alike ${index + 1}`,
+                      value: describe(row),
+                    }))
+              }
+            />
+          }
+        />
+      </OrphanDecision>
+    );
+  }
+
+  if (item.type === 'data_quality') {
+    const proposal = proposalOf(item);
+    const current = await currentValueOf(getDb(), item);
+    // The same question the server asks before it writes, so the screen cannot offer a correction
+    // the route refuses (ADR-0026 item 2).
+    const uncorrectable = writableTarget(item) === null ? noRowToCorrect(item, rule) : null;
+    return (
+      <ValueDecision
+        itemId={item.id}
+        after={after}
+        field={item.field ?? 'the value'}
+        proposal={proposal}
+        uncorrectable={uncorrectable}
+      >
+        <Evidence
+          view={view}
+          banner={
+            proposal === null
+              ? 'The raw row is kept either way.'
+              : `The detector proposes ${proposal.value}${proposal.rule === null ? '' : ` (${proposal.rule})`}. The raw row is kept either way.`
+          }
+          extra={
+            <EvidenceCard
+              title="The value as it stands"
+              rows={[
+                { term: 'field', value: <Mono>{item.field ?? '—'}</Mono> },
+                { term: 'stored value', value: current ?? 'empty' },
+                {
+                  term: 'proposal',
+                  value:
+                    proposal === null ? 'none' : `${proposal.value}  (${proposal.rule ?? '—'})`,
+                },
+              ]}
+            />
+          }
+        />
+      </ValueDecision>
+    );
+  }
+
+  if (item.type === 'clinical_history') {
+    return (
+      <ClinicalHistoryDecision itemId={item.id} after={after}>
+        <Evidence
+          view={view}
+          extra={
+            view.intake === null ? null : (
+              <EvidenceCard
+                title="The intake this is about"
+                rows={[
+                  {
+                    term: 'intake',
+                    value: (
+                      <Link href={`/console/intakes/${view.intake.id}`}>
+                        {view.intake.intakeId ?? view.intake.id}
+                      </Link>
+                    ),
+                  },
+                  { term: 'state', value: humanise(view.intake.state) },
+                ]}
+              />
+            )
+          }
+        />
+      </ClinicalHistoryDecision>
+    );
+  }
+
+  if (item.type === 'duplicate_intake') {
+    const pair = pairedIntakes(item.payload);
+    return (
+      <DuplicateDecision itemId={item.id} after={after} intakes={pair}>
+        <Evidence
+          view={view}
+          extra={
+            <EvidenceCard
+              title="The two intakes, side by side"
+              rows={pair.map((intake) => ({
+                key: intake.intakeId,
+                term: intake.intakeId,
+                value: intake.summary,
+              }))}
+            />
+          }
+        />
+      </DuplicateDecision>
+    );
+  }
+
+  // Always true today, and that is the point: the seven returns above cover `ReviewItemType`, so
+  // `tsc` narrows this to a certainty. It is written as a branch rather than dropped so that the
+  // two lines below it stay reachable — the compile-time proof, and the pane a new kind would show.
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- exhaustiveness, not a branch.
+  if (item.type === 'vocabulary') {
+    const rows = payloadRows(item.payload);
+    const columns = rows[0] === undefined ? [] : Object.keys(rows[0]);
+    return (
+      <VocabularyDecision
+        itemId={item.id}
+        after={after}
+        rows={excludable(poundsRowsOf(item, rule))}
+      >
+        <Evidence
+          view={view}
+          banner={QUESTIONS[rule] ?? DEFAULT_QUESTION}
+          extra={
+            rows.length === 0 ? null : (
+              <EvidenceCard
+                title={`Rows this applies to (${rows.length})`}
+                note={
+                  rows.length > ROWS_SHOWN
+                    ? `the first ${ROWS_SHOWN}; all ${rows.length} are covered by this one decision`
+                    : undefined
+                }
+                rows={rows.slice(0, ROWS_SHOWN).map((row, index) => ({
+                  term: String(index + 1),
+                  value: columns.map((key) => (
+                    <span key={key}>
+                      {key}: {shown(row[key])}{' '}
+                    </span>
+                  )),
+                }))}
+              />
+            )
+          }
+        />
+      </VocabularyDecision>
+    );
+  }
+
+  // `item.type` is `never` here. Adding a review-item type without giving it a screen fails `tsc`
+  // on this line rather than reaching a reviewer as a pane with nothing to decide on it.
+  item.type satisfies never;
+  return (
+    <DetailBody>
+      <Banner>
+        {`The screen for a ${humanise(item.type)} item is not built. Nothing here can be decided
+          until it is, and the API refuses a decision it cannot carry out.`}
+      </Banner>
+      <EvidenceCard note="as the export gave it" rows={evidenceOf(item)} />
+    </DetailBody>
   );
 }
 
 export default async function ReviewItemPage({
   params,
+  searchParams,
 }: {
   readonly params: Promise<{ readonly id: string }>;
+  readonly searchParams: Promise<SearchParams>;
 }): Promise<ReactElement> {
-  await requireReviewer();
-  const view = await findReviewItem(getDb(), (await params).id);
+  const reviewer = await requireReviewer();
+  const [{ id }, query] = await Promise.all([params, searchParams]);
+  const view = await findReviewItem(getDb(), id);
   if (view === null) notFound();
 
   const { item, rule } = view;
-  const rows = payloadRows(item.payload);
-  const columns = rows[0] === undefined ? [] : Object.keys(rows[0]);
 
   return (
-    <Page>
-      <PageHeader title={item.title}>
-        <Badge tone={toneForReviewItem(item.type)}>{humanise(item.type)}</Badge>
-        <Link href="/console">Back to the queue</Link>
-      </PageHeader>
-
-      <Card>
-        <Definitions
-          items={[
-            { term: 'rule', value: <Raw>{rule}</Raw> },
-            { term: 'raised', value: dayOf(item.createdAt) },
-            { term: 'status', value: humanise(item.status) },
-            ...(item.reason === null ? [] : [{ term: 'reason', value: item.reason }]),
-            ...(view.patient === null
-              ? []
-              : [
-                  {
-                    term: 'patient',
-                    value: (
-                      <Link href={`/console/patients/${view.patient.id}`}>{view.patient.name}</Link>
-                    ),
-                  },
-                ]),
-            ...evidenceOf(item),
-          ]}
-        />
-      </Card>
-
-      {item.type === 'identity_conflict' && <IdentityConflict view={view} />}
-
-      {item.type === 'orphan_intake' && (
-        <>
-          <SectionTitle>Patients that look like this one</SectionTitle>
-          <Card>
-            <Hint>
-              Context, not a proposal: the importer attached none of them, because even a single
-              look-alike is a guess. Same height, weight within 10 %, signed up at most a year
-              earlier.
-            </Hint>
-            {lookAlikes(item.payload).length === 0 ? (
-              <Hint>None. Search below.</Hint>
-            ) : (
-              <Definitions
-                items={lookAlikes(item.payload).map((row, index) => ({
-                  term: String(index + 1),
-                  value: describe(row),
-                }))}
-              />
-            )}
-          </Card>
-          <YourDecision item={item}>
-            <OrphanDecision itemId={item.id} />
-          </YourDecision>
-        </>
-      )}
-
-      {item.type === 'data_quality' && (
-        <YourDecision item={item}>
-          <ValueDecision
-            itemId={item.id}
-            field={item.field ?? 'the value'}
-            current={await currentValueOf(getDb(), item)}
-            proposal={proposalOf(item)}
-            // The same question the server asks before it writes, so the screen cannot offer a
-            // correction the route refuses (ADR-0026 item 2).
-            uncorrectable={writableTarget(item) === null ? noRowToCorrect(item, rule) : null}
+    <ConsoleShell
+      reviewer={reviewer}
+      params={query}
+      selected={{ kind: 'review_item', id: item.id }}
+      detail={(place: QueuePlace) => (
+        <DetailPane>
+          <DetailHeader
+            tone={toneForReviewItem(item.type)}
+            kindLabel={titled(item.type)}
+            rule={rule}
+            raised={dayOf(item.createdAt)}
+            position={place.position}
+            prevHref={place.prevHref}
+            nextHref={place.nextHref}
+            title={item.title}
+            patient={
+              view.patient === null ? (
+                'No patient'
+              ) : (
+                <Link href={`/console/patients/${view.patient.id}`}>{view.patient.name}</Link>
+              )
+            }
+            patientMeta={[
+              humanise(item.status),
+              view.intake === null
+                ? null
+                : `intake ${view.intake.intakeId ?? view.intake.id} · ${humanise(view.intake.state)}`,
+              item.reason,
+            ]
+              .filter((part) => part !== null && part !== '')
+              .join(' · ')}
           />
-        </YourDecision>
+          <Decision view={view} after={place.nextHref ?? '/console'} />
+        </DetailPane>
       )}
-
-      {item.type === 'consent' && <ConsentItem view={view} />}
-
-      {item.type === 'clinical_history' && (
-        <>
-          <SectionTitle>The intake this is about</SectionTitle>
-          <Card>
-            <Definitions
-              items={[
-                ...(view.intake === null
-                  ? []
-                  : [
-                      {
-                        term: 'intake',
-                        value: (
-                          <Link href={`/console/intakes/${view.intake.id}`}>
-                            {view.intake.intakeId ?? view.intake.id}
-                          </Link>
-                        ),
-                      },
-                      { term: 'state', value: humanise(view.intake.state) },
-                    ]),
-                ...Object.entries(item.payload as Record<string, unknown>)
-                  .filter(([key]) => key !== 'note')
-                  .map(([term, given]) => ({ term, value: shown(given) })),
-              ]}
-            />
-            <Hint>
-              The legacy process decided this and its outcome stands. What is open is what to do
-              about it now.
-            </Hint>
-          </Card>
-          <YourDecision item={item}>
-            <ClinicalHistoryDecision itemId={item.id} />
-          </YourDecision>
-        </>
-      )}
-
-      {item.type === 'duplicate_intake' && (
-        <>
-          <SectionTitle>The two intakes, side by side</SectionTitle>
-          <Card>
-            <Definitions
-              items={pairedIntakes(item.payload).map((intake) => ({
-                term: intake.intakeId,
-                value: intake.summary,
-              }))}
-            />
-          </Card>
-          <YourDecision item={item}>
-            <DuplicateDecision itemId={item.id} intakes={pairedIntakes(item.payload)} />
-          </YourDecision>
-        </>
-      )}
-
-      {item.type === 'vocabulary' ? (
-        <>
-          {rows.length > 0 && (
-            <>
-              <SectionTitle>{`Rows this applies to (${rows.length})`}</SectionTitle>
-              <Card>
-                <Definitions
-                  items={rows.slice(0, ROWS_SHOWN).map((row, index) => ({
-                    term: String(index + 1),
-                    value: columns.map((key) => (
-                      <span key={key}>
-                        {key}: {shown(row[key])}{' '}
-                      </span>
-                    )),
-                  }))}
-                />
-                {rows.length > ROWS_SHOWN && (
-                  <Hint>{`…and ${rows.length - ROWS_SHOWN} more, all of them covered by this one decision.`}</Hint>
-                )}
-              </Card>
-            </>
-          )}
-          <YourDecision item={item}>
-            <>
-              <Hint>{REJECT_MEANS}</Hint>
-              <VocabularyDecision
-                itemId={item.id}
-                question={QUESTIONS[rule] ?? DEFAULT_QUESTION}
-                rows={excludable(poundsRowsOf(item, rule))}
-              />
-            </>
-          </YourDecision>
-        </>
-      ) : (
-        ![
-          'identity_conflict',
-          'orphan_intake',
-          'duplicate_intake',
-          'data_quality',
-          'consent',
-          'clinical_history',
-        ].includes(item.type) && (
-          <YourDecision item={item}>
-            <Card>
-              <Hint>
-                {`The screen for a ${humanise(item.type)} item is not built. Nothing here can be
-                decided until it is, and the API refuses a decision it cannot carry out.`}
-              </Hint>
-            </Card>
-          </YourDecision>
-        )
-      )}
-    </Page>
+    />
   );
 }

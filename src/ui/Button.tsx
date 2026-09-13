@@ -1,9 +1,8 @@
 'use client';
 
-// `'use client'` for the same reason `./Field.tsx` carries it: `ButtonRow` names its reason with
-// `useId`, and a hook cannot run in a server component. Every caller is already a client
-// component; saying so here stops a future server-rendered button from failing at runtime.
-import { useId, type ReactElement, type ReactNode } from 'react';
+// `'use client'` for the same reason `./Field.tsx` carries it: every caller is already a client
+// component, and saying so here stops a future server-rendered button from failing at runtime.
+import type { ReactElement, ReactNode } from 'react';
 
 export type ButtonVariant = 'primary' | 'secondary' | 'danger';
 
@@ -60,33 +59,17 @@ export function Button({
  * sentence in one place rather than seven.
  */
 export const NEEDS_A_NOTE =
-  'Write why above first: a decision is only recorded with the reason you give it.';
+  'A decision is only recorded with the reason you give it — write one in the field below first.';
 
 /**
- * The one place a screen's actions live, so they are never scattered down the page.
- *
- * `reason` is what a disabled row owes the reader. `Button`'s own `disabled` stops the click and
- * says nothing — a reviewer facing two grey buttons has to guess which field is missing — so a row
- * that can be unavailable says why, above the buttons and bound to them for a screen reader.
+ * The one place a screen's actions live, so they are never scattered down the page. The console's
+ * decisions have their own bar (`./DecisionBar.tsx`); this is the intake flow and the login form,
+ * where a row of buttons ends a page rather than hanging off the bottom of it.
  */
-export function ButtonRow({
-  reason,
-  children,
-}: {
-  readonly reason?: string | undefined;
-  readonly children: ReactNode;
-}): ReactElement {
-  const id = useId();
+export function ButtonRow({ children }: { readonly children: ReactNode }): ReactElement {
   return (
     <div className="mt-8">
-      {reason !== undefined && (
-        <p id={id} className="mb-2 text-sm text-grey-500">
-          {reason}
-        </p>
-      )}
-      <div className="flex gap-3" aria-describedby={reason === undefined ? undefined : id}>
-        {children}
-      </div>
+      <div className="flex gap-3">{children}</div>
     </div>
   );
 }
