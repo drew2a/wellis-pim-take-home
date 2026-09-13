@@ -35,7 +35,12 @@ import {
   patientsByLegacyId,
 } from '@/repo/items';
 import { mergePatients } from '@/repo/merge';
-import { closeReviewItem, ResolutionError, resolveReviewItem } from '@/repo/resolve';
+import {
+  closeReviewItem,
+  ItemClosedError,
+  ResolutionError,
+  resolveReviewItem,
+} from '@/repo/resolve';
 import type { Decision } from '@/console/decisions/types';
 
 import {
@@ -154,6 +159,9 @@ export async function POST(request: Request, context: RouteContext): Promise<Res
           view.item,
           parsed.data,
           await derivedConsentState(db, view.item),
+          // The surviving record, which `findReviewItem` already resolved: that is where the
+          // state is derived and where it is written (ADR-0008 item 2).
+          view.patient?.id ?? null,
         );
         if (consent.establish === null) {
           decision = consent.decision;
@@ -206,6 +214,9 @@ export async function POST(request: Request, context: RouteContext): Promise<Res
     if (error instanceof DecisionError || error instanceof ResolutionError) {
       return badRequest(error.message);
     }
+    // Somebody decided it between the check above and the lock inside the transaction — the race
+    // the lock exists for. The same answer the check gives, not a 500: nothing went wrong.
+    if (error instanceof ItemClosedError) return conflict(error.message);
     return serverError(`resolving review item ${id.data} failed`, error);
   }
 }

@@ -65,9 +65,12 @@ export async function POST(request: Request, context: RouteContext): Promise<Res
   const parsed = transitionSchema.safeParse(raw);
   if (!parsed.success) return badRequest('that is not a move', issuesOf(parsed.error));
 
+  const db = getDb();
+  // Read before the try and kept in scope, because the catch needs it: telling a state race apart
+  // from a refusal is the question "is the intake still where it was when we looked".
+  let from: IntakeState | null = null;
   try {
-    const db = getDb();
-    const from = await intakeState(db, id.data);
+    from = await intakeState(db, id.data);
     if (from === null) return notFound('no such intake');
 
     const to: IntakeState = parsed.data.to;
@@ -87,9 +90,17 @@ export async function POST(request: Request, context: RouteContext): Promise<Res
     });
     return json({ from: result.from, to: result.to });
   } catch (error) {
-    // The role gate and the age carve-out both land here, and both are "not for you" (ADR-0014
-    // item 3). The message is the machine's own, so the reviewer is told which rule refused.
-    if (error instanceof IllegalTransitionError) return forbidden(error.message);
+    if (error instanceof IllegalTransitionError) {
+      // The role gate and the age carve-out are "not for you" (ADR-0014 item 3), and the message
+      // is the machine's own so the reviewer is told which rule refused. But the same error is
+      // raised when the intake moved between the read above and the transaction — somebody else
+      // claimed it — and that is a conflict about the intake, not a refusal about the reviewer.
+      const now = await intakeState(db, id.data);
+      if (now !== from) {
+        return conflict(`this intake is ${now ?? 'gone'} now, not ${from}; reload it`);
+      }
+      return forbidden(error.message);
+    }
     return serverError(`moving intake ${id.data} failed`, error);
   }
 }

@@ -100,8 +100,13 @@ export function decideIdentity(view: ConflictView, request: IdentityRequest): Id
   if (request.survivorId === request.loserId) {
     throw new DecisionError('a record cannot be merged into itself');
   }
+  // Either side, not only the loser: a survivor that has itself been merged away since the item
+  // was raised is refused by `mergePatients` too, but as a plain throw the route answers with a
+  // 500 instead of telling the reviewer what happened.
   const merged = view.candidates.find(
-    (candidate) => candidate.patientId === request.loserId && candidate.mergedInto !== null,
+    (candidate) =>
+      (candidate.patientId === request.loserId || candidate.patientId === request.survivorId) &&
+      candidate.mergedInto !== null,
   );
   if (merged !== undefined) {
     throw new DecisionError('that record has already been merged away; reload the item');

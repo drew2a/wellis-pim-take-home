@@ -110,6 +110,14 @@ describe('merging', () => {
   it('refuses a loser that has already been merged away', () => {
     expect(() => decideIdentity(view(candidate(A), candidate(B, A)), merge())).toThrow(/reload/);
   });
+
+  // The mirror case: `mergePatients` refuses it too, but as a plain throw the route would answer
+  // 500 where the reviewer needs to be told to reload.
+  it('refuses a survivor that has already been merged away', () => {
+    expect(() => decideIdentity(view(candidate(A, ELSEWHERE), candidate(B)), merge())).toThrow(
+      /reload/,
+    );
+  });
 });
 
 describe('deciding they are two people', () => {

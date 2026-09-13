@@ -61,8 +61,16 @@ export function decideConsent(
   request: ConsentRequest,
   /** The state derived from the log right now, which `set_state` may only override on a conflict. */
   derived: string | null,
+  /**
+   * The **surviving** patient the item's record belongs to (ADR-0008 item 2), which is where a
+   * consent state lives and where `derived` was read from. Not `item.patientId`: a record merged
+   * away since the item was raised keeps its id on the item, and writing the state there would
+   * leave the survivor's `conflict` standing and the decision on a row the next
+   * `recomputeConsentStates` deletes.
+   */
+  survivorId: string | null,
 ): ConsentDecision {
-  if (item.patientId === null) {
+  if (item.patientId === null || survivorId === null) {
     throw new DecisionError(`review item ${item.id} names no patient`);
   }
   const type = item.field;
@@ -74,7 +82,7 @@ export function decideConsent(
         note: request.note,
         // A consent state is derived from the log, and nothing here writes a consent event.
         changes: [],
-        subjects: [{ entityType: 'patient', entityId: item.patientId }],
+        subjects: [{ entityType: 'patient', entityId: survivorId }],
         resolution: { action: request.action, consent_type: type },
       },
       establish: null,
@@ -97,7 +105,7 @@ export function decideConsent(
       subjects: [
         {
           entityType: 'patient',
-          entityId: item.patientId,
+          entityId: survivorId,
           // Not a column, which is why it goes here and not through a field change: the row it
           // becomes is a cache of this entry (ADR-0025 item 1).
           changes: [{ field: `consent_state:${type}`, from: derived, to: request.state }],
@@ -105,6 +113,6 @@ export function decideConsent(
       ],
       resolution: { action: 'set_state', consent_type: type, state: request.state, was: derived },
     },
-    establish: { patientId: item.patientId, type, state: request.state },
+    establish: { patientId: survivorId, type, state: request.state },
   };
 }

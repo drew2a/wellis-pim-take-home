@@ -5,6 +5,8 @@ import { consentRequestSchema, decideConsent } from './consent';
 import { DecisionError } from './types';
 
 const PATIENT = '11111111-1111-4111-8111-111111111111';
+/** The patient `PATIENT` was merged into after the item was raised (ADR-0008 item 2). */
+const SURVIVOR = '22222222-2222-4222-8222-222222222222';
 
 type Item = Parameters<typeof decideConsent>[0];
 
@@ -19,14 +21,14 @@ const request = (
 
 describe('recording what was done', () => {
   it('closes the item against the patient and changes no value', () => {
-    const { decision, establish } = decideConsent(item(), request('resolve'), 'revoked');
+    const { decision, establish } = decideConsent(item(), request('resolve'), 'revoked', PATIENT);
     expect(decision).toMatchObject({ outcome: 'resolved', changes: [] });
     expect(decision.subjects).toEqual([{ entityType: 'patient', entityId: PATIENT }]);
     expect(establish).toBeNull();
   });
 
   it('dismisses when there is nothing to do', () => {
-    expect(decideConsent(item(), request('dismiss'), 'revoked').decision).toMatchObject({
+    expect(decideConsent(item(), request('dismiss'), 'revoked', PATIENT).decision).toMatchObject({
       outcome: 'dismissed',
     });
   });
@@ -38,7 +40,9 @@ describe('recording what was done', () => {
   });
 
   it('refuses an item that names no patient', () => {
-    expect(() => decideConsent(item(null), request('resolve'), 'revoked')).toThrow(DecisionError);
+    expect(() => decideConsent(item(null), request('resolve'), 'revoked', null)).toThrow(
+      DecisionError,
+    );
   });
 });
 
@@ -49,7 +53,7 @@ describe('establishing a state over a log that contradicts itself', () => {
     request('set_state', 'reached the patient; consent given on paper on 2026-09-11', { state });
 
   it('records the decision as a change against the patient, and the state to write', () => {
-    const { decision, establish } = decideConsent(item(), setState('granted'), 'conflict');
+    const { decision, establish } = decideConsent(item(), setState('granted'), 'conflict', PATIENT);
     expect(decision.subjects?.[0]?.changes).toEqual([
       { field: 'consent_state:data_processing', from: 'conflict', to: 'granted' },
     ]);
@@ -58,14 +62,16 @@ describe('establishing a state over a log that contradicts itself', () => {
   });
 
   it('writes no field on the patient: a consent state is not a column a reviewer types', () => {
-    expect(decideConsent(item(), setState('revoked'), 'conflict').decision.changes).toEqual([]);
+    expect(
+      decideConsent(item(), setState('revoked'), 'conflict', PATIENT).decision.changes,
+    ).toEqual([]);
   });
 
   // A revocation that is unambiguous is acted on, not overridden (ADR-0025 §3).
   it.each(['granted', 'revoked', 'no_record', 'unknown_pre_log', null])(
     'refuses to establish a state over a derived %s',
     (derived) => {
-      expect(() => decideConsent(item(), setState('granted'), derived)).toThrow(
+      expect(() => decideConsent(item(), setState('granted'), derived, PATIENT)).toThrow(
         /only a consent state of conflict/,
       );
     },
@@ -76,9 +82,23 @@ describe('establishing a state over a log that contradicts itself', () => {
     expect(() => request('set_state', 'x', { state: 'no_record' })).toThrow();
   });
 
-  it('refuses an item that names no consent type', () => {
-    expect(() => decideConsent(item(PATIENT, null), setState('granted'), 'conflict')).toThrow(
-      /consent type/,
+  // The state lives on the surviving record, and `derived` was read from there: writing the
+  // decision at `item.patient_id` would leave the survivor's conflict standing and put the row
+  // where the next recomputation deletes it.
+  it('establishes the state on the survivor when the item names a record merged away since', () => {
+    const { decision, establish } = decideConsent(
+      item(),
+      setState('granted'),
+      'conflict',
+      SURVIVOR,
     );
+    expect(establish?.patientId).toBe(SURVIVOR);
+    expect(decision.subjects?.[0]?.entityId).toBe(SURVIVOR);
+  });
+
+  it('refuses an item that names no consent type', () => {
+    expect(() =>
+      decideConsent(item(PATIENT, null), setState('granted'), 'conflict', PATIENT),
+    ).toThrow(/consent type/);
   });
 });
