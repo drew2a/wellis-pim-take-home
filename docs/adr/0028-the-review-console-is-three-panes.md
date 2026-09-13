@@ -86,6 +86,14 @@ those are evidence being chosen, not the decision being written.
 `NEEDS_A_NOTE` and the disabled-row reason from ADR-0026 survive unchanged: the bar says why it is
 unavailable, above the buttons and bound to them for a screen reader.
 
+**The field is omitted where the move records no words of the reviewer's own.** Claiming an intake
+is the case: the transition route's schema is strict and refuses a `note` on that edge, writing
+`claimed for review` itself (ADR-0014). A field there is a box whose contents are discarded — and,
+because claiming keeps the reviewer on the same screen, whatever they typed for the claim was still
+sitting in the bar when it became the Approve/Reject bar, pre-filled as the reason for a medical
+decision it was not written for. The bar now takes no reason on that edge, and `useDecide` clears
+the note on every recorded decision, so a future action that stays on screen cannot reintroduce it.
+
 ### 3. Three departures from the canvas, each because the data is not there
 
 The canvas is followed except where following it would mean drawing a control over nothing:

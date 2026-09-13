@@ -66,9 +66,14 @@ export function DecisionBar({
   error,
   actions,
 }: {
-  readonly note: string;
-  readonly onNote: (value: string) => void;
-  readonly placeholder: string;
+  /**
+   * The three go together, and all three are omitted where the move records no words of the
+   * reviewer's own — claiming an intake writes "claimed for review" and the route's schema is
+   * strict, so a field here would be a box whose contents are thrown away.
+   */
+  readonly note?: string;
+  readonly onNote?: (value: string) => void;
+  readonly placeholder?: string;
   readonly unavailable?: string | undefined;
   /** What the server said when it refused — shown, never swallowed. */
   readonly error?: string | null;
@@ -111,25 +116,29 @@ export function DecisionBar({
         </div>
       )}
       <div className="flex flex-wrap items-center justify-end gap-x-2.5 gap-y-2">
-        <label
-          htmlFor={`${id}-note`}
-          className="flex-none font-mono text-[10px] tracking-[0.12em] text-grey-600 uppercase"
-          title="Recorded with your name"
-        >
-          Reason
-        </label>
-        <input
-          id={`${id}-note`}
-          type="text"
-          value={note}
-          onChange={(event) => {
-            onNote(event.target.value);
-          }}
-          placeholder={placeholder}
-          aria-label="Your reason, recorded with your name"
-          aria-describedby={said ? `${id}-why` : undefined}
-          className="min-w-0 flex-1 basis-48 rounded-[7px] border border-grey-200 bg-grey-50 px-[11px] py-2 text-[13px] text-grey-900 placeholder:text-grey-400 focus:border-accent-600 focus:bg-white focus:outline-none"
-        />
+        {note !== undefined && onNote !== undefined && (
+          <>
+            <label
+              htmlFor={`${id}-note`}
+              className="flex-none font-mono text-[10px] tracking-[0.12em] text-grey-600 uppercase"
+              title="Recorded with your name"
+            >
+              Reason
+            </label>
+            <input
+              id={`${id}-note`}
+              type="text"
+              value={note}
+              onChange={(event) => {
+                onNote(event.target.value);
+              }}
+              placeholder={placeholder}
+              aria-label="Your reason, recorded with your name"
+              aria-describedby={said ? `${id}-why` : undefined}
+              className="min-w-0 flex-1 basis-48 rounded-[7px] border border-grey-200 bg-grey-50 px-[11px] py-2 text-[13px] text-grey-900 placeholder:text-grey-400 focus:border-accent-600 focus:bg-white focus:outline-none"
+            />
+          </>
+        )}
         {actions.map((action, index) => (
           <button
             key={index}

@@ -44,6 +44,10 @@ export function useDecide(url: string, after: string): Decide {
         setFailure(answer.error ?? 'that did not work');
         return;
       }
+      // A recorded decision takes its reason with it. Without this, claiming an intake — which
+      // stays on the screen — left the words typed for the claim sitting in the field, pre-filled
+      // as the reason for the approval or rejection that follows. Two different decisions.
+      setNote('');
       if (!stay) router.push(after);
       router.refresh();
     } catch {

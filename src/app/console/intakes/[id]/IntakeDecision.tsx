@@ -34,11 +34,12 @@ export function IntakeDecision({
     return (
       <>
         <DetailBody>{children}</DetailBody>
+        {/* No reason field: the route's schema refuses a note on this edge and writes "claimed for
+            review" itself, so a box here would throw away whatever was typed into it — and, since
+            claiming keeps the reviewer on this screen, hand it to the approval as a pre-filled
+            reason for a decision it was not written for. */}
         <DecisionBar
-          note={decide.note}
-          onNote={decide.setNote}
-          placeholder="Why you are picking this up — every transition records a reason (R-B20)"
-          unavailable="Claiming puts your name on this intake. Nobody else can then claim it, and the audit says who looked at it and when."
+          unavailable="Claiming puts your name on this intake. Nobody else can then claim it, and the audit records it as “claimed for review”, with the time. Approving and rejecting take your own words."
           error={decide.failure}
           actions={[
             {
@@ -62,9 +63,6 @@ export function IntakeDecision({
       <>
         <DetailBody>{children}</DetailBody>
         <DecisionBar
-          note=""
-          onNote={() => undefined}
-          placeholder="No decision is taken from here"
           unavailable="This intake takes no decision from here. The legacy process decided it, and this console does not rewrite what it decided — a disagreement with today’s rules is a clinical history item."
           actions={[]}
         />
