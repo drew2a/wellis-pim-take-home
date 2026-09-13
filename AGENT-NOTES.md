@@ -103,54 +103,6 @@ Concrete cases where the agent's output was wrong and I corrected it.
    the audit still names who decided. Recorded in its own ADR, superseding ADR-0014 item 3 and
    the role paragraph of ADR-0021.
 
-## The review console (2026-09-13, `feature/review-console`)
-
-Part C's screens, and the first branch where the pre-merge review (`CLAUDE.md` §3) found something
-in every layer rather than in the one I was watching.
-
-**The review.** `/code-review high` in a fresh session returned 13 findings; all 13 were fixed on
-the branch, none declined. Three of them needed a decision nobody had taken, so they are ADR-0026
-rather than a commit message: which row a `data_quality` item corrects (the item names an intake
-*and* its patient, and only the intake has `submitted_at`), what a screen does when a decision
-cannot be carried out at all (a consent event whose timestamp could not be read was never stored,
-so the item is dismiss-only and now says so), and which two records a merge joins when the item
-compares three (`candidateGroups` is a transitive closure; the screen assumed a pair and merged the
-wrong record).
-
-Two of the thirteen are worth naming because they are the kind a test suite does not catch:
-
-- **An audit entry for a change that never happened.** A merge read its set of decided columns off
-  the changes the decisions produced, and a decision that changes nothing produces none — so
-  choosing the survivor's own empty value let the old rule fill the field from the loser anyway,
-  and the survivor's entry claimed a value the column did not hold. `CLAUDE.md` §5 says a changed
-  value needs a record; this was the mirror image, and the ADR now says so in as many words.
-- **A defect in a branch this export never reaches.** The `submitted_at` fix is real, but I checked
-  the database before believing the agent's framing of it: `select count(*) from review_items where
-  type='data_quality' and intake_id is not null` is 0. All 62 are about a patient. The agent had
-  written "the 11 unreadable submission dates" in the ADR and three comments, taking the figure
-  from a module header where it means patient `dob`. It corrected all four when the query came back
-  — but I had to run the query.
-
-**Removing the reviewer role (ADR-0027).** The example of the whole branch. `reviewers.role` was
-`doctor` | `ops`, and ADR-0014 item 3 gated approving and rejecting on `doctor`: it reads like the
-one real permission in the product. It never was one, and the repository already said so — ADR-0021
-records that the console has one shared secret and the reviewer picks their own name from a list,
-so anyone who reaches the login page can be Dr Vermeer. The gate refused nobody while costing an
-enum, a column, two fields on the state machine, a branch in `checkTransition`, a field on the
-session, a shape in `REVIEWERS`, a conditional on the intake screen and half the meaning of 403.
-
-What made it safe to remove is that the safety was never in it: edge 9 also carries
-`refusesAbsoluteReject`, Q1's absolute age reject, which is a property of the intake's stored
-evaluation and therefore refuses *every* reviewer. A minor could not be approved by a doctor
-either. That guard stays, and after this it is the only thing 403 can mean.
-
-I told the agent to remove it; it drafted ADR-0027 as `proposed`, added the "Amended by" pointer to
-ADR-0014 rather than editing an accepted ADR, and stopped there until the decision was on the
-record. Worth keeping as the pattern: **the agent is good at noticing that a control is real, and
-will not tell you that one is theatre unless you ask.** It had built the gate, tested it, documented
-it in two ADRs and a scenario file, and none of that work contained the question "does this refuse
-anybody?"
-
 ## What I would do differently
 
 _To be filled at the end._

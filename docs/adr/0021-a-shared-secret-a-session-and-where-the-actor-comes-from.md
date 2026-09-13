@@ -1,6 +1,7 @@
 # ADR-0021: A shared secret, a session, and where the actor comes from
 
-- **Status:** accepted
+- **Status:** accepted · **Amended by:** [ADR-0027](0027-remove-the-reviewer-role.md) (the role
+  gate it describes is removed; everything about the secret, the session and the actor stands)
 - **Date:** 2026-09-13
 - **Deciders:** Andrei Andreev
 - **Requirements:** R-B16, R-B19, R-B20, R-C8, R-S4, R-T4 · **Resolves:** Q8 (neither A nor B: A
