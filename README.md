@@ -110,6 +110,16 @@ records are read through the membership function of `src/repo/membership.ts`, wh
 `merged_into`. That makes every merge reversible by writing the same two things back, which
 `unmergePatient` does; there is no console for it yet.
 
+*Why a survivor rather than a third record.* The alternative is to mint a new canonical patient
+that both originals point at, leaving neither original touched. Both are standard; this one keeps
+the patient's identifier stable, so every reference that already resolved — intakes, consent
+events, review items — still resolves to a row that exists, and reversibility comes from the audit
+entry recording which record supplied which field rather than from discarding a composite. The
+loser's row is never deleted: it keeps its identifier and its own records, and its `legacy_id` is
+repointed in `patient_legacy_ids` so a re-import lands on the survivor. Two questions, two answers:
+`patient_legacy_ids` says whose records these are *now*, `patients.created_from_legacy_id` says
+which exported row built this canonical row and never moves.
+
 **Shadow evaluation.** Every legacy intake is evaluated with the ruleset the console would apply
 today, stored in `eligibility_evaluations` with `shadow = true`, and **nothing is applied** — each
 intake keeps the state its legacy outcome gave it. Queueing those disagreements would be wrong: the
