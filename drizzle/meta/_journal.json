@@ -57,6 +57,13 @@
       "when": 1789290389045,
       "tag": "0007_intake_state_machine",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1789290390045,
+      "tag": "0008_freeze_answers_on_leaving_draft",
+      "breakpoints": true
     }
   ]
 }

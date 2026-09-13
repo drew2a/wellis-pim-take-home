@@ -138,6 +138,36 @@ describe('the answers of a submitted intake', () => {
     );
   });
 
+  // The gap 0008 closes: the check used to read only OLD.state, so one statement could leave draft
+  // and substitute the evidence in the same breath, and the row was then frozen with the
+  // substitution. A trigger that can be stepped around on the one transition it guards is not a
+  // lock (ADR-0014 item 6).
+  it('is refused on the very statement that leaves draft', async () => {
+    const id = await insertIn('draft');
+    await sql`update intakes set answers = ${JSON.stringify(answers)}::jsonb where id = ${id}`;
+
+    await expectDatabaseError(
+      sql`update intakes
+            set state = 'submitted',
+                answers = ${JSON.stringify({ formVersion: 'tampered' })}::jsonb
+          where id = ${id}`,
+      /answers of intake .* are evidence/,
+    );
+
+    const rows = await sql<{ answers: unknown; state: string }[]>`
+      select answers, state from intakes where id = ${id}`;
+    expect(rows[0]).toMatchObject({ answers, state: 'draft' });
+  });
+
+  it('still allows the transition itself when the answers are left alone', async () => {
+    const id = await insertIn('draft');
+    await sql`update intakes set answers = ${JSON.stringify(answers)}::jsonb where id = ${id}`;
+
+    await sql`update intakes set state = 'submitted' where id = ${id}`;
+
+    expect(await stateOf(id)).toBe('submitted');
+  });
+
   it('does not stand in the way of the intake’s other columns changing', async () => {
     const id = await insertIn('draft');
     await forceInto(id, 'auto_flagged');
