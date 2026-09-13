@@ -25,8 +25,6 @@ import {
   Choice,
   ErrorText,
   Field,
-  Findings,
-  Hint,
   Prose,
   StepIndicator,
   TextAreaField,
@@ -45,6 +43,7 @@ interface Issue {
   readonly message: string;
 }
 
+/** The submit response as the server sends it. The patient's screen reads `state` and no more. */
 interface Submitted {
   readonly state: string;
   readonly outcome: string;
@@ -365,7 +364,6 @@ export function IntakeForm({ bounds }: { bounds: Bounds }): ReactElement {
         {current.step === 'consent' && (
           <>
             <Prose text={CONSENT_TEXT} />
-            <Hint>Consent text version {CONSENT_TEXT_VERSION}.</Hint>
             <Field label="" message={messageFor(issues, 'granted')}>
               <Choice
                 type="checkbox"
@@ -414,7 +412,13 @@ export function IntakeForm({ bounds }: { bounds: Bounds }): ReactElement {
   );
 }
 
-/** What the patient is told afterwards: the engine's own explanation lines, verbatim (R-B9). */
+/**
+ * What the patient is told afterwards: one sentence, and who decides next.
+ *
+ * Not the engine's explanation lines and not the ruleset version (ADR-0020). R-B8 and R-B9 are
+ * unaffected — the outcome still carries its explanation and the intake still stores the version
+ * that judged it; both are for the reviewer reading the case, not for the patient reading a screen.
+ */
 function Result({ submitted }: { submitted: Submitted }): ReactElement {
   const headline: Record<string, string> = {
     auto_cleared: 'Thank you — your intake is with our care team.',
@@ -423,9 +427,7 @@ function Result({ submitted }: { submitted: Submitted }): ReactElement {
   };
   return (
     <Card title={headline[submitted.state] ?? 'Thank you.'}>
-      <Findings title="What the rules found" items={submitted.reasons} />
       <p>A doctor makes the final decision; nothing here is one.</p>
-      <Hint>Assessed with ruleset {submitted.rulesetVersion}.</Hint>
     </Card>
   );
 }
