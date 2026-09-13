@@ -1,6 +1,6 @@
 # ADR-0013: Where the import report gets its numbers
 
-- **Status:** proposed
+- **Status:** accepted
 - **Date:** 2026-09-12
 - **Deciders:** Andrei Andreev
 - **Requirements:** R-A18 to R-A23, R-A15, R-A16 · **Amends:** ADR-0011 item 14 (adds where the
