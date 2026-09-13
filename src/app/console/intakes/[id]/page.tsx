@@ -33,9 +33,37 @@ import { IntakeDecision } from './IntakeDecision';
 
 export const dynamic = 'force-dynamic';
 
+/**
+ * One thing the matcher found (`@/eligibility/terms`): the text it matched, and the ruleset term
+ * that caught it. Both, because that is the pair the evaluation stores and the pair a reviewer
+ * needs — the term alone does not show what the patient wrote, and the text alone does not show
+ * which rule it tripped (ADR-0015 item 6).
+ */
+const isTermMatch = (input: unknown): input is { term: string; text: string } =>
+  typeof input === 'object' &&
+  input !== null &&
+  typeof (input as { term?: unknown }).term === 'string' &&
+  typeof (input as { text?: unknown }).text === 'string';
+
+/**
+ * What the patient wrote, and the ruleset term behind it where that adds something. Of the 1725
+ * matches this database holds, 1503 quote the term verbatim and 184 differ only in case, so naming
+ * the term every time would be noise on 98 % of them; the 38 that carry more — `rybelsus 7 mg`
+ * caught by `rybelsus`, `medullair schildkliercarcinoom familie` by `schildkliercarcinoom` — are
+ * exactly the ones where a reviewer needs to see why it matched.
+ */
+const termMatch = (match: { term: string; text: string }): string =>
+  match.text.toLowerCase() === match.term.toLowerCase()
+    ? match.text
+    : `${match.text} (${match.term})`;
+
 const value = (input: unknown): string => {
   if (input === null || input === undefined) return '—';
-  if (Array.isArray(input)) return input.length === 0 ? 'none' : input.join(', ');
+  if (isTermMatch(input)) return termMatch(input);
+  // Each element through this function, never `join` on its own: `Array.prototype.join` stringifies
+  // an element with `String()`, so an array of objects rendered as `[object Object]` — which is
+  // what the panel explaining a medical verdict showed for every term the matcher found.
+  if (Array.isArray(input)) return input.length === 0 ? 'none' : input.map(value).join(', ');
   if (typeof input === 'object') return JSON.stringify(input);
   if (typeof input === 'boolean') return input ? 'yes' : 'no';
   if (typeof input === 'number') return String(input);
