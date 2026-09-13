@@ -6,12 +6,12 @@
 // those of every record merged into it (ADR-0011 item 3).
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import type { ReactElement, ReactNode } from 'react';
+import type { ReactElement } from 'react';
 
 import { requireReviewer } from '@/console/guard';
 import { getDb } from '@/db/client';
 import { dayOf } from '@/intake/today';
-import { patientDetail, type TimelineEntry } from '@/repo/patient-detail';
+import { patientDetail } from '@/repo/patient-detail';
 import {
   Badge,
   Caption,
@@ -30,6 +30,7 @@ import {
   type Definition,
 } from '@/ui';
 
+import { entryValue } from './entry';
 import { RevealBsn } from './RevealBsn';
 
 export const dynamic = 'force-dynamic';
@@ -43,53 +44,6 @@ const text = (value: unknown): string => {
   if (typeof value === 'number' || typeof value === 'boolean') return String(value);
   return JSON.stringify(value);
 };
-
-function changeLine(change: {
-  field: string;
-  from: string | null;
-  to: string | null;
-  chosen?: string;
-  source_legacy_id?: string;
-}): string {
-  const provenance = [
-    change.chosen === undefined ? '' : `chosen: ${change.chosen}`,
-    change.source_legacy_id === undefined ? '' : `from ${change.source_legacy_id}`,
-  ]
-    .filter((part) => part !== '')
-    .join(', ');
-  const arrow = `${change.field}: ${change.from ?? '—'} → ${change.to ?? '—'}`;
-  return provenance === '' ? arrow : `${arrow} (${provenance})`;
-}
-
-function entryValue(entry: TimelineEntry): ReactNode {
-  const states =
-    entry.fromState === null && entry.toState === null
-      ? null
-      : `${entry.fromState ?? '—'} → ${entry.toState ?? '—'}`;
-  return (
-    <span>
-      {states !== null && <Raw>{states}</Raw>} {entry.reason}
-      {entry.rule !== null && (
-        <>
-          {' '}
-          <Raw>{entry.rule}</Raw>
-        </>
-      )}
-      {(entry.changes ?? []).map((change, index) => (
-        <span key={index}>
-          {' · '}
-          <Raw>{changeLine(change)}</Raw>
-        </span>
-      ))}
-      {entry.reviewItem !== null && (
-        <>
-          {' · '}
-          <Link href={`/console/items/${entry.reviewItem.id}`}>{entry.reviewItem.title}</Link>
-        </>
-      )}
-    </span>
-  );
-}
 
 export default async function PatientPage({
   params,
