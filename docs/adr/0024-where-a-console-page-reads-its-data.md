@@ -3,16 +3,24 @@
 - **Status:** proposed
 - **Date:** 2026-09-13
 - **Deciders:** Andrei Andreev
-- **Requirements:** R-T4, R-C1, R-C9, R-T7 · **Amends:** ADR-0003 ("the API is the only database
-  client; React components never import the database layer")
+- **Requirements:** R-T4, R-C1, R-C9, R-T7 · **Amends:** ADR-0003 ("No React component imports the
+  data layer") and the sentence `CLAUDE.md` §8 states it in
 
 ## Context and problem statement
 
-ADR-0003 fixed the stack with one sentence about who may talk to the database: "The API is the only
-database client (R-T4); React components never import the database layer." Until now nothing tested
-it — the home page renders text, the intake page reads `rules/v1.json`, and the patient's form is a
-client component that talks to route handlers over `fetch`. The console is the first part of the
-product whose **pages** are the data.
+Two sentences in the repository say who may talk to the database, and this ADR replaces both.
+
+> **ADR-0003, Decision outcome:** "Next.js App Router: React Server Components for read views,
+> client components only where interaction needs them; API as Route Handlers under `app/api/**`.
+> **No React component imports the data layer.**"
+
+> **`CLAUDE.md` §8, Stack:** "one deployable that serves the React review console, the patient
+> intake flow, and the API as Route Handlers. **The API is the only database client (R-T4); React
+> components never import the database layer.**"
+
+Until now nothing tested either — the home page renders text, the intake page reads
+`rules/v1.json`, and the patient's form is a client component that talks to route handlers over
+`fetch`. The console is the first part of the product whose **pages** are the data.
 
 R-T4 itself says something narrower and sharper: "All business logic **MUST** live in my own API.
 The client **MUST NOT** talk to the database directly (no rows-over-REST)." A React Server
@@ -43,24 +51,31 @@ it is protecting against, and it protects against nothing: the browser never see
 
 ## Decision outcome
 
-Chosen option: **Option 1**.
+Chosen option: **Option 1**. The two sentences quoted above are replaced by these four:
 
-- **Reads.** A console page is a server component. It calls a function in `src/repo/` — the same
-  layer `mergePatients`, `membersOf` and `resolveReviewItem` live in — and renders the result. It
-  never writes SQL itself (option 3), and it never fetches its own API (option 2).
-- **Writes.** Every mutation is a route handler under `/api/console/`, called by a client
-  component. That is not symmetry for its own sake: a write is where the session, the role gate and
-  the 401/403 contract live (ADR-0021), and a route handler is a function from a `Request` to a
-  `Response` that a test can call with no browser and no rendering.
-- **The client.** Client components carry no database import and no business rule. They post to a
-  route and render what comes back, as `IntakeForm` already does.
-- **Where the query lives.** In `src/repo/`, not in the page, so the thing a test calls is the
-  thing the screen shows. A page that needs a number a repository function does not return gets a
-  function, not a query.
+1. **Route handlers are the only writers.** Every mutation in the product is a route handler under
+   `app/api/**`. Nothing else writes — not a page, not a server action, not a client component.
+   That is where the session, the actor, the role gate and the 401/403 contract live (ADR-0021),
+   and a route handler is a function from a `Request` to a `Response` that a test calls with no
+   browser and no rendering.
+2. **Server components and route handlers read through `src/repo/`.** Both are the server. Both
+   call the same repository layer — the one `mergePatients`, `membersOf`, `queuePage` and
+   `resolveReviewItem` already live in — so the thing a test calls is the thing the screen shows.
+   Neither writes SQL of its own.
+3. **The browser reaches data only through routes.** A client component holds no database import
+   and no business rule; it posts to a route and renders what comes back, as `IntakeForm` already
+   does. No endpoint serves rows for a client to assemble business logic from.
+4. **No page imports `drizzle-orm` or `@/db/schema`**, and a test asserts it over every file under
+   `src/app/` (`src/app/pages.test.ts`). A page that needs a number a repository function does not
+   return gets a function, not a query.
 
-R-T4 is satisfied in full: no rows reach the browser, and no business logic lives outside the
-server. What this amends is ADR-0003's stronger sentence, which was written before any page had
-data and which would now buy nothing at a real cost.
+R-T4 is satisfied in full and unchanged: the client does not talk to the database, and no business
+logic lives outside the server. What the old sentences got wrong is only *which process* a React
+Server Component runs in. They were written before any page had data, and followed literally they
+would buy nothing at a real cost.
+
+`CLAUDE.md` §8 is reworded on this branch to item 2's reading, so the document and the code agree
+rather than needing a reader to know which one won.
 
 ### Consequences
 
@@ -79,13 +94,14 @@ data and which would now buy nothing at a real cost.
 
 ### Confirmation
 
-- Console pages import from `src/repo/` and from `src/ui/`; a test asserts no `src/app/**/page.tsx`
-  imports `drizzle-orm` or `@/db/schema`.
+- `src/app/pages.test.ts` asserts that no file under `src/app/` imports `drizzle-orm` or
+  `@/db/schema`, and that no page fetches the console over HTTP.
 - Every console **mutation** is a route handler with an integration test that calls it directly and
   asserts 401 without a session (ADR-0021).
 - The queue's counts and rows are tested against the repository function, not by rendering a page.
 
 ## More information
 
-- ADR-0003 (the sentence this amends), ADR-0021 (where a write is refused), ADR-0023 (one
-  resolution path), `REQUIREMENTS.md` R-T4, R-C1.
+- ADR-0003 (the sentence this amends, and the **Amended by** pointer added to it), `CLAUDE.md` §8
+  (reworded on this branch), ADR-0021 (where a write is refused), ADR-0023 (one resolution path),
+  `REQUIREMENTS.md` R-T4, R-C1.
