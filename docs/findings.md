@@ -878,6 +878,12 @@ the report counts them. The 5 same-day pairs get one item per pair, both intakes
 legacy outcome, no outcome of record until a reviewer decides; listed under unexpected findings
 as well as under quarantined.
 
+**Superseded in part** (2026-09-14, [ADR-0029](adr/0029-an-orphan-intake-has-no-identity-to-match-on.md)):
+the look-alike context above is dropped. The criterion discriminates almost nothing in a
+weight-care population — 14 of the 21 orphans match somebody, one matches eight people, and one
+list holds four people born 1962, 1973, 1986 and 2005 — and an orphan intake carries no identity
+field to match on in the first place. Everything else in this entry stands.
+
 Check (1): no stored value differs from raw. Check (2): 21 + 5 row items, each a different person
 or pair with distinct actions.
 

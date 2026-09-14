@@ -1,11 +1,12 @@
 'use client';
 
-// Attaching an orphan intake, or leaving it unresolved (ADR-0006). The look-alikes the importer
-// found are shown as **context, not a proposal** — even a single one is a guess, which is why the
-// importer attached nothing — and the reviewer may search for any other patient instead.
+// Attaching an orphan intake, or leaving it unresolved (ADR-0006). The only way to an identity is
+// the reviewer's own search — no candidate patients are offered, because the intake carries no
+// name, no date of birth and no email, and build is not a weaker identity signal but none at all
+// (ADR-0029).
 //
-// There is no "create a patient" button, here or anywhere: the intake carries no name, no date of
-// birth and no email, and a row with none of those is a fabricated record.
+// For the same reason there is no "create a patient" button, here or anywhere: a row with none of
+// those fields is a fabricated record.
 import { useState, type ReactElement, type ReactNode } from 'react';
 
 import { useDecide } from '@/app/console/useDecide';

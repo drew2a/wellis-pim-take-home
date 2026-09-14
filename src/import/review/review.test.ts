@@ -11,13 +11,7 @@ import { parseCsv } from '../source/csv';
 import { readExportFiles } from '../source/files';
 import { parseConsentsJsonl } from '../source/jsonl';
 import { INTAKES_HEADER, PATIENTS_HEADER, byHeader } from '../source/layout';
-import {
-  dobFlipItems,
-  lookAlikes,
-  orphanItems,
-  shiftedPatientItems,
-  shiftedPatients,
-} from './cross-file';
+import { dobFlipItems, orphanItems, shiftedPatientItems, shiftedPatients } from './cross-file';
 import { dedupeKey, dedupeParts, ruleOf } from './items';
 import {
   confirmationItems,
@@ -161,14 +155,9 @@ describe('cross-file items', () => {
     expect(items).toEqual([]);
   });
 
-  it('raises one orphan item per orphan with the ADR-0006 look-alike distribution', () => {
-    const items = orphanItems(orphans, data, ids);
+  it('raises one orphan item per orphan, with the two ADR-0006 actions', () => {
+    const items = orphanItems(orphans, ids);
     expect(items).toHaveLength(21);
-    const distribution = countBy(items, (i) => {
-      const n = (i.payload as { look_alikes: unknown[] }).look_alikes.length;
-      return n === 0 ? 'none' : n === 1 ? 'one' : 'several';
-    });
-    expect(distribution).toEqual({ none: 7, one: 3, several: 11 });
     expect(items.every((i) => i.patientId === null && i.intakeId?.startsWith('uuid-INT'))).toBe(
       true,
     );
@@ -178,15 +167,11 @@ describe('cross-file items', () => {
     ]);
   });
 
-  it('look-alikes need the same height, weight within 10 % and signup at most a year before', () => {
-    const intake = orphans[0];
-    if (intake === undefined) throw new Error('no orphan');
-    const matches = lookAlikes(intake, data.patients);
-    for (const m of matches) {
-      expect(m.height_cm).toBe(intake.canonical.heightCm);
-      const w = Number(intake.canonical.weightKg);
-      expect(Math.abs(Number(m.weight_kg) - w)).toBeLessThanOrEqual(w * 0.1);
-    }
+  // ADR-0029: body measurements are not a weaker identity signal, they are not one, so the item
+  // offers no candidate patients at all.
+  it('offers no candidate patients on any orphan item', () => {
+    const keys = new Set(orphanItems(orphans, ids).flatMap((i) => Object.keys(i.payload)));
+    expect([...keys].sort()).toEqual(['actions', 'intake', 'intake_id', 'legacy_patient_id']);
   });
 });
 

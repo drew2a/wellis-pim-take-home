@@ -1,6 +1,6 @@
 // Review items that need more than one file (findings: dob, signup_date; ADR-0006 orphans):
 // a dob whose alternative reading flips minor/adult at one of the patient's intakes, a patient
-// whose whole record sits in the future, and an orphan intake with its look-alike context.
+// whose whole record sits in the future, and an orphan intake whose patient row is missing.
 import { ageInYears } from '@/eligibility/age';
 import type { Rules } from '@/rules/schema';
 
@@ -150,54 +150,12 @@ export function shiftedPatientItems(data: Export, ids: Ids): ReviewItemDraft[] {
     });
 }
 
-interface LookAlike {
-  readonly legacy_id: string;
-  readonly full_name: string;
-  readonly dob: string | null;
-  readonly height_cm: number | null;
-  readonly weight_kg: string | null;
-  readonly signup_date: string | null;
-  readonly status: string;
-}
-
-const DAY = 86_400_000;
-const daysBetween = (fromIso: string, toIso: string): number =>
-  (Date.parse(`${toIso}T00:00:00Z`) - Date.parse(`${fromIso}T00:00:00Z`)) / DAY;
-
 /**
- * Context only, not a rule (ADR-0006): patients with the same height, a signup weight within
- * 10 % of the intake's, and a signup date at most a year before the intake.
+ * One orphan_intake item per intake whose patient does not exist; two actions (ADR-0006).
+ * The payload carries no candidate patients: an orphan intake has no identity field, and body
+ * measurements are not a weaker identity signal but none at all (ADR-0029).
  */
-export function lookAlikes(intake: MappedIntake, patients: readonly MappedPatient[]): LookAlike[] {
-  const { heightCm, weightKg, submittedAt } = intake.canonical;
-  if (heightCm === null || weightKg === null) return [];
-  const weight = Number(weightKg);
-  return patients
-    .filter((p) => {
-      const c = p.canonical;
-      if (c.heightCm !== heightCm || c.weightKg === null) return false;
-      if (Math.abs(Number(c.weightKg) - weight) > weight * 0.1) return false;
-      if (submittedAt === null || c.signupDate === null) return true;
-      const days = daysBetween(c.signupDate, submittedAt);
-      return days >= 0 && days <= 365;
-    })
-    .map((p) => ({
-      legacy_id: p.legacyId,
-      full_name: p.canonical.fullName,
-      dob: p.canonical.dob,
-      height_cm: p.canonical.heightCm,
-      weight_kg: p.canonical.weightKg,
-      signup_date: p.canonical.signupDate,
-      status: p.canonical.status,
-    }));
-}
-
-/** One orphan_intake item per intake whose patient does not exist; two actions (ADR-0006). */
-export function orphanItems(
-  orphans: readonly MappedIntake[],
-  data: Export,
-  ids: Ids,
-): ReviewItemDraft[] {
+export function orphanItems(orphans: readonly MappedIntake[], ids: Ids): ReviewItemDraft[] {
   return orphans.map((intake) => ({
     type: 'orphan_intake',
     scope: 'row',
@@ -207,9 +165,7 @@ export function orphanItems(
       intake_id: intake.intakeId,
       legacy_patient_id: intake.legacyPatientId,
       intake: intake.canonical,
-      look_alikes: lookAlikes(intake, data.patients),
       actions: ['attach_to_existing_patient', 'leave_unresolved'],
-      note: 'attaching needs a note: even a single look-alike is a guess',
     },
     proposedResolution: null,
     patientId: null,

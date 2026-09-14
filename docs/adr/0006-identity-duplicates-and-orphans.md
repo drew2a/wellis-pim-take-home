@@ -1,6 +1,7 @@
 # ADR-0006: Identity: duplicate patients, orphan intakes and duplicate intakes
 
 - **Status:** accepted
+- **Superseded in part by:** [ADR-0029](0029-an-orphan-intake-has-no-identity-to-match-on.md) (the look-alike paragraph under *Orphan intakes* and its "Neutral" consequence; the rest of this ADR stands)
 - **Amended by:** [ADR-0008](0008-re-runs-under-immutability-patient-membership-and-provenance.md) (a patient's records are those of every patient merged into it, transitively; `patient_legacy_ids` is not the membership mechanism)
 - **Date:** 2026-09-09
 - **Deciders:** Andrei Andreev

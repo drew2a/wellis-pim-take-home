@@ -382,7 +382,7 @@ describe('resolving an orphan intake', () => {
       field: 'patient_id',
       intakeId,
       title: 'intake INT-9902 references a patient that does not exist',
-      payload: { look_alikes: [], legacy_patient_id: 'reccXw7xuGLe0LLnN' },
+      payload: { legacy_patient_id: 'reccXw7xuGLe0LLnN' },
       dedupeKey: 'orphan_intake|row|legacy_intake:INT-9902|patient_id|ORPHAN|reccXw7xuGLe0LLnN',
     });
     return { itemId, intakeId };

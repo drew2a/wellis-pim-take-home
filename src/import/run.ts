@@ -214,7 +214,7 @@ function buildReviewItems({
     ...confirmationItems(data.patients, data.intakes),
     ...dobFlipItems(data, ids, rules),
     ...shiftedPatientItems(data, ids),
-    ...orphanItems(orphans, data, ids),
+    ...orphanItems(orphans, ids),
     ...humanOwnedConflictItems(conflicts),
     ...identityConflictItems(groups, { patientIds: ids.patients, consentStates }),
     ...plausibilityItems(

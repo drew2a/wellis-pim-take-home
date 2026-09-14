@@ -9,7 +9,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import type { ReactElement, ReactNode } from 'react';
 
-import { proposalOf } from '@/console/decisions/data-quality';
+import { maskedPayload, proposalOf } from '@/console/decisions/data-quality';
 import { poundsRowsOf } from '@/console/decisions/vocabulary';
 import { requireReviewer } from '@/console/guard';
 import { getDb } from '@/db/client';
@@ -171,10 +171,28 @@ const shown = (value: unknown): ReactNode => {
   );
 };
 
+/**
+ * The payload keys this card leaves out. `rows`, `actions` and `note` because the decision
+ * component beside it already renders them; `look_alikes` because it is dead data — ADR-0029
+ * removed the block, and a payload written before that keeps the key forever, since the insert is
+ * `onConflictDoNothing` on an unchanged `dedupe_key` and no later import rewrites it (ADR-0030).
+ */
+const NOT_EVIDENCE = new Set(['rows', 'actions', 'note', 'look_alikes']);
+
+/**
+ * Every other payload key, whatever it holds. This is a denylist, so a key a detector adds
+ * tomorrow reaches this card with nobody having decided that it should. That is safe because a
+ * payload is written already masked: `mapping-items.ts` masks the bsn as the item is built, not as
+ * it is shown, since `review_items.payload` is jsonb and out of reach of the console's
+ * column-level masking. A new payload key inherits that obligation at the write end, not here.
+ *
+ * One payload is deliberately exempt, and `maskedPayload` is where that debt is paid: ADR-0009
+ * item 9 (`SOURCE_KEY_REPEATED`) stores the repeated row whole and unmasked because this item is
+ * the only place that row survives, and assigns the masking to the console (ADR-0030).
+ */
 function evidenceOf(item: ReviewItemView['item']): EvidenceRow[] {
-  const payload = item.payload as Record<string, unknown>;
-  return Object.entries(payload)
-    .filter(([key]) => key !== 'rows' && key !== 'actions' && key !== 'note')
+  return Object.entries(maskedPayload(item))
+    .filter(([key]) => !NOT_EVIDENCE.has(key))
     .map(([term, value]) => ({ term, value: shown(value) }));
 }
 
@@ -186,18 +204,6 @@ function excludable(rows: ReturnType<typeof poundsRowsOf>): ExcludableRow[] {
     instead: `${row.as_pounds.weight_kg} kg, BMI ${row.as_pounds.bmi ?? '?'}`,
   }));
 }
-
-/** The look-alike patients an orphan item carries as context. Shape-tolerant: `payload` is jsonb. */
-function lookAlikes(payload: unknown): readonly Record<string, unknown>[] {
-  const rows = (payload as { look_alikes?: unknown }).look_alikes;
-  return Array.isArray(rows) ? (rows as Record<string, unknown>[]) : [];
-}
-
-/** One payload row as a line: `key value · key value`. Values are scalars or, rarely, nested. */
-const describe = (row: Record<string, unknown>): string =>
-  Object.entries(row)
-    .map(([key, value]) => `${key} ${scalar(value)}`)
-    .join(' · ');
 
 const scalar = (value: unknown): string => {
   if (value === null || value === undefined) return '—';
@@ -407,26 +413,10 @@ async function Decision({
   if (item.type === 'consent') return <ConsentItem view={view} after={after} />;
 
   if (item.type === 'orphan_intake') {
-    const found = lookAlikes(item.payload);
+    // No candidate patients are offered: the intake carries no identity field (ADR-0029).
     return (
       <OrphanDecision itemId={item.id} after={after}>
-        <Evidence
-          view={view}
-          extra={
-            <EvidenceCard
-              title="Patients that look like this one"
-              note="same height, weight within 10 %, signed up at most a year earlier"
-              rows={
-                found.length === 0
-                  ? [{ term: 'look-alikes', value: 'None. Search below.' }]
-                  : found.map((row, index) => ({
-                      term: `look-alike ${index + 1}`,
-                      value: describe(row),
-                    }))
-              }
-            />
-          }
-        />
+        <Evidence view={view} />
       </OrphanDecision>
     );
   }

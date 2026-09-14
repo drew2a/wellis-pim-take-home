@@ -10,6 +10,7 @@ import { z } from 'zod';
 
 import { elfproef } from '@/import/mapper/bsn';
 import type { reviewItems } from '@/db/schema';
+import { maskIdentifier } from '@/repo/mask';
 import { writableTarget, type FieldChange, type ResolvableEntity } from '@/repo/resolve';
 
 import { DecisionError, type Decision } from './types';
@@ -49,6 +50,41 @@ export function proposalOf(
   return parsed.success
     ? { value: parsed.data.proposed_value, rule: parsed.data.rule ?? null }
     : null;
+}
+
+/**
+ * The identifiers masked in `repeated_row` before it reaches a screen. `bsn` because it is the one
+ * identifier in this export and its retention is still an open vocabulary item; `phone` because it
+ * reaches a person directly. Not `full_name`, `dob` or `email`: they are how the reviewer tells the
+ * two versions of the row apart, and the console shows them on every other item about this patient.
+ */
+const MASKED_IN_REPEATED_ROW = ['bsn', 'phone'] as const;
+
+/** A raw row as the export gave it: every column a string, because nothing has been read yet. */
+const repeatedRowSchema = z.record(z.string(), z.string());
+
+/**
+ * The payload as a screen may show it. ADR-0009 item 9 — a natural key the export repeats with
+ * different values — deliberately carries `repeated_row` whole and unmasked: the raw table is keyed
+ * by that natural key, so the repeated line is stored nowhere else and a redacted copy would lose
+ * it. ADR-0009 put the masking on the console and the console never did it (ADR-0030); this is it.
+ *
+ * Every other payload arrives already masked from the item builder and passes through untouched.
+ *
+ * Throws rather than renders when `repeated_row` is present but is not a row of strings: a payload
+ * the console cannot mask is not a payload it may show.
+ */
+export function maskedPayload(item: typeof reviewItems.$inferSelect): Record<string, unknown> {
+  const payload = item.payload as Record<string, unknown>;
+  if (payload.repeated_row === undefined) return payload;
+
+  const row = repeatedRowSchema.parse(payload.repeated_row);
+  const masked: Record<string, string> = { ...row };
+  for (const field of MASKED_IN_REPEATED_ROW) {
+    const value = row[field];
+    if (value !== undefined) masked[field] = maskIdentifier(value);
+  }
+  return { ...payload, repeated_row: masked };
 }
 
 /**
