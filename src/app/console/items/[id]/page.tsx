@@ -187,18 +187,6 @@ function excludable(rows: ReturnType<typeof poundsRowsOf>): ExcludableRow[] {
   }));
 }
 
-/** The look-alike patients an orphan item carries as context. Shape-tolerant: `payload` is jsonb. */
-function lookAlikes(payload: unknown): readonly Record<string, unknown>[] {
-  const rows = (payload as { look_alikes?: unknown }).look_alikes;
-  return Array.isArray(rows) ? (rows as Record<string, unknown>[]) : [];
-}
-
-/** One payload row as a line: `key value · key value`. Values are scalars or, rarely, nested. */
-const describe = (row: Record<string, unknown>): string =>
-  Object.entries(row)
-    .map(([key, value]) => `${key} ${scalar(value)}`)
-    .join(' · ');
-
 const scalar = (value: unknown): string => {
   if (value === null || value === undefined) return '—';
   if (typeof value === 'object') return JSON.stringify(value);
@@ -407,26 +395,10 @@ async function Decision({
   if (item.type === 'consent') return <ConsentItem view={view} after={after} />;
 
   if (item.type === 'orphan_intake') {
-    const found = lookAlikes(item.payload);
+    // No candidate patients are offered: the intake carries no identity field (ADR-0029).
     return (
       <OrphanDecision itemId={item.id} after={after}>
-        <Evidence
-          view={view}
-          extra={
-            <EvidenceCard
-              title="Patients that look like this one"
-              note="same height, weight within 10 %, signed up at most a year earlier"
-              rows={
-                found.length === 0
-                  ? [{ term: 'look-alikes', value: 'None. Search below.' }]
-                  : found.map((row, index) => ({
-                      term: `look-alike ${index + 1}`,
-                      value: describe(row),
-                    }))
-              }
-            />
-          }
-        />
+        <Evidence view={view} />
       </OrphanDecision>
     );
   }

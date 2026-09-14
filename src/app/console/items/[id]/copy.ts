@@ -28,12 +28,12 @@ export const ITEM_COPY: Readonly<Record<ReviewItemType, ItemCopy>> = {
   },
   orphan_intake: {
     banner:
-      'The look-alikes are context, not a proposal: the importer attached none of them, because ' +
-      'even a single look-alike is a guess.',
+      'The intake carries nothing that identifies a person, so there is nothing to match on. ' +
+      'Attach it if you know who it is.',
     why:
       'The export referenced a patient row it did not contain. Attaching is a search, not a ' +
       'suggestion: the console will not guess an identity from body measurements, and there is no ' +
-      'button that invents a patient.',
+      'button that invents a patient (ADR-0029).',
     writes:
       'Attaching sets the intake’s patient and records who said so. Leaving it unresolved is an ' +
       'acceptable outcome, and the import report counts them.',
