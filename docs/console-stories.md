@@ -87,8 +87,10 @@ kind there is without clicking into it.
   *is* the state, so the status filter applies to items only and the type filter carries the
   states; the screen says so rather than silently ignoring one of them.
 - **Age** filter: today / this week / older, as S-2 defines them.
-- The **default view** is open items plus intakes in `auto_flagged` and `in_review` — 346 rows
-  today (340 + 6 + 0). No `legacy_*` intake appears until its state is selected.
+- The **default view** is everything waiting for a person: open items plus intakes in
+  `auto_cleared`, `auto_flagged`, `auto_rejected` and `in_review` (`docs/reviewer-day.md`). No
+  `draft`, `submitted`, `approved`, `rejected` or `legacy_*` intake appears until its state is
+  selected.
 - A filter that selects an empty set renders the table's empty line, naming what was selected —
   `draft`, `submitted` and `legacy_expired` are legitimately empty and say why.
 - A test iterates `reviewItemTypeEnum.enumValues` and `intakeStateEnum.enumValues` and asserts
@@ -460,8 +462,9 @@ unfinished form and not a reviewer's work; `submitted` exists only inside one re
 `legacy_expired` is unreachable by ADR-0014 and has 0 rows; `approved` and `rejected` are the
 reviewer's own finished decisions, which a reviewer does want to find again. *Decision:* the type
 filter offers **all twelve**, so the enum test is honest and no state is invisible, while the
-**default view** stays exactly the scenario's. The three that cannot have rows render the empty
-line and say why.
+**default view** stays the narrower set `docs/reviewer-day.md` names: the four states waiting for a
+person (`auto_cleared`, `auto_flagged`, `auto_rejected`, `in_review`). The three that cannot have
+rows render the empty line and say why.
 
 ### D-6
 **Counts.** 42 identity conflicts and 8 vocabulary items are the import's figures and are correct

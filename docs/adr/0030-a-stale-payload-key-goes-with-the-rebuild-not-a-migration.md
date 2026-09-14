@@ -1,6 +1,6 @@
 # ADR-0030: A stale payload key goes with the rebuild, not with a migration
 
-- **Status:** proposed
+- **Status:** accepted
 - **Date:** 2026-09-14
 - **Deciders:** Andrei Andreev
 - **Requirements:** R-A15, R-C5 · **Supersedes:** two claims in the *What changes* section of

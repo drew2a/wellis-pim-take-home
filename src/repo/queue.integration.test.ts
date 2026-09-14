@@ -206,15 +206,23 @@ describe('the filters', () => {
     expect(rows.map((row) => row.title).sort()).toEqual([...expected].sort());
   });
 
-  // docs/reviewer-day.md: auto_cleared and auto_rejected are not "done", and the 2917 legacy rows
-  // are not a queue. Both are one filter click away.
+  // docs/reviewer-day.md: auto_cleared is "clear for doctor review" and auto_rejected that nobody
+  // opens is a machine deciding alone, so both are in the view a reviewer works. A draft nobody has
+  // submitted and the 2917 legacy rows are not, and are one filter click away.
   it('opens on the open items and the intakes waiting for a person', async () => {
     await item({ title: 'an item' });
     await newFlowIntake(at(TODAY), ['submitted', 'auto_flagged']);
     await newFlowIntake(at(TODAY), ['submitted', 'auto_cleared']);
+    await newFlowIntake(at(TODAY), ['submitted', 'auto_rejected']);
+    await newFlowIntake(at(TODAY)); // still a draft
     await legacyIntake('INT-0001', TODAY, 'legacy_approved');
     const rows = await queuePage(db, DEFAULT_FILTERS, NOW);
-    expect(rows.rows.map((row) => row.type).sort()).toEqual(['auto_flagged', 'data_quality']);
+    expect(rows.rows.map((row) => row.type).sort()).toEqual([
+      'auto_cleared',
+      'auto_flagged',
+      'auto_rejected',
+      'data_quality',
+    ]);
   });
 
   it('stops at the limit and says there is more', async () => {

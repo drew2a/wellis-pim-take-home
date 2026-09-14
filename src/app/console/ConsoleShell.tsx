@@ -12,7 +12,7 @@ import type { ReactElement, ReactNode } from 'react';
 import type { ConsoleReviewer } from '@/console/reviewer';
 import { getDb } from '@/db/client';
 import { dayOf } from '@/intake/today';
-import { queueCounts, queuePage, type QueueRow } from '@/repo/queue';
+import { DEFAULT_FILTERS, queueCounts, queuePage, type QueueRow } from '@/repo/queue';
 import {
   ConsoleFrame,
   QueuePane,
@@ -101,11 +101,11 @@ export async function ConsoleShell({
   }));
 
   // The whole queue, not the filtered one: a count next to a place in the product says how much
-  // work is there, and does not move when the reviewer narrows the list below it.
+  // work is there, and does not move when the reviewer narrows the list below it. Its intake states
+  // are the default view's, so the number counts what clicking the row would show.
   const waiting =
     Object.values(counts.items).reduce((total, n) => total + n, 0) +
-    counts.intakes.auto_flagged +
-    counts.intakes.in_review;
+    DEFAULT_FILTERS.states.reduce((total, state) => total + counts.intakes[state], 0);
 
   const chosenTypes = new Set<string>(filters.types);
   const chosenStates = new Set<string>(filters.states);
