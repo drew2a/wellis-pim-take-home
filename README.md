@@ -3,6 +3,11 @@
 Take-home assignment for the Senior Engineer role on the Patient Information
 Management team at Wellis.
 
+**Deployed:** <https://wellis-pim-take-home-alpha.vercel.app> — the patient intake at
+`/intake`, the review console at `/console` behind `/login`. The console secret is in the
+submission message, not in this repository. The data behind it is this repository's
+`legacy_export/`, loaded by `npm run import` and by nothing else.
+
 Start with [ASSIGNMENT.md](ASSIGNMENT.md). The dataset you'll be working with is in
 [`legacy_export/`](legacy_export/), described in
 [`legacy_export/EXPORT-NOTES.md`](legacy_export/EXPORT-NOTES.md).
