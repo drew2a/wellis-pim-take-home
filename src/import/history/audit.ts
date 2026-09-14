@@ -83,6 +83,14 @@ function ageAt(dob: string | null, submittedAt: string | null): number | null {
 }
 
 /**
+ * The rule for the 58 minors an approval or a pending outcome left open. Exported because the
+ * console keys the words it offers a reviewer on it: what is done about a minor approved in 2024
+ * is not what is done about a GLP-1 medication, and a key that drifted from this string would
+ * silently go back to the generic line (`src/app/console/items/[id]/page.tsx`).
+ */
+export const MINOR_NOT_REJECTED = 'HISTORY_MINOR_NOT_REJECTED';
+
+/**
  * The legacy outcomes for which a minor's intake is a legal question rather than history.
  * `unknown` is one of them: the spelling could not be read, so the intake sits in `legacy_pending`,
  * the one non-terminal legacy state (ADR-0009 item 8), and nobody can say what the legacy process
@@ -142,7 +150,7 @@ export function clinicalHistoryItems(
           evaluation,
           {
             title: `intake from a patient aged ${age}, legacy outcome ${evaluation.legacyOutcome}`,
-            rule: 'HISTORY_MINOR_NOT_REJECTED',
+            rule: MINOR_NOT_REJECTED,
             reasonPrefix: 'rejected: age',
           },
           reasonFor(evaluation, 'rejected: age'),

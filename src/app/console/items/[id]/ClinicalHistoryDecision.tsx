@@ -11,10 +11,16 @@ import { DecisionBar, DetailBody, ENTER, NEEDS_A_NOTE } from '@/ui';
 export function ClinicalHistoryDecision({
   itemId,
   after,
+  placeholder,
   children,
 }: {
   readonly itemId: string;
   readonly after: string;
+  /**
+   * The actions a reviewer picks from when they write the reason. Per rule rather than per kind:
+   * what is done about a minor approved in 2024 is not what is done about a GLP-1 medication.
+   */
+  readonly placeholder: string;
   readonly children: ReactNode;
 }): ReactElement {
   const decide = useDecide(`/api/console/items/${itemId}/resolve`, after);
@@ -26,7 +32,7 @@ export function ClinicalHistoryDecision({
       <DecisionBar
         note={decide.note}
         onNote={decide.setNote}
-        placeholder="What was done — the patient was contacted, the care plan was adjusted, nothing was needed"
+        placeholder={placeholder}
         unavailable={held}
         error={decide.failure}
         actions={[
