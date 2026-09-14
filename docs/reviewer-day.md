@@ -16,7 +16,16 @@ One screen, one table. Every row is one thing to do: a review item or an intake.
 - Filters: **type** (identity_conflict, orphan_intake, duplicate_intake, consent, data_quality,
   vocabulary, clinical_history, and intakes by state: auto_flagged, auto_rejected, auto_cleared,
   in_review, legacy_pending, legacy_approved, legacy_rejected), **age** (today / this week /
-  older), **status** (open / resolved / dismissed; default open). Sort: oldest first.
+  older), **status** (open / resolved / dismissed; default open).
+- **Order: people waiting come before data to clean** (ADR-0031). The intakes waiting for a person
+  sort above the review items, and inside each group the oldest is first; the "newest first" button
+  flips the age inside each group and never moves the groups past one another. The two sources the
+  queue combines are not equally urgent — a patient who submitted this morning is waiting for a
+  decision, a consent gap from 2023 is not — and age alone cannot tell them apart: after a fresh
+  import every review item carries the import moment as its `created_at`, so the hundreds of open
+  items are all exactly the same age and an intake submitted after that import sorts below every
+  one of them. A count in the rail proves an intake is in the view; it is not the same as a
+  reviewer seeing it. Nothing else is sortable (a scope cut).
 - Counts per type visible without clicking. Every state of ADR-0014 is reachable here.
 - Default view: **everything waiting for a person** — open items, and intakes in auto_cleared,
   auto_flagged, auto_rejected and in_review. auto_cleared is the brief's "clear for doctor review",

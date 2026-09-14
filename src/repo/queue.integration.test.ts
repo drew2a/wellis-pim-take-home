@@ -120,7 +120,7 @@ async function item(
 const at = (iso: string): Date => new Date(`${iso}T09:00:00+02:00`);
 
 describe('one queue, both sources of work', () => {
-  it('lists review items and intakes together, oldest first', async () => {
+  it('lists review items and intakes together, in one list', async () => {
     await item({ title: 'newest item' }, at(TODAY));
     await legacyIntake('INT-0001', LONG_AGO);
     await item({ title: 'older item' }, at(THIS_WEEK));
@@ -128,6 +128,33 @@ describe('one queue, both sources of work', () => {
     const rows = await rowsOf({ states: ['legacy_pending'] });
     expect(rows.map((row) => row.title)).toEqual(['INT-0001', 'older item', 'newest item']);
     expect(rows.map((row) => row.kind)).toEqual(['intake', 'review_item', 'review_item']);
+  });
+
+  // The two sources are not equally urgent: a patient who submitted this morning is waiting for a
+  // decision, a consent gap from 2023 is not. Age alone buries a new intake among hundreds of items
+  // — and after a fresh import every one of those items carries the import moment as its age, so
+  // age does not order them at all (`docs/reviewer-day.md`).
+  it('puts the intakes waiting for a person above the review items, whatever their age', async () => {
+    await item({ title: 'an item raised long ago' }, at(LONG_AGO));
+    await newFlowIntake(at(TODAY), ['submitted', 'auto_flagged']);
+
+    const rows = await queuePage(db, DEFAULT_FILTERS, NOW);
+    expect(rows.rows.map((row) => row.kind)).toEqual(['intake', 'review_item']);
+  });
+
+  it('orders by age inside each group', async () => {
+    await item({ title: 'newer item' }, at(TODAY));
+    await item({ title: 'older item' }, at(LONG_AGO));
+    await legacyIntake('INT-0002', THIS_WEEK);
+    await legacyIntake('INT-0001', LONG_AGO);
+
+    const rows = await rowsOf({ states: ['legacy_pending'] });
+    expect(rows.map((row) => row.title)).toEqual([
+      'INT-0001',
+      'INT-0002',
+      'older item',
+      'newer item',
+    ]);
   });
 
   it('says what kind of work each row is: the item type, or the intake state', async () => {
@@ -153,11 +180,18 @@ describe('how old a row is', () => {
     expect(row?.age?.toISOString()).toBe(draftAt.toISOString());
   });
 
-  it('lists a row nothing dates, last, rather than dropping it', async () => {
+  // Last of its own group, not last of the queue: an intake nothing dates is still a person
+  // waiting, so it keeps its place above the data to clean (`docs/reviewer-day.md`, ADR-0031).
+  it('lists a row nothing dates, last of its group, rather than dropping it', async () => {
     await legacyIntake('INT-0001', null);
     await legacyIntake('INT-0002', TODAY);
-    const rows = await rowsOf({ types: [], states: ['legacy_pending'] });
-    expect(rows.map((row) => row.title)).toEqual(['INT-0002', 'INT-0001']);
+    await item({ title: 'an item raised long ago' }, at(LONG_AGO));
+    const rows = await rowsOf({ states: ['legacy_pending'] });
+    expect(rows.map((row) => row.title)).toEqual([
+      'INT-0002',
+      'INT-0001',
+      'an item raised long ago',
+    ]);
     expect(rows[1]?.age).toBeNull();
   });
 });

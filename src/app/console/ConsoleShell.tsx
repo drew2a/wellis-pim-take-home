@@ -91,6 +91,7 @@ export async function ConsoleShell({
 
   const items: QueueItem[] = rows.map((row) => ({
     key: `${row.kind}:${row.id}`,
+    kind: row.kind,
     href: hrefOf(row, query),
     tone: row.kind === 'intake' ? toneForState(row.type) : toneForReviewItem(row.type),
     kindLabel: titled(row.type),
@@ -172,8 +173,8 @@ export async function ConsoleShell({
         ages={ages}
         footnote={
           page.more
-            ? `Oldest first. The oldest ${rows.length} are shown, which is a page and not the whole of it — the counts in the rail are over everything.`
-            : 'Oldest first. The rail counts every open item and every intake; the scope above says which status this list is of.'
+            ? `Intakes waiting for a person first, then the review items, oldest first inside each. ${rows.length} rows are shown, which is a page and not the whole of it — the counts in the rail are over everything.`
+            : 'Intakes waiting for a person first, then the review items, oldest first inside each. The rail counts every open item and every intake; the scope above says which status this list is of.'
         }
       />
 

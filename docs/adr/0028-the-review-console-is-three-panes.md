@@ -1,6 +1,10 @@
 # ADR-0028: The review console is three panes, and the queue never leaves the screen
 
 - **Status:** accepted
+- **Superseded in part by:** [ADR-0031](0031-people-waiting-come-before-data-to-clean.md) (proposed)
+  — the sorting half of the *"Age stays"* bullet in §3: the queue orders the intakes waiting for a
+  person above the review items, and the toggle flips the age inside each group rather than
+  reversing the rendered page. The rest of that bullet, and of this ADR, stands.
 - **Date:** 2026-09-13
 - **Deciders:** Andrei Andreev
 - **Requirements:** R-C1, R-C2, R-C3, R-C4, R-C5, R-C6, R-S4 · **Amends:** ADR-0018 (extends the
