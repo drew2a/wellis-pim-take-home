@@ -2,6 +2,7 @@
 // the status codes, the messages and the `Set-Cookie` a reviewer's browser actually gets.
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { unauthorized } from '@/app/api/http';
 import { reviewers } from '@/db/schema';
 import { loadEnv } from '@/env';
 import { createTestDatabase, type TestDatabase, type TestDb } from '@/test/database';
@@ -86,17 +87,31 @@ describe('POST /api/console/session', () => {
   // A login page that said "no such reviewer" would enumerate the care team for anyone with the
   // URL, so the two failures are one answer.
   it('refuses an unknown reviewer with the same answer as a wrong secret', async () => {
-    await seed('Dr Vermeer');
+    const reviewerId = await seed('Dr Vermeer');
     const unknown = await post({
       reviewerId: '00000000-0000-4000-8000-000000000000',
       secret: SECRET,
     });
-    const wrongSecret = await post({
-      reviewerId: '00000000-0000-4000-8000-000000000000',
-      secret: 'nope',
-    });
+    const wrongSecret = await post({ reviewerId, secret: 'z'.repeat(SECRET.length) });
     expect(unknown.status).toBe(401);
+    expect(wrongSecret.status).toBe(401);
     await expect(unknown.json()).resolves.toEqual(await wrongSecret.json());
+  });
+
+  // `unauthorized()` sends a caller with no session to the login page. On the login page itself
+  // that sentence tells the reviewer to do what they are doing, so this route has its own text.
+  it('tells a refused reviewer the attempt failed, not to go and sign in', async () => {
+    const reviewerId = await seed('Dr Vermeer');
+    const redirectSentence = ((await unauthorized().json()) as { error: string }).error;
+
+    for (const body of [
+      { reviewerId, secret: 'z'.repeat(SECRET.length) },
+      { reviewerId: '00000000-0000-4000-8000-000000000000', secret: SECRET },
+    ]) {
+      const refusal = (await (await post(body)).json()) as { error: string };
+      expect(refusal.error).not.toBe(redirectSentence);
+      expect(refusal.error).not.toBe('');
+    }
   });
 
   // The whole reason the session exists: the caller may not say who they are or what they may do.
