@@ -320,6 +320,14 @@ of it. 6 `auto_flagged`, 4 `auto_cleared`, 1 `auto_rejected` today.
   ("flagged: current GLP-1 medication (rybelsus 7 mg)"), `payload.matched_terms`,
   `payload.legacy_outcome` next to `payload.shadow_outcome`, and the patient's current status and
   consent state.
+- **The patient now**, on all three rules: status, consent state, and their age on the import's
+  `--as-of` — the three facts that say whether the item is urgent or archival, and the ones the
+  payload cannot carry because it describes an intake from 2024. Over the 58 minor approvals the
+  patients are 26 active, 10 paused, 15 churned and 7 prospect, and a 17-year-old approved then may
+  be an adult today.
+- The reason field names what is actually done about this class: for a minor approval, that the
+  patient or guardian was contacted, that participation was paused, or that the patient is an adult
+  now and the record stands.
 - **Resolve** or **dismiss**, each with a required note; each writes an audit entry with both
   states null (ADR-0014 item 7).
 - A test asserts the legacy intake's `state` and `outcome` are unchanged after either action.

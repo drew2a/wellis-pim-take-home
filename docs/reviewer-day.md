@@ -66,8 +66,10 @@ One screen, one table. Every row is one thing to do: a review item or an intake.
    have no door; their disagreements are clinical_history items.
 10. **Work a clinical_history item** (115). Example: legacy intake approved 2024-07, meds_current
     "Ozempic 0,5 mg" — "flagged: current GLP-1 medication (Ozempic 0,5 mg)". Sees the legacy
-    intake, the reason, the legacy outcome, the patient's current status and consent. Actions:
-    **resolve** with a note (patient contacted, care plan adjusted, no action needed) or
+    intake, the reason, the legacy outcome, and **the patient now**: status, consent state and
+    their age on the import's `--as-of`, which is what says whether the case is urgent or
+    archival. Actions: **resolve** with a note (patient contacted, care plan adjusted, no action
+    needed; for a minor approval: guardian contacted, participation paused, an adult now) or
     **dismiss** with a note. The historical outcome never changes.
 
 ## Patient detail — everyone

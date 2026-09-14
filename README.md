@@ -267,6 +267,15 @@ Each is a decision, not an omission (R-S4):
   pick any name on the list. There is no registration, no password reset, no per-reviewer
   credential, no lockout and no audit of failed logins. **A real deployment plugs SSO in here**,
   against `audit_entries.actor_reviewer_id`, which is already the stable identity.
+- **A clinical finding cannot change the patient's participation.** A doctor working a
+  `clinical_history` item — say an intake approved for a 17-year-old, and 26 of those 58 patients
+  are `active` today — records what was done and closes it. They cannot flip the historical
+  outcome, by design: `legacy_approved` is the fact that a doctor approved it in 2024, and
+  rewriting it would put a false statement in the record (ADR-0005, ADR-0014). What is missing is
+  the other half: acting on a patient who should not still be in the programme is a decision about
+  `patients.status`, and no item writes it (ADR-0023 item 3 refused it for consent items on the
+  same reasoning). Today the decision lives in the note and its audit entry; enforcing it is the
+  next thing I would build, and it belongs to the patient, not to the historical intake.
 - **An abandoned draft stays forever**, as a `draft` row with partial answers and no patient. No
   expiry is built.
 - **No unmerge screen.** `unmergePatient` exists, is the exact inverse of a merge and is tested;

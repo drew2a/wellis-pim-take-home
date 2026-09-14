@@ -13,6 +13,7 @@ import { proposalOf } from '@/console/decisions/data-quality';
 import { poundsRowsOf } from '@/console/decisions/vocabulary';
 import { requireReviewer } from '@/console/guard';
 import { getDb } from '@/db/client';
+import { MINOR_NOT_REJECTED } from '@/import/history/audit';
 import { dayOf } from '@/intake/today';
 import { COMPARED_FIELDS, conflictView, DECIDABLE_FIELDS } from '@/repo/identity';
 import {
@@ -20,6 +21,8 @@ import {
   currentValueOf,
   derivedConsentState,
   findReviewItem,
+  patientStanding,
+  type PatientStanding,
   type ReviewItemView,
 } from '@/repo/items';
 import { writableTarget } from '@/repo/resolve';
@@ -68,6 +71,50 @@ const QUESTIONS: Readonly<Record<string, string>> = {
 };
 
 const DEFAULT_QUESTION = 'Confirm records that the importer read this correctly.';
+
+/**
+ * What a reviewer is being asked to type, in the words of what is actually done about this class
+ * of item. The minor approvals are the class where the generic line is worst: the three things a
+ * doctor does about one are not "the care plan was adjusted".
+ */
+const REASONS: Readonly<Record<string, string>> = {
+  [MINOR_NOT_REJECTED]:
+    'What was done — the patient or guardian was contacted, participation was paused, the patient is an adult now and the record stands',
+};
+
+const DEFAULT_REASON =
+  'What was done — the patient was contacted, the care plan was adjusted, nothing was needed';
+
+/** Consent as it stands, in the words the consent screens use. */
+const consentNow = (states: Readonly<Record<string, string>>): string =>
+  Object.values(states).join(', ') || 'no record';
+
+/**
+ * Whether this person is still in the programme, which is the first question a `clinical_history`
+ * item raises and the one its payload cannot answer: the payload describes an intake from 2024.
+ * Over the 58 minor approvals the patients are 26 active, 10 paused, 15 churned and 7 prospect,
+ * and a 17-year-old approved then may be an adult now — so the age is given as of the import's
+ * reference date rather than left to be worked out from a date of birth.
+ */
+function Standing({ standing }: { readonly standing: PatientStanding }): ReactElement {
+  return (
+    <EvidenceCard
+      title="The patient now"
+      note={`as of ${standing.asOf}, the import’s reference date`}
+      rows={[
+        { term: 'status', value: standing.status },
+        {
+          term: 'age',
+          value:
+            standing.ageYears === null
+              ? 'unknown — the export gave no date of birth'
+              : String(standing.ageYears),
+        },
+        { term: 'consent', value: consentNow(standing.consent) },
+      ]}
+    />
+  );
+}
 
 /**
  * Why a `data_quality` item has no value to write, in one line. The consent case names the table
@@ -271,7 +318,7 @@ async function IdentityConflict({
         patientId: candidate.patientId,
         label: candidate.fields.full_name ?? candidate.patientId,
         intakeCount: candidate.intakeCount,
-        consent: Object.values(candidate.consentStates).join(', ') || 'no record',
+        consent: consentNow(candidate.consentStates),
         legacyIds: candidate.legacyIds,
       }))}
       rows={COMPARED_FIELDS.map((field) => ({
@@ -425,27 +472,35 @@ async function Decision({
   }
 
   if (item.type === 'clinical_history') {
+    const standing = await patientStanding(getDb(), item);
     return (
-      <ClinicalHistoryDecision itemId={item.id} after={after}>
+      <ClinicalHistoryDecision
+        itemId={item.id}
+        after={after}
+        placeholder={REASONS[rule] ?? DEFAULT_REASON}
+      >
         <Evidence
           view={view}
           extra={
-            view.intake === null ? null : (
-              <EvidenceCard
-                title="The intake this is about"
-                rows={[
-                  {
-                    term: 'intake',
-                    value: (
-                      <Link href={`/console/intakes/${view.intake.id}`}>
-                        {view.intake.intakeId ?? view.intake.id}
-                      </Link>
-                    ),
-                  },
-                  { term: 'state', value: humanise(view.intake.state) },
-                ]}
-              />
-            )
+            <>
+              {standing !== null && <Standing standing={standing} />}
+              {view.intake === null ? null : (
+                <EvidenceCard
+                  title="The intake this is about"
+                  rows={[
+                    {
+                      term: 'intake',
+                      value: (
+                        <Link href={`/console/intakes/${view.intake.id}`}>
+                          {view.intake.intakeId ?? view.intake.id}
+                        </Link>
+                      ),
+                    },
+                    { term: 'state', value: humanise(view.intake.state) },
+                  ]}
+                />
+              )}
+            </>
           }
         />
       </ClinicalHistoryDecision>
