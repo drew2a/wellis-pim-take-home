@@ -17,10 +17,14 @@ One screen, one table. Every row is one thing to do: a review item or an intake.
   vocabulary, clinical_history, and intakes by state: auto_flagged, auto_rejected, auto_cleared,
   in_review, legacy_pending, legacy_approved, legacy_rejected), **age** (today / this week /
   older), **status** (open / resolved / dismissed; default open). Sort: oldest first.
-- Counts per type visible without clicking. Every state of ADR-0014 is reachable here —
-  auto_cleared and auto_rejected are not "done".
-- Default view: open items and intakes in auto_flagged / in_review. Legacy_* states only via the
-  filter.
+- Counts per type visible without clicking. Every state of ADR-0014 is reachable here.
+- Default view: **everything waiting for a person** — open items, and intakes in auto_cleared,
+  auto_flagged, auto_rejected and in_review. auto_cleared is the brief's "clear for doctor review",
+  which is a doctor's inbox and not a finished case; an auto_rejected intake nobody opens is a
+  machine taking the final decision on a person's eligibility with no human in the loop, which is
+  why ADR-0014 keeps the auto_rejected → in_review edge. Out of the default and one filter click
+  away: draft (the patient is still filling it in), submitted (transient inside one request),
+  approved and rejected (decided), and every legacy_* state (history).
 
 ## Ops — actions
 
@@ -54,10 +58,11 @@ One screen, one table. Every row is one thing to do: a review item or an intake.
 
 ## Doctor — actions (the clinical half of the same queue)
 
-8. **Review a new intake** (auto_flagged first; auto_rejected and auto_cleared reachable).
-   Example: intake from today, "flagged: current GLP-1 medication (declared by patient)".
-   Sees the answers as given (structured fields, free text as typed), the engine's evaluation:
-   outcome, every reason line, the inputs it saw (age, BMI, matched terms), ruleset version.
+8. **Review a new intake** (auto_flagged first; auto_cleared and auto_rejected sit beside it in
+   the default view, not behind a filter). Example: intake from today, "flagged: current GLP-1
+   medication (declared by patient)". Sees the answers as given (structured fields, free text as
+   typed), the engine's evaluation: outcome, every reason line, the inputs it saw (age, BMI,
+   matched terms), ruleset version.
    Actions: **claim** → in_review with the reviewer as actor (a second reviewer sees "claimed by
    Dr Vermeer" and cannot claim); **approve** / **reject** with a note (approve of an under-18
    intake is refused with the reason shown, for everyone); **open the patient**.

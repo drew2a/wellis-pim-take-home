@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_FILTERS } from '@/repo/queue';
 
 import { intakeStateEnum, reviewItemTypeEnum } from '@/db/schema';
+import type { IntakeState } from '@/intake/machine';
 
 import { filtersFrom, ITEM_TYPE_ORDER, STATE_ORDER, toggled, withParam } from './queue-filters';
 
@@ -18,6 +19,55 @@ describe('the filters on offer', () => {
     expect([...STATE_ORDER].sort()).toEqual([...intakeStateEnum.enumValues].sort());
     expect(STATE_ORDER).toContain('legacy_expired');
     expect(STATE_ORDER).toContain('draft');
+  });
+});
+
+// The default view is every intake waiting for a person (docs/reviewer-day.md). `auto_cleared` is
+// the brief's "clear for doctor review" — a doctor's inbox, not a finished case — and an
+// `auto_rejected` intake nobody opens is a machine taking the final decision on a person's
+// eligibility, which is why ADR-0014 keeps the auto_rejected → in_review edge. Placing every state
+// on one side or the other is what stops the view drifting back to a narrower one.
+describe('the default view', () => {
+  const WAITING_FOR_A_PERSON: readonly IntakeState[] = [
+    'auto_cleared',
+    'auto_flagged',
+    'auto_rejected',
+    'in_review',
+  ];
+
+  /** Not yet a person's to do (`draft`, `submitted`), already decided, or history. */
+  const NOT_WAITING: readonly IntakeState[] = [
+    'draft',
+    'submitted',
+    'approved',
+    'rejected',
+    'legacy_pending',
+    'legacy_approved',
+    'legacy_rejected',
+    'legacy_expired',
+  ];
+
+  it('holds exactly the intake states waiting for a person', () => {
+    expect([...DEFAULT_FILTERS.states].sort()).toEqual([...WAITING_FOR_A_PERSON].sort());
+  });
+
+  it('leaves out the states nobody is waiting on, which the filter still offers', () => {
+    for (const state of NOT_WAITING) {
+      expect(DEFAULT_FILTERS.states).not.toContain(state);
+      expect(STATE_ORDER).toContain(state);
+    }
+  });
+
+  // A thirteenth state has to be put on one side or the other, here and in reviewer-day.md.
+  it('accounts for every state of the enum, in or out', () => {
+    expect([...WAITING_FOR_A_PERSON, ...NOT_WAITING].sort()).toEqual(
+      [...intakeStateEnum.enumValues].sort(),
+    );
+  });
+
+  it('holds every review-item type, open only, because an open item is work', () => {
+    expect([...DEFAULT_FILTERS.types].sort()).toEqual([...reviewItemTypeEnum.enumValues].sort());
+    expect(DEFAULT_FILTERS.status).toBe('open');
   });
 });
 

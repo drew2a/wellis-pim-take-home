@@ -48,20 +48,23 @@ export interface QueueCounts {
 }
 
 /**
- * Enough that the default view — every open item plus the intakes waiting for a person, 346 rows
- * on this export — arrives whole, so nothing a reviewer is meant to act on today is on a page that
- * does not exist. A filter that selects the 2068 legacy approvals is capped, and says so.
+ * Enough that the default view — every open item plus every intake waiting for a person — arrives
+ * whole, so nothing a reviewer is meant to act on today is on a page that does not exist. A filter
+ * that selects the 2068 legacy approvals is capped, and says so.
  */
 const DEFAULT_LIMIT = 500;
 
 /**
- * The queue a reviewer lands on: everything still open, and the intakes waiting for a person.
- * `auto_cleared` and `auto_rejected` are not "done" and are one filter click away, but a queue
+ * The queue a reviewer lands on: everything still open, and every intake waiting for a person.
+ * `auto_cleared` is "clear for doctor review" and `auto_rejected` that nobody opens is a machine
+ * taking the last word on a person's eligibility — neither is "done", so both are in the view a
+ * reviewer works rather than one filter click away. Out of it: `draft` and `submitted` (nobody is
+ * waiting yet), `approved` and `rejected` (decided), and the `legacy_*` history, because a queue
  * that opened with 2917 legacy rows in it would not be a queue (`docs/reviewer-day.md`).
  */
 export const DEFAULT_FILTERS: QueueFilters = {
   types: reviewItemTypeEnum.enumValues,
-  states: ['auto_flagged', 'in_review'],
+  states: ['auto_flagged', 'auto_rejected', 'auto_cleared', 'in_review'],
   status: 'open',
 };
 

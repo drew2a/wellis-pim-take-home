@@ -41,6 +41,15 @@ aborted its own request, so it never left "Starting your intake…"; a wrong con
 patient timeline printed every normalisation twice, once as prose and once as a code pill. Tests
 assert that a fact reaches the screen, not that it reaches it once.
 
+Using it also corrected a decision of my own. `docs/reviewer-day.md`, which I wrote as the console's
+decision record, put the queue's default view at open items plus intakes in `auto_flagged` and
+`in_review`. Then I submitted an intake on the deployed console and could not find it: it had been
+cleared, and `auto_cleared` sat behind a filter. The brief calls that outcome "clear for doctor
+review" — it is the doctor's main inbox, not a finished state — and an `auto_rejected` intake nobody
+opens means a machine took the last word on a person's eligibility. The default view now holds
+everything waiting for a person, and I changed the decision record rather than the code's behaviour
+alone.
+
 **Stopped it.**
 
 - It launched the profiling subagent right after presenting the plan, before I had accepted it. I

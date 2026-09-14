@@ -80,7 +80,7 @@ export function filtersFrom(params: SearchParams): QueueFilters {
  * - **The default view is not a selection.** It is what a reviewer sees *before* they make one, so
  *   the first click on a kind means "show me this kind", not "all of them except this one". Read
  *   from `DEFAULT_FILTERS` instead, clicking Consent on the queue as it opens selected the other
- *   six types and both intake states, and lit up eight rows of the rail.
+ *   six types and all four default intake states, and lit up ten rows of the rail.
  * - **Clicking the only selected kind goes back.** Unticking the last one would otherwise mean the
  *   empty selection, which is a legitimate thing for a URL to say (`filtersFrom` honours `type=`)
  *   and a dead end to arrive at by clicking the row you are already on.
