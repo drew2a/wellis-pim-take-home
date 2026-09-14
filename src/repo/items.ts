@@ -1,9 +1,10 @@
 // Reading one review item with the context a reviewer needs to decide it (ADR-0024): the item, the
 // rule that raised it, and the rows it is about.
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, inArray } from 'drizzle-orm';
 
 import type { Queryable } from '@/db/queryable';
-import { consentStates, intakes, patients, reviewItems } from '@/db/schema';
+import { consentStates, importRuns, intakes, patients, reviewItems } from '@/db/schema';
+import { ageInYears } from '@/eligibility/age';
 import { consentTypeOf } from '@/import/detect/consent';
 import { ruleOf } from '@/import/review/items';
 
@@ -112,6 +113,71 @@ export async function derivedConsentState(
     .from(consentStates)
     .where(and(eq(consentStates.patientId, survivor), eq(consentStates.type, consentTypeOf(item))));
   return row?.state ?? null;
+}
+
+export interface PatientStanding {
+  /** The patient's commercial standing: active, paused, churned, prospect (`CLAUDE.md` §6). */
+  readonly status: string;
+  /** Their age on `asOf`, or null when the export gave no date of birth. */
+  readonly ageYears: number | null;
+  /** The `--as-of` of the run that imported them, which every "now" here is measured from. */
+  readonly asOf: string;
+  /** Consent as it stands, per type; empty for a patient with no state at all. */
+  readonly consent: Readonly<Record<string, string>>;
+}
+
+/**
+ * Whether this person is still in the programme, for an item that asks what to do about their
+ * history. A `clinical_history` item is urgent or archival depending on three facts that are
+ * nowhere in its payload — the payload describes an intake from 2024 — and a reviewer who has to
+ * open the patient's page to find them decides 115 items with the queue out of sight.
+ *
+ * The age is measured from the import's `--as-of` rather than the wall clock, so that it is the
+ * same date the report counted minors against (ADR-0009 item 5): a 17-year-old approved in 2024
+ * may be an adult now, and which it is decides the item.
+ */
+export async function patientStanding(
+  db: Queryable,
+  item: typeof reviewItems.$inferSelect,
+): Promise<PatientStanding | null> {
+  if (item.patientId === null) return null;
+  const survivor = await survivorOf(db, item.patientId);
+  const [row] = await db
+    .select({ status: patients.status, dob: patients.dob })
+    .from(patients)
+    .where(eq(patients.id, survivor));
+  if (row === undefined) return null;
+
+  const asOf = await importedAsOf(db);
+  const states = await db
+    .select({ type: consentStates.type, state: consentStates.state })
+    .from(consentStates)
+    .where(eq(consentStates.patientId, survivor));
+
+  return {
+    status: row.status,
+    ageYears: row.dob === null ? null : ageInYears(row.dob, asOf),
+    asOf,
+    consent: Object.fromEntries(states.map((each) => [each.type, each.state])),
+  };
+}
+
+/**
+ * The reference date of the most recent real import. Dry runs are skipped: one is a rehearsal that
+ * wrote nothing, and letting its `--as-of` date the console would move every age on screen without
+ * a row having changed.
+ */
+async function importedAsOf(db: Queryable): Promise<string> {
+  const [run] = await db
+    .select({ asOf: importRuns.asOf })
+    .from(importRuns)
+    .where(eq(importRuns.dryRun, false))
+    .orderBy(desc(importRuns.id))
+    .limit(1);
+  if (run === undefined) {
+    throw new Error('no import run has stored an as-of date to measure an age against');
+  }
+  return run.asOf;
 }
 
 /** Whether a patient a reviewer named still exists, before a decision references it. */
