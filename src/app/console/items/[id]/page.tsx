@@ -171,10 +171,31 @@ const shown = (value: unknown): ReactNode => {
   );
 };
 
+/**
+ * The payload keys this card leaves out. `rows`, `actions` and `note` because the decision
+ * component beside it already renders them; `look_alikes` because it is dead data — ADR-0029
+ * removed the block, and a payload written before that keeps the key forever, since the insert is
+ * `onConflictDoNothing` on an unchanged `dedupe_key` and no later import rewrites it (ADR-0030).
+ */
+const NOT_EVIDENCE = new Set(['rows', 'actions', 'note', 'look_alikes']);
+
+/**
+ * Every other payload key, whatever it holds. This is a denylist, so a key a detector adds
+ * tomorrow reaches this card with nobody having decided that it should. That is safe because a
+ * payload is written already masked: `mapping-items.ts` masks the bsn as the item is built, not as
+ * it is shown, since `review_items.payload` is jsonb and out of reach of the console's
+ * column-level masking. A new payload key inherits that obligation at the write end, not here.
+ *
+ * One payload is deliberately exempt. ADR-0009 item 9 (`SOURCE_KEY_REPEATED`) carries the repeated
+ * row whole and unmasked because this item is the only place that row survives, and ADR-0009 makes
+ * masking it the console's job. This export produces none of those items (`repeatedKeys: 0` in the
+ * import report), so nothing renders unmasked today; the day one appears, the masking belongs here
+ * (ADR-0030).
+ */
 function evidenceOf(item: ReviewItemView['item']): EvidenceRow[] {
   const payload = item.payload as Record<string, unknown>;
   return Object.entries(payload)
-    .filter(([key]) => key !== 'rows' && key !== 'actions' && key !== 'note')
+    .filter(([key]) => !NOT_EVIDENCE.has(key))
     .map(([term, value]) => ({ term, value: shown(value) }));
 }
 
