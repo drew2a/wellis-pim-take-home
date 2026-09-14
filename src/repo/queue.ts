@@ -101,9 +101,16 @@ const inList = (column: SQL, values: readonly string[]): SQL =>
   values.length === 0 ? sql`false` : sql`${column} in ${[...values]}`;
 
 /**
- * One page of the queue, oldest first — the order a queue is worked in, and the only order offered
- * (sorting beyond age is a scope cut, R-S4).
+ * The order the queue is worked in: the intakes waiting for a person first, then the review items,
+ * each group oldest first (`docs/reviewer-day.md`). The two sources are not equally urgent — a
+ * patient who submitted this morning is waiting for a decision, a consent gap from 2023 is not —
+ * and age alone cannot separate them: after a fresh import every review item carries the import
+ * moment as its `created_at`, so a new intake lands among hundreds of same-aged rows arbitrarily.
+ * Nothing beyond this is sortable (a scope cut, R-S4).
  */
+const WORK_FIRST = sql`(case when kind = 'intake' then 0 else 1 end)`;
+
+/** One page of the queue, in the order `WORK_FIRST` describes. */
 export async function queuePage(
   db: Queryable,
   filters: QueueFilters,
@@ -164,7 +171,7 @@ export async function queuePage(
     )
     select * from work
     where ${ageCondition(filters.age, now)}
-    order by age asc nulls last, id asc
+    order by ${WORK_FIRST}, age asc nulls last, id asc
     limit ${limit + 1}
   `);
 

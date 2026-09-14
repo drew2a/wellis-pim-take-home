@@ -219,8 +219,10 @@ is the one thing standing between a minor and an approval.
 `/console`, behind `/login`. Three panes (ADR-0028): a dark rail of every kind of open work with its
 count, the queue, and the piece of work that is open — so deciding an item never costs a reviewer
 their place in the list. One queue combines both sources of work, the review items the import could
-not decide and the intakes waiting for a person, oldest first. On this export that is **340 open
-items and 6 flagged intakes**, with every count taken from the database rather than from the page.
+not decide and the intakes waiting for a person — the intakes above the items, each group oldest
+first, because people waiting come before data to clean
+([`docs/reviewer-day.md`](docs/reviewer-day.md)). On this export that is **340 open items and 6
+flagged intakes**, with every count taken from the database rather than from the page.
 
 The filters are the URL: the rail's kinds, the scope (open / resolved / dismissed) and the age are
 query parameters, so a filtered queue survives a reload and can be kept in a tab. A kind narrows to
@@ -294,8 +296,8 @@ Each is a decision, not an omission (R-S4):
   import run is the report in `reports/`.
 - **No bulk actions**, except the row-by-row exclusion on a vocabulary item — which is not a bulk
   action but the opposite: one decision, applied to the rows a person kept.
-- **The queue shows a page, not everything.** 500 rows, oldest first, which is the whole of the
-  default view; a filter that selects the 2068 legacy approvals says it is showing a page.
+- **The queue shows a page, not everything.** 500 rows, the intakes waiting for a person and then
+  the oldest items, which is the whole of the default view; a filter that selects the 2068 legacy approvals says it is showing a page.
 - **A reviewer has no role, and the console enforces no permissions** (ADR-0027). Approving and
   rejecting were once gated on a `doctor` role; with one shared secret and the name picked from a
   list, that gate refused nobody who wanted to pass it, so it was removed rather than left to imply

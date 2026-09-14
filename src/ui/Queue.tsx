@@ -4,20 +4,24 @@
 // costs a reviewer their place in the work.
 //
 // `'use client'` for three things it does to a page the server already rendered — narrow it by
-// text, reverse it, and move through it with `j`/`k`. None of them is a second read of the
-// database: the rows arrive as props from `ConsoleShell`, which read them through `@/repo/queue`.
+// text, flip the age inside each group, and move through it with `j`/`k`. None of them is a second
+// read of the database: the rows arrive as props from `ConsoleShell`, which read them through
+// `@/repo/queue`.
 // Anything that changes what the *query* returns — the scope, the age — stays a link, because the
 // queue's filters are the URL (ADR-0024).
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState, type ReactElement, type ReactNode } from 'react';
 
+import { ordered, type QueueKind } from './queue-order';
 import { Dot } from './Rail';
 import type { Tone } from './tones';
 
 /** One row, as the queue needs it: what it says, where it goes, and what it can be matched on. */
 export interface QueueItem {
   readonly key: string;
+  /** Which group the row is ordered in — the toggle reverses inside one, never across both. */
+  readonly kind: QueueKind;
   readonly href: string;
   readonly tone: Tone;
   readonly kindLabel: string;
@@ -128,10 +132,10 @@ export function QueuePane({
   const shown = useMemo(() => {
     const needle = text.trim().toLowerCase();
     const matched = needle === '' ? rows : rows.filter((row) => row.haystack.includes(needle));
-    return newestFirst ? [...matched].reverse() : matched;
+    return ordered(matched, newestFirst);
   }, [rows, text, newestFirst]);
 
-  // `j`/`k` move through the list as rendered — filtered and sorted — which is the list the
+  // `j`/`k` move through the list as rendered — filtered and ordered — which is the list the
   // reviewer is looking at. A keystroke inside the filter box is text, not navigation.
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
