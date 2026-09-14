@@ -11,10 +11,21 @@ import { getDb } from '@/db/client';
 import { loadEnv } from '@/env';
 import { findReviewer } from '@/reviewers/repo';
 
-import { badRequest, issuesOf, json, serverError, unauthorized } from '../../http';
+import { badRequest, issuesOf, json, serverError } from '../../http';
 
 // `.strict()`: an unknown key is a caller trying to say something this route does not let them say.
 const signInSchema = z.object({ reviewerId: z.uuid(), secret: z.string() }).strict();
+
+/**
+ * The 401 of this route, not `unauthorized()`'s. That one tells a caller with no session to go and
+ * sign in, which is the right answer everywhere else and the wrong one here: the person reading it
+ * is signing in at that very moment, on the login form. This says the attempt failed instead.
+ *
+ * One sentence for both failures — a wrong secret and an unknown reviewer — and it names neither,
+ * so the login page cannot be used to enumerate the care team.
+ */
+const signInRefused = (): Response =>
+  json({ error: 'that did not sign you in — check the reviewer and the console secret' }, 401);
 
 /** Set on a response rather than through `next/headers`, so the handler stays a plain function. */
 const withCookie = (response: Response, cookie: string): Response => {
@@ -37,10 +48,10 @@ export async function POST(request: Request): Promise<Response> {
   try {
     // The secret first and in constant time, so the answer does not depend on whether the reviewer
     // exists — and one answer for both failures, so the login page cannot be used to list the team.
-    if (!secretMatches(parsed.data.secret, loadEnv().CONSOLE_SECRET)) return unauthorized();
+    if (!secretMatches(parsed.data.secret, loadEnv().CONSOLE_SECRET)) return signInRefused();
 
     const reviewer = await findReviewer(getDb(), parsed.data.reviewerId);
-    if (reviewer === null) return unauthorized();
+    if (reviewer === null) return signInRefused();
 
     const session = signSession(reviewer.id, new Date(), loadEnv().CONSOLE_SECRET);
     return withCookie(json(reviewer), sessionSetCookie(session, { secure: secure() }));
