@@ -11,7 +11,12 @@ import { parseCsv } from '../source/csv';
 import { readExportFiles } from '../source/files';
 import { INTAKES_HEADER, PATIENTS_HEADER, byHeader } from '../source/layout';
 import type { Ids } from '../review/mapping-items';
-import { consentItems, futureDatedConsentItem, type ConsentSubject } from './consent';
+import {
+  consentItems,
+  consentTypeOf,
+  futureDatedConsentItem,
+  type ConsentSubject,
+} from './consent';
 import { duplicateIntakeItems } from './duplicate-intakes';
 import { decimalShift, plausibilityItems } from './plausibility';
 import { divergenceItems, lbsReconciliationItem, unitMissingItem, type WeightRow } from './weight';
@@ -340,6 +345,19 @@ describe('consent items (ADR-0005)', () => {
 
     expect(items).toHaveLength(2);
     expect(items[0]).toMatchObject({ type: 'consent', scope: 'row', field: 'consent_state' });
+  });
+
+  // The writer and the reader of this payload, in one test: `field` is the field the decision is
+  // about, and the consent type — what `consent_states` is keyed by — is in the payload.
+  it('carries the consent type where consentTypeOf reads it, not in field', () => {
+    const [draft] = consentItems([subject({ state: 'conflict', type: 'data_processing' })]);
+
+    expect(draft?.field).toBe('consent_state');
+    expect(consentTypeOf({ id: 'item-1', payload: draft?.payload })).toBe('data_processing');
+  });
+
+  it('throws for an item that carries no consent type', () => {
+    expect(() => consentTypeOf({ id: 'item-1', payload: {} })).toThrow(/consent type/);
   });
 
   it.each([
