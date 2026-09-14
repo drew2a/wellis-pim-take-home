@@ -4,6 +4,8 @@
 // Which cases are items follows from what we would do about them. A revoked consent on a churned
 // patient needs nobody: they left, and we stopped. A revoked consent on an *active* patient is a
 // person we are still treating without permission, and someone has to look today.
+import { z } from 'zod';
+
 import { dedupeKey, type ReviewItemDraft } from '../review/items';
 
 export interface ConsentSubject {
@@ -98,6 +100,30 @@ export function consentItems(subjects: readonly ConsentSubject[]): ReviewItemDra
       },
     ];
   });
+}
+
+/** As much of a consent item's payload as a reader of it depends on. */
+const consentPayloadSchema = z.object({ consent_type: z.string().min(1) });
+
+/**
+ * The consent type one of these items is about, read back from the payload written above.
+ *
+ * Not `item.field`, which holds `consent_state` — the field the decision is about, which is not a
+ * type. Reading the type from there looked `consent_states` up by a type no row has ever carried,
+ * so every one of the seven contradicting logs derived `none`: the detail page showed the
+ * non-conflict banner and offered no way to establish a state, and the route would have refused
+ * one (ADR-0025 §3). The type is an identifier of what the item is about rather than a snapshot of
+ * a value, so the payload is where it stays — and it is read here, beside the line that writes it.
+ *
+ * Throws rather than defaulting: a `consent` item without a consent type is this importer
+ * misbehaving, not a condition of the export (`CLAUDE.md` §2).
+ */
+export function consentTypeOf(item: { readonly id: string; readonly payload: unknown }): string {
+  const parsed = consentPayloadSchema.safeParse(item.payload);
+  if (!parsed.success) {
+    throw new Error(`review item ${item.id} carries no consent type`);
+  }
+  return parsed.data.consent_type;
 }
 
 export interface FutureEvent {

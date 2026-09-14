@@ -10,8 +10,15 @@ const SURVIVOR = '22222222-2222-4222-8222-222222222222';
 
 type Item = Parameters<typeof decideConsent>[0];
 
-const item = (patientId: string | null = PATIENT, field: string | null = 'data_processing'): Item =>
-  ({ id: 'item-1', patientId, field }) as Item;
+/**
+ * As the detector writes one: the consent type in the payload, and `consent_state` in `field` —
+ * the field the decision is about. A fixture that put the type in `field` instead is what let the
+ * seven conflicts reach a reviewer with no way to decide them (`src/import/detect/consent.ts`).
+ */
+const item = (
+  patientId: string | null = PATIENT,
+  payload: unknown = { consent_type: 'data_processing' },
+): Item => ({ id: 'item-1', patientId, field: 'consent_state', payload }) as Item;
 
 const request = (
   action: string,
@@ -96,9 +103,11 @@ describe('establishing a state over a log that contradicts itself', () => {
     expect(decision.subjects?.[0]?.entityId).toBe(SURVIVOR);
   });
 
-  it('refuses an item that names no consent type', () => {
+  // Not a DecisionError: the payload is this importer's own, so an item without a type is a bug
+  // here and answered with a 500, not a reviewer sending something wrong (`CLAUDE.md` §2).
+  it('throws on an item whose payload carries no consent type', () => {
     expect(() =>
-      decideConsent(item(PATIENT, null), setState('granted'), 'conflict', PATIENT),
+      decideConsent(item(PATIENT, {}), setState('granted'), 'conflict', PATIENT),
     ).toThrow(/consent type/);
   });
 });

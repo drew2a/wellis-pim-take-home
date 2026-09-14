@@ -17,6 +17,7 @@
 import { z } from 'zod';
 
 import type { reviewItems } from '@/db/schema';
+import { consentTypeOf } from '@/import/detect/consent';
 
 import { DecisionError, type Decision } from './types';
 
@@ -73,7 +74,9 @@ export function decideConsent(
   if (item.patientId === null || survivorId === null) {
     throw new DecisionError(`review item ${item.id} names no patient`);
   }
-  const type = item.field;
+  // The consent type the item is about, from its payload — never `item.field`, which says which
+  // field the decision is about (`consent_state`) and is not a type.
+  const type = consentTypeOf(item);
 
   if (request.action !== 'set_state') {
     return {
@@ -89,7 +92,6 @@ export function decideConsent(
     };
   }
 
-  if (type === null) throw new DecisionError(`review item ${item.id} names no consent type`);
   // Only a log that contradicts itself. A clear `revoked` is acted on, not overridden (ADR-0025 §3).
   if (derived !== 'conflict') {
     throw new DecisionError(

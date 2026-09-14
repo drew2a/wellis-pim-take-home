@@ -4,6 +4,7 @@ import { and, eq, inArray } from 'drizzle-orm';
 
 import type { Queryable } from '@/db/queryable';
 import { consentStates, intakes, patients, reviewItems } from '@/db/schema';
+import { consentTypeOf } from '@/import/detect/consent';
 import { ruleOf } from '@/import/review/items';
 
 import { maskIdentifier } from './mask';
@@ -95,17 +96,21 @@ export async function consentTimeline(
     .sort((left, right) => left.at.localeCompare(right.at));
 }
 
-/** The consent state stored for the item's patient and type right now, or null. */
+/**
+ * The consent state stored for the item's patient and type right now, or null. The type comes from
+ * the payload the detector wrote (`consentTypeOf`) and the patient from membership, so a record
+ * merged away since the item was raised still resolves to the row the state lives on (ADR-0008).
+ */
 export async function derivedConsentState(
   db: Queryable,
   item: typeof reviewItems.$inferSelect,
 ): Promise<string | null> {
-  if (item.patientId === null || item.field === null) return null;
+  if (item.patientId === null) return null;
   const survivor = await survivorOf(db, item.patientId);
   const [row] = await db
     .select({ state: consentStates.state })
     .from(consentStates)
-    .where(and(eq(consentStates.patientId, survivor), eq(consentStates.type, item.field)));
+    .where(and(eq(consentStates.patientId, survivor), eq(consentStates.type, consentTypeOf(item))));
   return row?.state ?? null;
 }
 
