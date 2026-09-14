@@ -11,3 +11,8 @@ export function Card({ title, children }: { title?: string; children: ReactNode 
     </section>
   );
 }
+
+/** Sibling lines inside a card — the landing page's destinations — set apart instead of stacked. */
+export function Stack({ children }: { children: ReactNode }): ReactElement {
+  return <div className="space-y-3">{children}</div>;
+}

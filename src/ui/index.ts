@@ -51,7 +51,7 @@ export {
   RailUser,
 } from './Rail';
 export { Button, ButtonRow, NEEDS_A_NOTE, type ButtonVariant } from './Button';
-export { Card } from './Card';
+export { Card, Stack } from './Card';
 export { Definitions, Raw, type Definition } from './Definitions';
 export { Choice, Field, TextAreaField, TextField } from './Field';
 export { Caption, PageHeader, SectionTitle } from './Header';
