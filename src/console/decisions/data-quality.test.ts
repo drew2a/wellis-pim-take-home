@@ -1,7 +1,12 @@
 // Pure: what a reviewer's answer on one unreadable value means.
 import { describe, expect, it } from 'vitest';
 
-import { dataQualityRequestSchema, decideDataQuality, proposalOf } from './data-quality';
+import {
+  dataQualityRequestSchema,
+  decideDataQuality,
+  maskedPayload,
+  proposalOf,
+} from './data-quality';
 import { DecisionError } from './types';
 
 const PATIENT = '11111111-1111-4111-8111-111111111111';
@@ -157,5 +162,69 @@ describe('leaving the value empty', () => {
   it('dismisses and writes nothing, whatever field it is about', () => {
     const decision = decideDataQuality(item({ field: null }), request({ action: 'dismiss' }));
     expect(decision).toMatchObject({ outcome: 'dismissed', changes: [] });
+  });
+});
+
+// ADR-0009 item 9 stores the repeated row unmasked on purpose — it survives nowhere else — and
+// makes masking it the console's job. ADR-0030 is the decision to finally do that job here.
+describe('the payload a screen may show', () => {
+  const REPEATED = {
+    table: 'legacy_patients_raw',
+    key: 'LEG-0001',
+    repeated_line_no: 812,
+    repeated_row: {
+      legacy_id: 'LEG-0001',
+      full_name: 'Luuk Dijkstra',
+      email: 'luuk@example.nl',
+      dob: '1981-04-02',
+      bsn: '123456782',
+      phone: '+31612345678',
+      city: 'Utrecht',
+    },
+  };
+
+  it('masks the bsn and the phone of a row that is stored nowhere else', () => {
+    const row = maskedPayload(item({ payload: REPEATED })).repeated_row;
+
+    expect(row).toMatchObject({ bsn: '******782', phone: '*********678' });
+  });
+
+  it('leaves every other column of that row as the export gave it', () => {
+    const row = maskedPayload(item({ payload: REPEATED })).repeated_row;
+
+    // The reviewer decides which of two versions of this row is right, and these are what they
+    // compare. Masking them would leave nothing to decide on.
+    expect(row).toMatchObject({
+      legacy_id: 'LEG-0001',
+      full_name: 'Luuk Dijkstra',
+      email: 'luuk@example.nl',
+      dob: '1981-04-02',
+      city: 'Utrecht',
+    });
+  });
+
+  it('does not invent a field the repeated row never had', () => {
+    const payload = {
+      ...REPEATED,
+      repeated_row: { legacy_id: 'LEG-0001', bsn: '123456782', city: 'Utrecht' },
+    };
+
+    expect(maskedPayload(item({ payload }))).toMatchObject({
+      repeated_row: { bsn: '******782' },
+    });
+    expect(maskedPayload(item({ payload })).repeated_row).not.toHaveProperty('phone');
+  });
+
+  it('passes every other item’s payload through untouched, already masked by the builder', () => {
+    const payload = { legacy_id: 'LEG-0002', raw_masked: '******596', canonical: null };
+
+    expect(maskedPayload(item({ payload }))).toEqual(payload);
+  });
+
+  // A payload the console cannot mask is not a payload it may show: failing to render is
+  // recoverable, rendering a readable bsn is not.
+  it('throws rather than render a repeated row that is not a row of strings', () => {
+    expect(() => maskedPayload(item({ payload: { repeated_row: { bsn: 123456782 } } }))).toThrow();
+    expect(() => maskedPayload(item({ payload: { repeated_row: 'LEG-0001,Luuk' } }))).toThrow();
   });
 });

@@ -9,7 +9,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import type { ReactElement, ReactNode } from 'react';
 
-import { proposalOf } from '@/console/decisions/data-quality';
+import { maskedPayload, proposalOf } from '@/console/decisions/data-quality';
 import { poundsRowsOf } from '@/console/decisions/vocabulary';
 import { requireReviewer } from '@/console/guard';
 import { getDb } from '@/db/client';
@@ -186,15 +186,12 @@ const NOT_EVIDENCE = new Set(['rows', 'actions', 'note', 'look_alikes']);
  * it is shown, since `review_items.payload` is jsonb and out of reach of the console's
  * column-level masking. A new payload key inherits that obligation at the write end, not here.
  *
- * One payload is deliberately exempt. ADR-0009 item 9 (`SOURCE_KEY_REPEATED`) carries the repeated
- * row whole and unmasked because this item is the only place that row survives, and ADR-0009 makes
- * masking it the console's job. This export produces none of those items (`repeatedKeys: 0` in the
- * import report), so nothing renders unmasked today; the day one appears, the masking belongs here
- * (ADR-0030).
+ * One payload is deliberately exempt, and `maskedPayload` is where that debt is paid: ADR-0009
+ * item 9 (`SOURCE_KEY_REPEATED`) stores the repeated row whole and unmasked because this item is
+ * the only place that row survives, and assigns the masking to the console (ADR-0030).
  */
 function evidenceOf(item: ReviewItemView['item']): EvidenceRow[] {
-  const payload = item.payload as Record<string, unknown>;
-  return Object.entries(payload)
+  return Object.entries(maskedPayload(item))
     .filter(([key]) => !NOT_EVIDENCE.has(key))
     .map(([term, value]) => ({ term, value: shown(value) }));
 }

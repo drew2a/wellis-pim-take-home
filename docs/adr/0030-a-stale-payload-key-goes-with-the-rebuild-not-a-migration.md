@@ -65,18 +65,33 @@ a payload tomorrow reaches the reviewer's screen whether or not anyone decided i
 obligation is at the write end. That is how `look_alikes` came back after being deleted, and
 naming it is worth more than the one key this ADR removes from view.
 
-The rule has one deliberate exception, and writing it down is the second reason the comment exists.
+The rule has one deliberate exception, and **paying its debt is the second half of this decision.**
 **ADR-0009 item 9** (`SOURCE_KEY_REPEATED`) puts the repeated row into the payload *whole, as
 exported, unmasked* — `repeated_row: r.fields` in `repeatedKeyItems()` — because the raw table is
 keyed by the natural key, so that row survives nowhere else and a redacted copy would lose it.
-ADR-0009 accepts this and assigns the masking to the console: *"the console must mask what it
-renders."* The console does not, today: `evidenceOf()` would fold that row onto the screen with its
-`bsn`, `phone`, `dob` and `email` in it. It is latent, not live — **this export produces zero such
-items** (`repeatedKeys: 0` in `reports/import-report.json`, and
-`raw-load.integration.test.ts` covers the builder on a synthetic repeat), so there is nothing on
-any screen to mask. Left as a named follow-up rather than fixed here: masking inside a payload is a
-decision about what a reviewer sees, which `CLAUDE.md` §4 reserves for the repo owner, and it is
-not what this branch was reviewed for.
+ADR-0009 accepts that and assigns the masking to the console: *"the console must mask what it
+renders."* The console never did it. `evidenceOf()` would have folded that row onto the screen with
+its `bsn` and `phone` readable.
+
+It was latent rather than live — **this export produces zero such items** (`repeatedKeys: 0` in
+`reports/import-report.json`; `raw-load.integration.test.ts` covers the builder on a synthetic
+repeat) — and it is closed here anyway, because zero is a property of this export and not of the
+code, and an unmasked bsn on a reviewer's screen is not a thing to leave loaded for whoever imports
+the next export.
+
+The fix is not to hide `repeated_row`: ADR-0009 keeps it deliberately, and hiding it would delete
+the only copy of that line from the one screen that can act on it. The fix is `maskedPayload()` in
+`src/console/decisions/data-quality.ts`, which runs `repeated_row.bsn` and `repeated_row.phone`
+through `maskIdentifier` — **the same helper the item builder uses**, so what is masked at the write
+end and what is masked at the read end cannot mean two different things. The rest of the row is
+shown as exported: `full_name`, `dob`, `email` and `city` are how the reviewer tells the two
+versions of the row apart, and the console already shows them on every other item about this
+patient. A `repeated_row` that is not a row of strings throws instead of rendering — failing to draw
+a card is recoverable, printing a readable bsn is not.
+
+Everything else passes through untouched, which keeps one rule for the whole card rather than a
+per-item-type exception list: identifiers are masked at the write end, and `maskedPayload` is the
+one documented place where a payload ADR-0009 exempted is brought back under that rule.
 
 Option 2 was rejected on the rebuild: a `DROP SCHEMA` precedes the migrations, so the migration's
 `WHERE` clause matches nothing, forever, on every database anyone creates from this repository. It
@@ -95,6 +110,11 @@ grounds above, not blocked.
   `NOT_EVIDENCE` set, with the reason for each on it.
 - The comment above `evidenceOf()` states that the card is a denylist and that payloads are
   written already masked — the obligation a new payload key inherits.
+- `maskedPayload()` is added to `src/console/decisions/data-quality.ts` and is what `evidenceOf()`
+  reads: it masks `bsn` and `phone` inside `repeated_row` with `maskIdentifier`, passes every other
+  payload through unchanged, and throws on a `repeated_row` it cannot mask. Five tests in
+  `data-quality.test.ts` cover the two masked fields, the columns left readable, an absent `phone`,
+  an ordinary payload, and the throw. No change to what the importer writes.
 - `README.md` § Deploy states the rebuild explicitly: an empty schema, migrations, import, then
   `seed:reviewers`. It previously stated only that the production database is seeded by running
   the importer, which left the claim this ADR rests on unwritten.
@@ -110,15 +130,27 @@ grounds above, not blocked.
   it is rebuilt. It is unreachable through the console and is not read by any code
   (`grep -ri "look.alike\|look_alikes" src drizzle` returns nothing), but a direct SQL query finds
   it. Accepted: that database is a development one and will not be the one submitted.
-- Neutral: no import number moves; nothing is written, so the report is identical.
-- Follow-up, open: ADR-0009 item 9 assigns the console the masking of `repeated_row`, and the
-  console does not do it. Zero items in this export, so nothing is exposed; it becomes real the
-  first time an export repeats a natural key with different values.
+- Good: ADR-0009 item 9's assignment to the console is discharged. The first export that repeats a
+  natural key with different values now finds the masking already there, tested, rather than
+  finding a note saying someone knew.
+- Neutral: no import number moves; nothing is written, so the report is identical. Nothing on a
+  screen changes for this export either — it has no such item — so the test is the only evidence
+  the masking works, which is why there are five of them.
+- Neutral: `sourceDifferences()` masks `bsn` and not `phone` when it writes the `differences` map
+  (`MASKED_SOURCE_COLUMNS`), so a repeated row whose phone differs shows that phone in
+  `differences` while `repeated_row` masks it. Left as ADR-0009 wrote it: changing what the
+  importer stores is a write-end change to an accepted ADR's payload spec, not a rendering fix, and
+  the `differences` map is two values of one column rather than a whole identity.
 
 ### Confirmation
 
 - `grep -n "look_alikes" src/app/console/items/\[id\]/page.tsx` shows the key on `NOT_EVIDENCE`,
   and it is the only occurrence of it under `src/`.
+- `data-quality.test.ts` § *the payload a screen may show* fails if the masking is removed: it
+  asserts `bsn: '******782'` and `phone: '*********678'` on a repeated row, and asserts the four
+  columns that stay readable — so neither direction can drift unnoticed.
+- `grep -rn "\.payload as" src/app/console src/console` returns one line, inside `maskedPayload()`
+  itself: the evidence card reaches a payload through that function and nowhere else.
 - `npm run check` passes: typecheck, lint, format, schema diagram, unit and integration suites.
 - On a database rebuilt from an empty schema, `select count(*) from review_items where payload ?
   'look_alikes'` returns 0 — which is the whole argument against the migration.
