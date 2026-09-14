@@ -56,6 +56,7 @@ Each directory under `src/` owns one of those jobs:
 | `ui/` | the presentation components, and the only place a Tailwind class appears (ADR-0018) |
 | `consent/` | the consent texts and their versions, and the pure derivation of a consent state from events |
 | `reviewers/` | the seeded care team and its lookup |
+| `test/` | the integration harness: a database per test file, and the minimal rows constraint tests build on |
 
 Table by table, with a diagram rendered from the Drizzle schema:
 [`docs/schema.md`](docs/schema.md). Every decision behind the above, with its context and the
@@ -273,8 +274,10 @@ count, the queue, and the piece of work that is open — so deciding an item nev
 their place in the list. One queue combines both sources of work, the review items the import could
 not decide and the intakes waiting for a person — the intakes above the items, each group oldest
 first, because people waiting come before data to clean
-([`docs/reviewer-day.md`](docs/reviewer-day.md)). On this export that is **340 open items and 6
-flagged intakes**, with every count taken from the database rather than from the page.
+([`docs/reviewer-day.md`](docs/reviewer-day.md)). On this export that is **336 open items and no
+intakes waiting** — the import leaves every legacy intake in a legacy state, so an intake reaches
+this queue only through the new flow — with every count taken from the database rather than from
+the page.
 
 The filters are the URL: the rail's kinds, the scope (open / resolved / dismissed) and the age are
 query parameters, so a filtered queue survives a reload and can be kept in a tab. A kind narrows to
@@ -290,9 +293,9 @@ Every kind of item has a screen and a decision:
 | `clinical_history` | 115 | what was done about something the legacy process could not see; **the outcome never changes** |
 | `consent` | 83 | what was done outside the system; for the 7 self-contradicting logs, the state a person established (ADR-0025) |
 | `data_quality` | 62 | accept the detector's proposal, type a value, or leave the null |
-| `identity_conflict` | 44 | merge with a survivor and a value per field, or "not the same person" |
+| `identity_conflict` | 42 | merge with a survivor and a value per field, or "not the same person" |
 | `orphan_intake` | 21 | attach to a patient found by search, or leave unresolved |
-| `vocabulary` | 10 | confirm or reject the inference; for the 18 unit-less weights, apply it row by row |
+| `vocabulary` | 8 | confirm or reject the inference; for the 18 unit-less weights, apply it row by row |
 | `duplicate_intake` | 5 | which of a same-day pair is the record of note; **both rows stay** |
 
 An intake is claimed (`in_review`, with the reviewer's name on it) and then approved or rejected by
