@@ -112,6 +112,11 @@ export async function ConsoleShell({
   const chosenStates = new Set<string>(filters.states);
   const narrowed = params.type !== undefined || params.state !== undefined;
 
+  // A kind with nothing behind it is not work, and a rail of zeroes buries the rows that are. The
+  // one a reviewer has already clicked stays, empty or not, so the way back out of an empty list is
+  // the same row they came in by.
+  const listed = (count: number, selected: boolean): boolean => count > 0 || selected;
+
   const scopes: QueueChoice[] = SCOPES.map(([status, label]) => ({
     label,
     href: withParam(params, 'status', status),
@@ -136,7 +141,9 @@ export async function ConsoleShell({
 
         <RailLabel>Open by kind</RailLabel>
         <RailKinds>
-          {ITEM_TYPE_ORDER.map((type) => (
+          {ITEM_TYPE_ORDER.filter((type) =>
+            listed(counts.items[type], narrowed && chosenTypes.has(type)),
+          ).map((type) => (
             <RailKind
               key={type}
               href={toggled(params, 'type', type)}
@@ -147,7 +154,9 @@ export async function ConsoleShell({
               {titled(type)}
             </RailKind>
           ))}
-          {STATE_ORDER.map((state) => (
+          {STATE_ORDER.filter((state) =>
+            listed(counts.intakes[state], narrowed && chosenStates.has(state)),
+          ).map((state) => (
             <RailKind
               key={state}
               href={toggled(params, 'state', state)}
