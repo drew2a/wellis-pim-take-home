@@ -180,11 +180,18 @@ describe('how old a row is', () => {
     expect(row?.age?.toISOString()).toBe(draftAt.toISOString());
   });
 
-  it('lists a row nothing dates, last, rather than dropping it', async () => {
+  // Last of its own group, not last of the queue: an intake nothing dates is still a person
+  // waiting, so it keeps its place above the data to clean (`docs/reviewer-day.md`, ADR-0031).
+  it('lists a row nothing dates, last of its group, rather than dropping it', async () => {
     await legacyIntake('INT-0001', null);
     await legacyIntake('INT-0002', TODAY);
-    const rows = await rowsOf({ types: [], states: ['legacy_pending'] });
-    expect(rows.map((row) => row.title)).toEqual(['INT-0002', 'INT-0001']);
+    await item({ title: 'an item raised long ago' }, at(LONG_AGO));
+    const rows = await rowsOf({ states: ['legacy_pending'] });
+    expect(rows.map((row) => row.title)).toEqual([
+      'INT-0002',
+      'INT-0001',
+      'an item raised long ago',
+    ]);
     expect(rows[1]?.age).toBeNull();
   });
 });

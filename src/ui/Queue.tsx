@@ -13,14 +13,16 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState, type ReactElement, type ReactNode } from 'react';
 
-import { ordered, type QueueKind } from './queue-order';
+import type { QueueKind } from '@/repo/queue';
+
+import { ordered } from './queue-order';
 import { Dot } from './Rail';
 import type { Tone } from './tones';
 
 /** One row, as the queue needs it: what it says, where it goes, and what it can be matched on. */
 export interface QueueItem {
   readonly key: string;
-  /** Which group the row is ordered in — the toggle reverses inside one, never across both. */
+  /** Which group the row is in — the toggle flips the age inside a group, never across them. */
   readonly kind: QueueKind;
   readonly href: string;
   readonly tone: Tone;

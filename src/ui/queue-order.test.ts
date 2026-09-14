@@ -1,7 +1,9 @@
-// The "newest first" toggle (ADR-0028 §3: sorting is a client-side reverse of the rendered page).
+// What the "newest first" toggle does to the page the server rendered (`docs/reviewer-day.md`,
+// ADR-0031 §1: it flips the age inside each group and never moves the groups past one another).
 import { describe, expect, it } from 'vitest';
 
-import { ordered, type QueueKind } from './queue-order';
+import { ordered } from './queue-order';
+import type { QueueKind } from '@/repo/queue';
 
 const row = (
   kind: QueueKind,
@@ -28,5 +30,17 @@ describe('the order the queue is read in', () => {
       'newer item',
       'older item',
     ]);
+  });
+
+  // The grouping is the query's to decide (`@/repo/queue`), and the toggle is not a second opinion
+  // on it: whatever order of kinds the server sends is the order of kinds the reviewer keeps.
+  it('leaves the kinds where the server put them, grouped or not', () => {
+    const interleaved = [
+      row('review_item', 'first'),
+      row('intake', 'second'),
+      row('review_item', 'third'),
+    ];
+    expect(ordered(interleaved, true).map((r) => r.kind)).toEqual(interleaved.map((r) => r.kind));
+    expect(ordered(PAGE, true).map((r) => r.kind)).toEqual(PAGE.map((r) => r.kind));
   });
 });

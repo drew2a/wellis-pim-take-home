@@ -105,8 +105,8 @@ const inList = (column: SQL, values: readonly string[]): SQL =>
  * each group oldest first (`docs/reviewer-day.md`). The two sources are not equally urgent — a
  * patient who submitted this morning is waiting for a decision, a consent gap from 2023 is not —
  * and age alone cannot separate them: after a fresh import every review item carries the import
- * moment as its `created_at`, so a new intake lands among hundreds of same-aged rows arbitrarily.
- * Nothing beyond this is sortable (a scope cut, R-S4).
+ * moment as its `created_at`, so age alone sorts a patient who submitted after the import below
+ * every one of them. Nothing beyond this is sortable (a scope cut, R-S4, ADR-0031).
  */
 const WORK_FIRST = sql`(case when kind = 'intake' then 0 else 1 end)`;
 
