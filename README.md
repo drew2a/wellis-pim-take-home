@@ -337,3 +337,11 @@ not support the session-level features drizzle-kit needs. `MIGRATION_URL` is tha
 role and the same secret as `DATABASE_URL`, read by drizzle-kit only, and unset locally and in CI
 where one URL serves both (ADR-0008). The production database is seeded by running the importer
 (`npm run import`, Part A) with `DATABASE_URL` pointed at whichever pooler fits.
+
+The deployed database is **rebuilt from an empty schema**, not migrated forward: `drop schema
+public cascade; create schema public;` through the session pooler, then `npm run db:migrate`, then
+`npm run import`, then `npm run seed:reviewers`. The evidence tables reject `UPDATE`, `DELETE` and
+`TRUNCATE` by trigger (ADR-0007), so dropping the schema is the only way back to an empty database
+— and it is what makes the import idempotency (R-A15) a property of the data rather than of the
+order someone ran things in. A rebuild is therefore the mechanism by which anything an earlier
+import left behind disappears; ADR-0030 declines a migration on exactly this ground.

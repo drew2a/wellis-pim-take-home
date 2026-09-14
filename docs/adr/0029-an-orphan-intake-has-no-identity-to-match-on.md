@@ -1,6 +1,7 @@
 # ADR-0029: An orphan intake has no identity to match on
 
 - **Status:** accepted
+- **Superseded in part by:** [ADR-0030](0030-a-stale-payload-key-goes-with-the-rebuild-not-a-migration.md) (two claims under *What changes*: no later import overwrites a stored payload, and the leftover key was not inert; the decision of this ADR stands)
 - **Date:** 2026-09-14
 - **Deciders:** Andrei Andreev
 - **Requirements:** R-A10, R-C5, R-C6 · **Relates to:** Q9 (orphan intakes) ·
