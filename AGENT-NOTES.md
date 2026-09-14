@@ -1,126 +1,31 @@
 # Agent notes
 
-How the work was directed through an AI coding agent (Claude Code), as required by
-ASSIGNMENT.md §5. Kept short and updated as the work progresses; the unedited session
-traces are the full record.
+How I directed this work through Claude Code. The unedited session traces are the full record. This is the short version.
 
-## Decomposition
+## How I split it
 
-- Docs before code: `REQUIREMENTS.md`, `QUESTIONS.md`, `CLAUDE.md` and the ADR log were
-  written first so every later session starts from the same definition of "correct".
-- Part A starts with a data profile (`docs/profile/data-profile.md`), then mapping rules and
-  schema as `proposed` ADRs that I accept by hand, then implementation on a topic branch,
-  then a review in a fresh session before the merge.
+Docs before code. `REQUIREMENTS.md`, `QUESTIONS.md`, `CLAUDE.md` and the ADR log came first. Every later session started from the same definition of "correct". I used one topic branch per block: profile the export, agree the mapping, scaffold, schema, importer load, eligibility, detectors, report, intake, console. I used eight small fix branches once I started using the application. Each block of the build ended with a review in a fresh session before the merge, and with an ADR for whatever it decided. The agent drafted each ADR as `proposed`. Accepting it was my job, in my own commit. An agent commit flipped a status once. I reverted it and reopened the ADR.
 
-## Where the agent ran, where I took the wheel
+## Where I let it run, where I took the wheel
 
-**Let it run (2026-09-09, Part A analysis).**
+I let it run when invariants already answered the question. This included profiling the export (36 inventories from a spec I provided), mapping ordinary columns, the report, and most of the UI. From the sixth branch on, I stopped approving plans. I let it work directly from the files.
 
-- Profiling the export: a subagent wrote `scripts/profile/*.ts` and generated
-  `docs/profile/data-profile.md` / `.json` (36 inventories) from a spec I gave it; I only spot-checked six
-  numbers against the raw files and read the result.
-- Testing the mapping hypotheses (`scripts/profile/hypotheses.ts`): the separator convention for
-  dates, the weight-unit readings against the same patient's intakes, heights, vocabulary spread.
-- The browsing artifact of the inventories.
-- Once the per-column rhythm was set (facts, warnings, agreed line, two-question check), I let it
-  finish `signup_date` and `source` alone, then six intake columns (`submitted_at`,
-  `questionnaire_version`, `weight`, `height`, `alcohol_units_week`, `reviewer_note`) with one commit
-  each, and asked for one summary table at the end.
-- Drafting the three ADRs from the agreed lines.
+I took the wheel for every column carrying identity, medicine or consent. This meant `legacy_patient_id` and the orphans, `meds_current`, `conditions`, `outcome`, the consent log, and the duplicate tiers. I read the facts and wrote those decisions myself.
 
-**Took the wheel.** Every column that carries identity, medicine or consent: `legacy_patient_id`
-(orphans), `meds_current`, `conditions`, `outcome`, the consent log, and the duplicate-patient
-tiers. On those I read the facts, then wrote the decision myself; the agent recorded it.
+I stopped it twice. Once, it launched a subagent before I accepted the plan. Once, it tried to process `intakes.csv` past the columns I wanted.
 
-**Ran it myself.** From the sixth branch on I stopped approving plans and let the agent proceed
-from the files, so my own time went into using the thing. Three defects came out of clicking
-through the running app that no test had caught, because each one was a page doing the right thing
-twice or saying the wrong sentence about it: the intake form created a draft on page load and then
-aborted its own request, so it never left "Starting your intake…"; a wrong console secret answered
-"sign in to the console first", the redirect message, to someone already trying to sign in; and the
-patient timeline printed every normalisation twice, once as prose and once as a code pill. Tests
-assert that a fact reaches the screen, not that it reaches it once.
+## What went wrong, and what caught it
 
-Using it also corrected a decision of my own. `docs/reviewer-day.md`, which I wrote as the console's
-decision record, put the queue's default view at open items plus intakes in `auto_flagged` and
-`in_review`. Then I submitted an intake on the deployed console and could not find it: it had been
-cleared, and `auto_cleared` sat behind a filter. The brief calls that outcome "clear for doctor
-review" — it is the doctor's main inbox, not a finished state — and an `auto_rejected` intake nobody
-opens means a machine took the last word on a person's eligibility. The default view now holds
-everything waiting for a person, and I changed the decision record rather than the code's behaviour
-alone.
-
-**Stopped it.**
-
-- It launched the profiling subagent right after presenting the plan, before I had accepted it. I
-  interrupted and asked for plan, then accept, then execute.
-- Before `intakes.csv` I told it not to proceed past the columns I wanted to decide myself.
-
-## Where the agent was right and I changed course
-
-1. **"No rules" (2026-09-09).** Mid-discussion on `dob` I said "for mapping there should not be any
-   rules". The agent stopped and asked what I meant instead of rewriting three agreed lines. My
-   phrasing was wrong: I meant "the importer is not a rule engine", not "drop the normalisation
-   records". I retracted, and the clarification produced the vocabulary and the structure we now
-   use. Mapping is plain parser code; a "rule" is a string code on a normalisation record plus
-   evidence; "versioned" means the record carries the import run and importer version. "Warnings
-   with a proposed autofix" are not a mechanism next to the review queue: there is one queue, a
-   proposal is data on an item, applied only through the human resolution path. From that came the
-   three-layer split: mapper never guesses, detectors create items, the resolution path is the only
-   writer; four proposal functions, no framework.
-2. **Orphan intakes (2026-09-09).** It proposed a null patient reference for the 21 orphan intakes
-   instead of the placeholder patient in my Q9 default. A row with no name, birth date or email is a
-   fabricated record; I changed the default.
-3. **Flipping an ADR (2026-09-09).** I wrote "then flip it" for ADR-0004. It did not flip the status
-   and pointed at the lifecycle rule (the human accepts, from their own terminal, no co-author
-   trailer). Correct: that rule exists so the history shows who accepted what.
-
-## Corrections
-
-Concrete cases where the agent's output was wrong and I corrected it.
-
-1. **Profiling language (2026-09-09).** The agent planned the data-profiling script in
-   Python ("stdlib only, fast to write") even though ADR-0003 fixes the stack to
-   TypeScript. Its reasoning was speed for a one-off script. I rejected it: a reviewer
-   reads every script in the repo, one language keeps the toolchain single, and the
-   profiling code is the seed of the importer's own parsers, so it belongs in the same
-   language. The script is now `scripts/profile/profile.ts`, run with `tsx`.
-2. **Process (2026-09-09).** The agent launched the profiling subagent immediately after
-   presenting the plan, before I had accepted it. I stopped it and asked for
-   plan → accept → execute. The agent also proposed a script or CI check to keep the ADR
-   index in sync with the ADR files; I chose to drop the index instead, since a derived
-   copy that can drift is not worth a safeguard this early.
-3. **Per-row versus vocabulary-level (2026-09-09).** It routed the 42 legacy GLP-1 mentions into one
-   list item "for a human to confirm the whole vocabulary once". A vocabulary item is for a decision
-   about a rule; here the decision is per patient (approved, reports Ozempic: does a doctor look?),
-   so 42 row items with the engine's reason string. The reverse correction on weight: it proposed
-   about 50 row items for pounds rows that do not reconcile with intakes, which is one finding, not
-   fifty decisions.
-4. **`OK` is an inference, not a spelling (2026-09-09).** It folded `OK` (441 outcomes) into the
-   approved vocabulary table. I made it a separate rule code with a confirmation item, like the
-   date convention, so the rows can be remapped if the answer is no. Same treatment applied to the
-   questionnaire label `2.0`.
-5. **Over-quoting CLAUDE.md (2026-09-09).** ADR-0006 quoted "identity never auto-resolves" and dropped
-   the deliberate exception "unless literally identical on identity and non-contradictory on
-   everything else". I restored it as tier 1 (28 exact pairs auto-merged with provenance).
-6. **Shadow mode, not a queue (2026-09-09).** Its first ADR-0005 queued every historical rule hit
-   (about 400 items). The doctor who approved a 2024 intake saw its BMI; those disagreements are a
-   report figure and a browsable shadow evaluation. Items only where the legacy process could not
-   see the problem (GLP-1 and flag conditions in free text) or where it is legal (approved or
-   pending minors).
-7. **Detector it missed (2026-09-09).** It claimed the weight-divergence detector covered the five
-   tiny weights; it does not, because those patients' intakes carry the same tiny values. I asked
-   for a separate plausibility detector with bounds in the rules file, shared with Part B.
-
-
-8. **Roles the brief never asked for (2026-09-13).** ADR-0014 gave reviewers a `doctor` / `ops`
-   role and gated approve and reject on `doctor`; I accepted it, then cut it. The brief asks for
-   an *actor* on every audited decision, not for an authorisation model, and a second role means
-   every screen and every action has to answer "who may do this" — a question the assignment does
-   not pose and a reviewer-experience decision I had not intended to take. One kind of reviewer,
-   the audit still names who decided. Recorded in its own ADR, superseding ADR-0014 item 3 and
-   the role paragraph of ADR-0021.
+- **My own phrasing.** Mid-discussion I said "for mapping there should not be any rules". I meant "the importer is not a rule engine". Read literally, it would have dropped the normalisation records. It asked instead of rewriting. This saved it. Terse corrections get read literally.
+- **Plausible but wrong claims.** It told me the weight-divergence detector already covered the five patients whose signup weight is 6.5–8.6 kg. It covers three of them, and for the wrong reason. That detector asks whether a patient's signup weight disagrees with their own intake weights. These patients' intakes carry the same impossible order of magnitude. Two of the five agree with themselves and pass in silence. Even for the three it catches, the item reads "these two numbers disagree — which is right?". Neither is right. An adult cannot weigh 7 kg. A separate plausibility detector with bounds in `rules/v1.json` asks that question instead. The claim was close enough to true to pass a reading. I now check claims against the data rather than against how confident the agent sounds.
+- **Reviews beat agreement.** The fresh-session reviews found the contradiction between append-only evidence and importer idempotency (ADR-0008). They found an alias bug relying on `RETURNING` order. They found a float BMI wrong exactly at the band boundary. They found a missing input silently becoming `auto_cleared`. None of that came out of agreeing lines with the agent.
+- **Using the thing.** Three defects came from clicking through the running app. No test caught them. A page did the right thing twice, or said the wrong sentence about it. Using the app also corrected a decision of mine. I put `auto_cleared` behind a filter. I submitted an intake and could not find it. The brief calls that outcome "clear for doctor review". It is the inbox, not a finished state.
+- **Scope it did not need.** It gave reviewers `doctor` and `ops` roles. I accepted this before cutting it. The brief asks for an actor on every decision, not an authorisation model. A second role makes every screen answer "who may do this".
 
 ## What I would do differently
 
-_To be filled at the end._
+I spent attention in the right places. I designed the approach and the schema. I agreed the mapping column by column. I would do all three again. The column loop especially. I looked at the data myself and built the reading that drove every later decision. Handing that over would have left me approving a system I did not understand.
+
+I got the next phase wrong. By the end of the schema branch, everything defining "correct" was in files: `CLAUDE.md`, the ADRs, the schema, `rules/v1.json`. I went on supervising intermediate steps anyway. I approved plans, agreed on sequencing, and reviewed checkpoints the agent did not need to ask for. I changed that on the sixth branch. It belonged two branches earlier. An agent should own those middle steps end to end.
+
+The review can go too. Every real defect of this week came from a review, and an agent ran every one of those reviews in a fresh session. That is why they worked: a session with no memory of writing the code has nothing to defend. What does not delegate is narrower than I assumed. Deciding what "correct" means, before the work starts. And noticing at the end that a working system is wrong for the person using it — the three defects no test caught came from clicking through the app, not from reading its code.
