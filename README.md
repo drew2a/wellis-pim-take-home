@@ -9,6 +9,58 @@ Start with [ASSIGNMENT.md](ASSIGNMENT.md). The dataset you'll be working with is
 
 All patient data in this repository is synthetic. No real person appears in it.
 
+## Architecture
+
+**One deployable.** Next.js (App Router) serves the patient intake flow, the review console and
+the API from a single process; Postgres is behind it, and Drizzle owns the schema, the migrations
+and the queries (ADR-0003). There is no second service and no queue — the importer is a CLI
+against the same database, and everything else is that one process — so a deployment is a Vercel
+project and a connection string and nothing else ([Deploy](#deploy)).
+
+**The read path.** A server component asks a function in `src/repo/`, and that function holds the
+SQL and returns rows already shaped for the screen. No page or component under `src/app/` imports
+`drizzle-orm` or the schema, and none fetches its own API over HTTP to reach its own process;
+`src/app/pages.test.ts` asserts both mechanically over every file (ADR-0024).
+
+**The write path.** The browser reaches data only through a route handler under `src/app/api/`. A
+handler validates the body with Zod at the boundary, takes the actor from the session rather than
+from the body, opens one transaction, and calls the resolution path — `resolveReviewItem` for a
+review item, `transitionIntake` for an intake's state — which writes the value, the audit entry
+and the item's closure together. Nothing writes a canonical table directly: the request says what
+the reviewer chose, never what to write (R-T4, ADR-0021, ADR-0023).
+
+**Four kinds of table, and one direction.** *Raw* holds every exported row byte-faithfully. The
+importer maps raw into *canonical* — the patients, intakes and consent states the application acts
+on — and rewrites them from raw on every run, except the fields a human has touched. Everything it
+did on the way is *evidence*: a normalisation record per changed value, the consent events, the
+audit entries. What it could not decide safely becomes a *decision* row — a review item, or an
+eligibility evaluation. Data moves raw → canonical and canonical → evidence and decisions; nothing
+flows back, and no canonical value is read out of an evidence row. The invariants that matter are
+**database triggers rather than application checks**: raw and evidence tables refuse `UPDATE`,
+`DELETE` and `TRUNCATE` (ADR-0007), and a trigger on `intakes`, generated from the same table the
+pure state machine uses, refuses an illegal transition (ADR-0014). Both hold against `psql` exactly
+as they hold against the app.
+
+Each directory under `src/` owns one of those jobs:
+
+| directory | what it owns |
+|---|---|
+| `app/` | every page, and the route handlers that are the only writers; holds no SQL of its own |
+| `import/` | the Part A CLI: reading the export, the raw load, mapping, identity, detectors, the shadow history, the report |
+| `eligibility/` | the rules engine — one pure function, no I/O, no clock, no threshold of its own |
+| `intake/` | the Part B submission: answers, the two detectors, the state machine, and the only code that writes `intakes.state` |
+| `console/` | the Part C reviewer session and one decision module per kind of review item |
+| `repo/` | every query and every write: patient membership, the queue, the resolution path, the merge |
+| `rules/` | loading and validating `rules/v1.json`, the versioned ruleset the engine and the forms both read |
+| `db/` | the Drizzle schema, the client, and the append-only trigger |
+| `ui/` | the presentation components, and the only place a Tailwind class appears (ADR-0018) |
+| `consent/` | the consent texts and their versions, and the pure derivation of a consent state from events |
+| `reviewers/` | the seeded care team and its lookup |
+
+Table by table, with a diagram rendered from the Drizzle schema:
+[`docs/schema.md`](docs/schema.md). Every decision behind the above, with its context and the
+options refused: [`docs/adr/README.md`](docs/adr/README.md).
+
 ## Setup
 
 Requires Node 22, npm and Docker. Every step below is a command; there are no manual steps.
@@ -325,6 +377,60 @@ Each is a decision, not an omission (R-S4):
 - **A merge joins two records at a time.** An identity item comparing three or more — reachable
   through the new flow; there are none in the export — is decided one pair at a time, and the
   records not in that merge are left exactly as they are (ADR-0026 item 3).
+
+## Key decisions
+
+Twelve decisions that shaped the rest. Each links the ADR that has the context, the options
+refused and the evidence; [`docs/adr/README.md`](docs/adr/README.md) is the full list of 31.
+
+- **Constraints live in the database, not only in the application code.** Unique keys, checks and
+  triggers hold against a psql session, a future service and a migration script alike — the app is
+  not the only thing that can ever write to this database.
+  ([ADR-0003](docs/adr/0003-stack-nextjs-postgres-drizzle.md),
+  [ADR-0004](docs/adr/0004-part-a-schema-and-idempotency.md))
+- **Evidence is append-only, enforced by a trigger on every such table.** A wrong row is corrected
+  by a new row naming the actor and the reason; an audit log that can be edited is not one.
+  ([ADR-0007](docs/adr/0007-amendments-to-adr-0004-append-only-evidence-and-consent-timestamps.md))
+- **A re-import is idempotent by natural key and `ON CONFLICT DO NOTHING`, never by
+  truncate-and-reload.** Reloading would undo every human decision the table had collected, which
+  is the one thing a re-run must not do.
+  ([ADR-0004](docs/adr/0004-part-a-schema-and-idempotency.md),
+  [ADR-0008](docs/adr/0008-re-runs-under-immutability-patient-membership-and-provenance.md))
+- **A merge keeps one of the two records as the survivor rather than minting a third.** Every
+  reference that already resolved still resolves, the loser keeps its row and its records, and the
+  merge is therefore reversible by writing two things back.
+  ([ADR-0006](docs/adr/0006-identity-duplicates-and-orphans.md),
+  [ADR-0011](docs/adr/0011-detector-conventions-evaluations-merge-mechanics-and-disagreement.md))
+- **Identity never auto-resolves unless the records are literally identical on identity and
+  non-contradictory on everything else.** No latest-wins and no most-complete-wins: every other
+  candidate group is a conflict shown to a human side by side.
+  ([ADR-0006](docs/adr/0006-identity-duplicates-and-orphans.md))
+- **A review item is a decision, not residue.** A rule that would raise hundreds of identical row
+  items is one vocabulary-level question for a human instead; row-level items are for cases whose
+  consequence differs per row.
+  ([ADR-0005](docs/adr/0005-normalisation-rules-detectors-and-review-boundary.md))
+- **The eligibility ruleset is a versioned file, and every evaluation stores the version that
+  judged it.** A verdict that cannot name the thresholds behind it cannot be reproduced or argued
+  with. ([ADR-0010](docs/adr/0010-eligibility-engine-precedence-reasons-and-matching.md))
+- **Legacy intakes are evaluated against today's rules in shadow, and nothing is applied.** The
+  doctor who approved a 2024 intake saw its BMI; today's rules explain that history, they do not
+  rewrite it. ([ADR-0005](docs/adr/0005-normalisation-rules-detectors-and-review-boundary.md),
+  [ADR-0011](docs/adr/0011-detector-conventions-evaluations-merge-mechanics-and-disagreement.md))
+- **The intake state machine is enforced twice — a pure table and a database trigger generated
+  from it.** The pure half is testable without a database; the trigger holds for a writer that
+  never loads the module. ([ADR-0014](docs/adr/0014-intake-state-machine-actors-and-audited-transitions.md))
+- **Consent is the first step of the intake, not the last.** It is permission to process everything
+  that follows, so a patient who declines is refused before any personal data exists to store.
+  ([ADR-0019](docs/adr/0019-consent-is-the-first-step-not-the-last.md))
+- **A reviewer has no role, and the actor of a write comes from the session and never from the
+  request body.** One shared secret cannot prove who someone is, so the console enforces no
+  permission it could not keep — but every decision still carries a name.
+  ([ADR-0021](docs/adr/0021-a-shared-secret-a-session-and-where-the-actor-comes-from.md),
+  [ADR-0027](docs/adr/0027-remove-the-reviewer-role.md))
+- **`bsn` is masked by default everywhere, and revealing one writes an audit entry before it
+  answers.** Until retention is decided, the defensible position is that the number is available
+  and every look at it is on the record.
+  ([ADR-0023](docs/adr/0023-console-conventions-one-resolution-path-and-nine-small-decisions.md) item 8)
 
 ## Deploy
 
