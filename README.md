@@ -215,6 +215,8 @@ a GLP-1. Over the legacy export the matcher reproduces the counts ADR-0005 was a
 
 ## Intake
 
+![The five steps of an intake: consent, identity, height and weight, medication, conditions](gif/wellis-intake.gif)
+
 ```sh
 npm run dev                 # http://localhost:3000/intake
 ```
@@ -273,6 +275,8 @@ which is why Q1 calls that rule absolute in the first place. That refusal, not a
 is the one thing standing between a minor and an approval.
 
 ## Part C — the review console
+
+![The review console: the queue, an item resolved, and the patient record it changed](gif/wellis-console.gif)
 
 `/console`, behind `/login`. Three panes (ADR-0028): a dark rail of every kind of open work with its
 count, the queue, and the piece of work that is open — so deciding an item never costs a reviewer
