@@ -1,6 +1,6 @@
 # ADR-0029: An orphan intake has no identity to match on
 
-- **Status:** proposed
+- **Status:** accepted
 - **Date:** 2026-09-14
 - **Deciders:** Andrei Andreev
 - **Requirements:** R-A10, R-C5, R-C6 · **Relates to:** Q9 (orphan intakes) ·
