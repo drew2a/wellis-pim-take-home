@@ -1,6 +1,6 @@
 # ADR-0031: People waiting come before data to clean
 
-- **Status:** proposed
+- **Status:** accepted
 - **Date:** 2026-09-14
 - **Deciders:** Andrei Andreev
 - **Requirements:** R-C2, R-C3, R-S4 · **Supersedes:** the sorting half of the *"Age stays"* bullet
