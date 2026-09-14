@@ -59,8 +59,8 @@ came from the import or from a patient who submitted this morning.
   (21 orphan intakes, 10 vocabulary items).
 - The row count equals the sum of the two queries for the same filters.
 - Order: the intakes waiting for a person first, then the review items, each group oldest first on
-  the age the story below defines — people waiting come before data to clean
-  (`docs/reviewer-day.md`). Nothing else is sortable (scope cut).
+  the age the story below defines — people waiting come before data to clean (ADR-0031,
+  `docs/reviewer-day.md`). Nothing else is sortable (scope cut).
 
 ### S-2 · Age is the age of the work, not of the import · *either*
 

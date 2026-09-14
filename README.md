@@ -283,10 +283,12 @@ Each is a decision, not an omission (R-S4):
 - **No unmerge screen.** `unmergePatient` exists, is the exact inverse of a merge and is tested;
   nothing in the console calls it. A merge taken back is rare enough to be worth a deliberate act
   through the API.
-- **Sorting is by age only**, and there are no saved filters. The filters are the URL, so a
-  filtered queue can be kept in a tab, which is most of what saved filters would buy. The queue's
-  own text box and its oldest/newest toggle narrow and reverse **the page already on screen** — they
-  are not a second query, and the header says how many of the page they left.
+- **The one order is the queue's own** — the intakes waiting for a person, then the review items,
+  each group oldest first (ADR-0031) — and nothing else is sortable. There are no saved filters
+  either: the filters are the URL, so a filtered queue can be kept in a tab, which is most of what
+  saved filters would buy. The queue's own text box and its oldest/newest toggle narrow **the page
+  already on screen** and flip the age inside each group — they are not a second query, and the
+  header says how many of the page they left.
 - **There is no "Mine".** The console design offers it as a third scope; nothing owns an item —
   roles were removed in ADR-0027, and claiming an intake writes an audit entry rather than an
   assignment — so the three scope pills are the three real statuses instead. A pill that filtered on
@@ -297,7 +299,8 @@ Each is a decision, not an omission (R-S4):
 - **No bulk actions**, except the row-by-row exclusion on a vocabulary item — which is not a bulk
   action but the opposite: one decision, applied to the rows a person kept.
 - **The queue shows a page, not everything.** 500 rows, the intakes waiting for a person and then
-  the oldest items, which is the whole of the default view; a filter that selects the 2068 legacy approvals says it is showing a page.
+  the oldest items, which is the whole of the default view; a filter that selects the 2068 legacy
+  approvals says it is showing a page.
 - **A reviewer has no role, and the console enforces no permissions** (ADR-0027). Approving and
   rejecting were once gated on a `doctor` role; with one shared secret and the name picked from a
   list, that gate refused nobody who wanted to pass it, so it was removed rather than left to imply
