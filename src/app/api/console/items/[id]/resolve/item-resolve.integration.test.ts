@@ -53,6 +53,13 @@ beforeEach(async () => {
 
 const params = (id: string) => ({ params: Promise.resolve({ id }) });
 
+/**
+ * The one consent type the export declares. A `consent` item carries it in its payload and
+ * `consent_state` in `field`, as `consentItems` writes it: fixtures that put the type in `field`
+ * are what hid a bug that made every conflict item undecidable (`src/import/detect/consent.ts`).
+ */
+const TYPE = 'data_processing';
+
 const post = (id: string, body: unknown, session = true): Promise<Response> =>
   resolveItem(
     new Request(`http://localhost/api/console/items/${id}/resolve`, {
@@ -632,10 +639,10 @@ describe('resolving a consent item', () => {
   const consentItem = (patientId: string) =>
     item({
       type: 'consent',
-      field: 'data_processing',
+      field: 'consent_state',
       patientId,
       title: 'consent revoked for a patient who is active',
-      payload: { consent_state: 'revoked', patient_status: 'active' },
+      payload: { consent_type: TYPE, consent_state: 'revoked', patient_status: 'active' },
       dedupeKey: 'consent|row|legacy_patient:recA|data_processing|CONSENT_REVOKED_WHILE_ACTIVE|x',
     });
 
@@ -699,10 +706,10 @@ describe('establishing a consent state', () => {
     await recomputeConsentStates(db, { declaredTypes: ['data_processing'] });
     const itemId = await item({
       type: 'consent',
-      field: 'data_processing',
+      field: 'consent_state',
       patientId,
       title: 'the consent log contradicts itself',
-      payload: { consent_state: 'conflict' },
+      payload: { consent_type: TYPE, consent_state: 'conflict' },
       dedupeKey: 'consent|row|legacy_patient:recA|data_processing|CONSENT_CONFLICT|conflict',
     });
     return { itemId, patientId };
@@ -766,10 +773,10 @@ describe('establishing a consent state', () => {
     await recomputeConsentStates(db, { declaredTypes: ['data_processing'] });
     const itemId = await item({
       type: 'consent',
-      field: 'data_processing',
+      field: 'consent_state',
       patientId,
       title: 'consent revoked for a patient who is active',
-      payload: { consent_state: 'revoked' },
+      payload: { consent_type: TYPE, consent_state: 'revoked' },
       dedupeKey: 'consent|row|legacy_patient:recA|data_processing|CONSENT_REVOKED_WHILE_ACTIVE|x',
     });
 
