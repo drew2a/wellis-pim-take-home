@@ -183,9 +183,10 @@ value wins in each field, and the merge really happens.
 `reccXw7xuGLe0LLnN` in neither file.
 
 **Done when**
-- The view shows the intake (`payload.intake`), the unresolved `legacy_patient_id` and the
-  look-alike patients in `payload.look_alikes`, labelled **context, not a proposal** — the
-  importer attached none, deliberately (ADR-0006).
+- The view shows the intake (`payload.intake`) and the unresolved `legacy_patient_id`, and
+  **no candidate patients**: an orphan intake carries no identity field, so there is nothing to
+  match on, and a list under a heading like "patients that look like this one" would read as a
+  shortlist (ADR-0029). The banner says so.
 - **Attach to an existing patient**: search by name, email or legacy id; a required note; writes
   `intakes.patient_id`, one audit entry on the intake naming the reviewer and the note, item
   resolved.

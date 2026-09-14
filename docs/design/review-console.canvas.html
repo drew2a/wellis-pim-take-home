@@ -339,15 +339,12 @@ const ITEMS = [
   {
     kind: 'orphan_intake', date: '2023-06-05', rule: 'R-A17',
     title: 'Intake INT-9521 references a patient that does not exist',
-    patient: 'No patient', patientMeta: 'unattached · 3 look-alikes found',
-    banner: 'Context, not a proposal: the importer attached none of them, because even a single look-alike is a guess.',
+    patient: 'No patient', patientMeta: 'unattached · no identity in the intake',
+    banner: 'The intake carries nothing that identifies a person, so there is nothing to match on. Attach it if you know who it is.',
     evidence: [
       ['intake', 'INT-9521 · submitted 2023-06-05 · v1'],
       ['references', 'recZtNxtTROiwcw0C — no such row'],
       ['answers', '83.6 kg · 162 cm · metformine 500mg · hoge bloeddruk'],
-      ['look-alike 1', 'Emma de Boer — 162 cm, 84.0 kg, signed up 2023-01-11'],
-      ['look-alike 2', 'Sofia Jansen — 162 cm, 81.2 kg, signed up 2022-09-30'],
-      ['look-alike 3', 'Iris Visser — 162 cm, 86.9 kg, signed up 2023-04-18'],
     ],
     findings: [],
     ruleset: '',
@@ -356,9 +353,9 @@ const ITEMS = [
       ['Leave unresolved', 'ghost', 'D'],
     ],
     notePlaceholder: 'e.g. confirmed by phone with the patient',
-    foot: 'Same height, weight within 10 %, signed up at most a year earlier — that is all a look-alike means.',
+    foot: 'Attaching sets the intake’s patient and records who said so. Unresolved is an acceptable outcome.',
     explainer:
-      'The export referenced a patient row it did not contain. Attaching is a search, not a suggestion: the console will not guess an identity from body measurements.',
+      'The export referenced a patient row it did not contain. Attaching is a search, not a suggestion: the console will not guess an identity from body measurements (ADR-0029).',
   },
   {
     kind: 'clinical_history', date: '2023-08-09', rule: 'R-A21',

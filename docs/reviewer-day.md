@@ -37,9 +37,9 @@ One screen, one table. Every row is one thing to do: a review item or an intake.
    field provenance). **Not the same person** — dismiss with note. **Leave open.** bsn masked,
    reveal is audited.
 3. **Resolve an orphan intake** (21). Example: intake INT-7412 references a legacy id that
-   exists nowhere; two look-alike patients shown as context. Actions: **attach** to a patient
-   (search by name / email / legacy id, note) or **leave unresolved**. No "create patient" — the
-   intake carries no identity.
+   exists nowhere. No candidate patients are shown: the intake carries no identity field, so
+   there is nothing to match on (ADR-0029). Actions: **attach** to a patient (search by name /
+   email / legacy id, note) or **leave unresolved**. No "create patient", for the same reason.
 4. **Resolve a same-day pair** (5). Example: two intakes for one patient on 2024-04-12, one
    "in review", one "goedgekeurd". Both side by side; marks one as the record of note with a
    note; both rows stay.
